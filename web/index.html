@@ -2465,6 +2465,7 @@
             <button class="btn alt" id="st-load" type="button">Cargar alumnos del local</button>
             <button class="btn alt" id="st-export-cv" type="button">Exportar curriculum</button>
             <button class="btn alt" id="st-print-cv" type="button">Imprimir curriculum</button>
+            <button class="btn alt" id="st-show-qr" type="button">Ver QR alumno</button>
           </div>
         </div>
         <div id="students-list-wrap"><span class="muted">Presiona "Cargar alumnos del local" para ver la lista.</span></div>
@@ -5197,6 +5198,55 @@
         a.download = `curriculum_${(student.full_name || studentId).replace(/\s+/g, '_')}.csv`;
         a.click();
         ids('students-output').textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        ids('students-output').textContent = err.message;
+      }
+    });
+
+    // ─── QR de Identificación ──────────────────────────────────────────
+    ids('st-show-qr')?.addEventListener('click', async () => {
+      const studentId = ids('st-cv-student-id').value.trim();
+      const establishmentId = selectedEstablishmentId();
+      if (!studentId) {
+        ids('students-output').textContent = 'Selecciona un alumno primero (haz click en una fila)';
+        return;
+      }
+      if (!establishmentId) {
+        ids('students-output').textContent = 'Selecciona establecimiento primero';
+        return;
+      }
+      try {
+        const result = await api(`/api/students/${encodeURIComponent(studentId)}/qr?establishmentId=${encodeURIComponent(establishmentId)}`);
+        const data = result?.data;
+        if (data?.qrDataUrl) {
+          const studentName = data.student?.full_name || 'Alumno';
+          ids('students-output').textContent = JSON.stringify(result, null, 2);
+          const existing = ids('st-qr-modal');
+          if (existing) existing.remove();
+          const modal = document.createElement('div');
+          modal.id = 'st-qr-modal';
+          modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;';
+          modal.innerHTML = `
+            <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:400px;width:90%;text-align:center;">
+              <h3 style="margin:0 0 4px;">${studentName}</h3>
+              <div class="muted" style="font-size:12px;margin-bottom:12px;">QR de identificacion</div>
+              <img src="${data.qrDataUrl}" style="width:280px;height:280px;border-radius:8px;display:block;margin:0 auto 14px;">
+              <p style="font-size:11px;color:var(--muted);margin:0 0 14px;">ID: ${studentId}</p>
+              <button class="btn" onclick="this.closest('#st-qr-modal').remove()" type="button">Cerrar</button>
+              <button class="btn alt" onclick="printQR('${data.qrDataUrl}','${studentName}')" type="button" style="margin-left:8px;">Imprimir</button>
+            </div>
+          `;
+          document.body.appendChild(modal);
+          window.printQR = (qrUrl, name) => {
+            const w = window.open('', '_blank');
+            w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>QR ' + name + '</title><style>body{text-align:center;padding:20px;font-family:Arial}h2{margin:0 0 8px}p{color:#666;margin:0 0 16px}img{width:300px;height:300px}</style></head><body>');
+            w.document.write('<h2>' + name + '</h2><p>QR de identificacion</p><img src="' + qrUrl + '"></body></html>');
+            w.document.close();
+            w.print();
+          };
+        } else {
+          ids('students-output').textContent = 'No se pudo generar el QR';
+        }
       } catch (err) {
         ids('students-output').textContent = err.message;
       }

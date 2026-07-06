@@ -5262,6 +5262,106 @@ app.post('/api/prospects/:id/convert', requireAuth, async (req, res) => {
   }
 });
 
+// ─── QR de Identificación ──────────────────────────────────────────────────
+const QRCode = require('qrcode');
+
+// GET /api/students/:id/qr — Generate QR code for a student
+app.get('/api/students/:id/qr', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId } = req.query;
+
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const { data: student, error: studentError } = await supabaseAdmin
+      .from('students')
+      .select('id, full_name, establishment_id')
+      .eq('id', id)
+      .eq('establishment_id', establishmentId)
+      .single();
+    if (studentError || !student) return res.status(404).json({ ok: false, error: 'Student not found' });
+
+    // Build QR payload with student info
+    const qrPayload = JSON.stringify({
+      type: 'student_id',
+      studentId: student.id,
+      name: student.full_name,
+      establishmentId: student.establishment_id,
+      ts: Date.now()
+    });
+
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, {
+      errorCorrectionLevel: 'M',
+      width: 400,
+      margin: 2,
+      color: { dark: '#1a1a2e', light: '#ffffff' }
+    });
+
+    return res.json({ ok: true, data: { qrDataUrl, student } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not generate QR code' });
+  }
+});
+
+// POST /api/attendance/qr-scan — Mark attendance by scanning QR
+app.post('/api/attendance/qr-scan', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { qrData, classId, status } = req.body || {};
+
+  if (!qrData || !classId) {
+    return res.status(400).json({ ok: false, error: 'qrData and classId are required' });
+  }
+
+  try {
+    let payload;
+    try {
+      payload = JSON.parse(qrData);
+    } catch (_) {
+      return res.status(400).json({ ok: false, error: 'Invalid QR data format' });
+    }
+
+    if (payload.type !== 'student_id' || !payload.studentId || !payload.establishmentId) {
+      return res.status(400).json({ ok: false, error: 'Invalid QR code: not a student ID' });
+    }
+
+    const { studentId, establishmentId } = payload;
+
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const { data: classSession, error: classError } = await supabaseAdmin
+      .from('class_sessions')
+      .select('id, establishment_id, discipline_id')
+      .eq('id', classId)
+      .eq('establishment_id', establishmentId)
+      .single();
+    if (classError || !classSession) return res.status(404).json({ ok: false, error: 'Class not found' });
+
+    const finalStatus = status || 'present';
+
+    const { data, error } = await supabaseAdmin
+      .from('class_attendance_records')
+      .upsert({
+        class_session_id: classId,
+        student_id: studentId,
+        status: finalStatus,
+        notes: 'Marcado por QR',
+        marked_by: profileId,
+        marked_at: new Date().toISOString()
+      }, { onConflict: 'class_session_id,student_id' })
+      .select('id, student_id, status, marked_at');
+
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true, data: data || [], scanned: { studentId, name: payload.name } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not process QR scan' });
+  }
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });

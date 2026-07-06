@@ -5053,6 +5053,215 @@ app.get('/api/theory', requireAuth, async (req, res) => {
   });
 });
 
+// ─── CRM Prospectos ─────────────────────────────────────────────────────────
+const prospectsPath = path.join(__dirname, '..', 'data', 'prospects.json');
+
+const getProspectStore = () => {
+  const data = readJsonStore(prospectsPath, {});
+  return data && typeof data === 'object' ? data : {};
+};
+
+const saveProspectStore = (store) => {
+  writeJsonStore(prospectsPath, store || {});
+};
+
+// GET /api/prospects — List prospects (with optional filters)
+app.get('/api/prospects', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, status, source, daysOld } = req.query;
+
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const store = getProspectStore();
+    const estKey = String(establishmentId);
+    let prospects = store[estKey] || [];
+
+    // Filter by status
+    if (status) {
+      prospects = prospects.filter(p => String(p.status || '').toLowerCase() === String(status).toLowerCase());
+    }
+
+    // Filter by source
+    if (source) {
+      prospects = prospects.filter(p => String(p.source || '').toLowerCase() === String(source).toLowerCase());
+    }
+
+    // Filter by days old (e.g. prospects older than N days without follow-up)
+    if (daysOld) {
+      const cutoff = Date.now() - (Number(daysOld) * 86400000);
+      prospects = prospects.filter(p => {
+        if (!p.lastContactedAt) return new Date(p.createdAt).getTime() < cutoff;
+        return new Date(p.lastContactedAt).getTime() < cutoff;
+      });
+    }
+
+    // Sort by most recent first
+    prospects.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.json({ ok: true, data: prospects });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load prospects' });
+  }
+});
+
+// POST /api/prospects — Create a new prospect
+app.post('/api/prospects', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, name, phone, email, source, notes, disciplineCode } = req.body || {};
+
+  if (!establishmentId || !name || !phone) {
+    return res.status(400).json({ ok: false, error: 'establishmentId, name and phone are required' });
+  }
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const store = getProspectStore();
+    const estKey = String(establishmentId);
+    if (!store[estKey]) store[estKey] = [];
+
+    const prospect = {
+      id: crypto.randomUUID(),
+      name: String(name).trim(),
+      phone: String(phone).trim(),
+      email: email ? String(email).trim() : null,
+      source: source || 'direct',
+      notes: notes || null,
+      disciplineCode: disciplineCode || null,
+      status: 'new',
+      createdBy: profileId,
+      createdAt: new Date().toISOString(),
+      lastContactedAt: null,
+      contactedCount: 0,
+      convertedToStudentId: null
+    };
+
+    store[estKey].push(prospect);
+    saveProspectStore(store);
+
+    return res.status(201).json({ ok: true, data: prospect });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not create prospect' });
+  }
+});
+
+// PATCH /api/prospects/:id — Update prospect status or info
+app.patch('/api/prospects/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId, status, notes, contacted } = req.body || {};
+
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const store = getProspectStore();
+    const estKey = String(establishmentId);
+    const prospects = store[estKey] || [];
+    const idx = prospects.findIndex(p => p.id === id);
+
+    if (idx === -1) return res.status(404).json({ ok: false, error: 'Prospect not found' });
+
+    if (status) {
+      const validStatuses = ['new', 'contacted', 'trial_scheduled', 'trial_done', 'enrolled', 'lost'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ ok: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      prospects[idx].status = status;
+    }
+    if (notes !== undefined) prospects[idx].notes = notes;
+    if (contacted === true) {
+      prospects[idx].lastContactedAt = new Date().toISOString();
+      prospects[idx].contactedCount = (prospects[idx].contactedCount || 0) + 1;
+    }
+
+    saveProspectStore(store);
+
+    return res.json({ ok: true, data: prospects[idx] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not update prospect' });
+  }
+});
+
+// GET /api/prospects/reminders — Get prospects that need follow-up
+app.get('/api/prospects/reminders', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const store = getProspectStore();
+    const estKey = String(establishmentId);
+    const prospects = store[estKey] || [];
+
+    const now = Date.now();
+    const threeDays = 3 * 86400000;
+    const sevenDays = 7 * 86400000;
+
+    const reminders = prospects.filter(p => {
+      if (p.status === 'enrolled' || p.status === 'lost') return false;
+      const lastContact = p.lastContactedAt ? new Date(p.lastContactedAt).getTime() : new Date(p.createdAt).getTime();
+      const elapsed = now - lastContact;
+      return elapsed >= threeDays;
+    }).map(p => {
+      const lastContact = p.lastContactedAt ? new Date(p.lastContactedAt).getTime() : new Date(p.createdAt).getTime();
+      const elapsed = now - lastContact;
+      return {
+        ...p,
+        daysSinceContact: Math.floor(elapsed / 86400000),
+        priority: elapsed >= sevenDays ? 'high' : 'medium'
+      };
+    }).sort((a, b) => b.daysSinceContact - a.daysSinceContact);
+
+    return res.json({ ok: true, data: reminders });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load reminders' });
+  }
+});
+
+// POST /api/prospects/:id/convert — Convert prospect to student
+app.post('/api/prospects/:id/convert', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId, disciplineCode, studentId } = req.body || {};
+
+  if (!establishmentId || !studentId) {
+    return res.status(400).json({ ok: false, error: 'establishmentId and studentId are required' });
+  }
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const store = getProspectStore();
+    const estKey = String(establishmentId);
+    const prospects = store[estKey] || [];
+    const idx = prospects.findIndex(p => p.id === id);
+
+    if (idx === -1) return res.status(404).json({ ok: false, error: 'Prospect not found' });
+
+    prospects[idx].status = 'enrolled';
+    prospects[idx].convertedToStudentId = studentId;
+    prospects[idx].enrolledAt = new Date().toISOString();
+    saveProspectStore(store);
+
+    return res.json({ ok: true, data: prospects[idx] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not convert prospect' });
+  }
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });

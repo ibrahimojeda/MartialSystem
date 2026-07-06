@@ -1057,6 +1057,7 @@
 
       <div class="tabs hidden" id="app-tabs">
         <button class="tab-btn" data-tab="operacion">Dashboard</button>
+        <button class="tab-btn" data-tab="prospectos">Prospectos</button>
         <button class="tab-btn" data-tab="calendario">Calendario</button>
         <button class="tab-btn" data-tab="academico">Academico</button>
         <button class="tab-btn" data-tab="administracion">Administracion</button>
@@ -1418,6 +1419,78 @@
 
     </section>
 
+    <!-- ─── PROSPECTOS TAB ─────────────────────────────────────────────── -->
+    <section id="tab-prospectos" class="grid hidden">
+      <article class="card full">
+        <h3>CRM - Prospectos</h3>
+        <p class="muted">Registra personas que preguntan por clases pero aun no se inscriben. El sistema te recordara hacer seguimiento.</p>
+        <div class="row" style="margin-bottom:12px;">
+          <button class="btn" id="prospect-load" type="button">Cargar prospectos</button>
+          <button class="btn alt" id="prospect-reminders" type="button">Ver recordatorios</button>
+        </div>
+        <form id="prospect-form" class="form" style="margin-bottom:12px;">
+          <div>
+            <label>Nombre</label>
+            <input id="prospect-name" placeholder="Nombre del prospecto" required>
+          </div>
+          <div>
+            <label>Telefono</label>
+            <input id="prospect-phone" placeholder="6000-0000" required>
+          </div>
+          <div>
+            <label>Email</label>
+            <input id="prospect-email" placeholder="correo@ejemplo.com">
+          </div>
+          <div>
+            <label>Fuente</label>
+            <select id="prospect-source">
+              <option value="direct">Directo</option>
+              <option value="instagram">Instagram</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="facebook">Facebook</option>
+              <option value="referido">Referido</option>
+              <option value="web">Pagina web</option>
+              <option value="llamada">Llamada</option>
+            </select>
+          </div>
+          <div>
+            <label>Disciplina de interes</label>
+            <input id="prospect-discipline" placeholder="karate, judo, bjj...">
+          </div>
+          <div class="full">
+            <label>Notas</label>
+            <textarea id="prospect-notes" placeholder="Informacion adicional"></textarea>
+          </div>
+          <div class="full">
+            <button class="btn" type="submit">Registrar prospecto</button>
+          </div>
+        </form>
+        <div id="prospect-filters" class="row" style="margin-bottom:10px;">
+          <select id="prospect-filter-status">
+            <option value="">Todos los estados</option>
+            <option value="new">Nuevo</option>
+            <option value="contacted">Contactado</option>
+            <option value="trial_scheduled">Prueba programada</option>
+            <option value="trial_done">Prueba realizada</option>
+            <option value="enrolled">Inscrito</option>
+            <option value="lost">Perdido</option>
+          </select>
+          <select id="prospect-filter-source">
+            <option value="">Todas las fuentes</option>
+            <option value="direct">Directo</option>
+            <option value="instagram">Instagram</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="facebook">Facebook</option>
+            <option value="referido">Referido</option>
+            <option value="web">Pagina web</option>
+            <option value="llamada">Llamada</option>
+          </select>
+          <input id="prospect-days-old" type="number" min="1" placeholder="Dias sin contacto" style="max-width:160px;">
+        </div>
+        <div id="prospect-list-wrap"><span class="muted">Presiona "Cargar prospectos" para ver la lista.</span></div>
+        <pre id="prospect-output" style="display:none;">Sin datos</pre>
+      </article>
+    </section>
     <section id="tab-finanzas" class="grid hidden">
       <article class="card full" id="finance-panel-card">
         <h3>Panel Financiero</h3>
@@ -2732,8 +2805,8 @@
     }
 
     // â”€â”€ NAVEGACIÃ“N DE TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const ALL_TABS = ['onboarding','operacion','calendario','academico','teoria','administracion','roles','torneos','comunidad','marketplace','finanzas','inventario','comisiones','pasarela','configuracion','debug'];
-    const TOP_TABS = ['operacion','calendario','academico','administracion','torneos','comunidad','marketplace','finanzas','configuracion','debug'];
+    const ALL_TABS = ['onboarding','operacion','prospectos','calendario','academico','teoria','administracion','roles','torneos','comunidad','marketplace','finanzas','inventario','comisiones','pasarela','configuracion','debug'];
+    const TOP_TABS = ['operacion','prospectos','calendario','academico','administracion','torneos','comunidad','marketplace','finanzas','configuracion','debug'];
     const TAB_PARENT = {
       teoria: 'academico',
       inventario: 'marketplace',

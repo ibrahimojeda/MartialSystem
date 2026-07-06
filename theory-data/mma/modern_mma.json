@@ -1,0 +1,466 @@
+{
+  "iniciacion": [
+    {
+      "type": "fill_blank",
+      "prompt": "En MMA (Modern MMA), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama jaula o ring.",
+      "answer": "jaula o ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en MMA es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel iniciacion, el estudiante debe dominar base de golpeo y defensa de derribo.",
+      "answer": "base de golpeo y defensa de derribo"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en MMA es integracion de striking, clinch y suelo.",
+      "answer": "integracion de striking, clinch y suelo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de MMA?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En MMA, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Modern MMA, cual contenido es propio del nivel iniciacion?",
+      "options": [
+        "base de golpeo y defensa de derribo",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de MMA?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en MMA, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en MMA?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "intermedio": [
+    {
+      "type": "fill_blank",
+      "prompt": "En MMA (Modern MMA), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama jaula o ring.",
+      "answer": "jaula o ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en MMA es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel intermedio, el estudiante debe dominar transiciones entre fases de combate.",
+      "answer": "transiciones entre fases de combate"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en MMA es integracion de striking, clinch y suelo.",
+      "answer": "integracion de striking, clinch y suelo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de MMA?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En MMA, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Modern MMA, cual contenido es propio del nivel intermedio?",
+      "options": [
+        "transiciones entre fases de combate",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de MMA?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en MMA, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en MMA?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "avanzado": [
+    {
+      "type": "fill_blank",
+      "prompt": "En MMA (Modern MMA), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama jaula o ring.",
+      "answer": "jaula o ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en MMA es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel avanzado, el estudiante debe dominar control posicional y finalizacion segura.",
+      "answer": "control posicional y finalizacion segura"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en MMA es integracion de striking, clinch y suelo.",
+      "answer": "integracion de striking, clinch y suelo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de MMA?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En MMA, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Modern MMA, cual contenido es propio del nivel avanzado?",
+      "options": [
+        "control posicional y finalizacion segura",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de MMA?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en MMA, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en MMA?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "junior": [
+    {
+      "type": "fill_blank",
+      "prompt": "En MMA (Modern MMA), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama jaula o ring.",
+      "answer": "jaula o ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en MMA es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel junior, el estudiante debe dominar estrategia competitiva integral.",
+      "answer": "estrategia competitiva integral"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en MMA es integracion de striking, clinch y suelo.",
+      "answer": "integracion de striking, clinch y suelo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de MMA?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En MMA, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Modern MMA, cual contenido es propio del nivel junior?",
+      "options": [
+        "estrategia competitiva integral",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de MMA?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en MMA, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en MMA?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ]
+}

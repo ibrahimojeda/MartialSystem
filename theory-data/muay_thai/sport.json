@@ -1,0 +1,466 @@
+{
+  "iniciacion": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Muay Thai (Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Muay Thai es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel iniciacion, el estudiante debe dominar golpes basicos y defensa frontal.",
+      "answer": "golpes basicos y defensa frontal"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Muay Thai es puntuacion efectiva y ritmo de combate.",
+      "answer": "puntuacion efectiva y ritmo de combate",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Muay Thai?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Muay Thai, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Sport, cual contenido es propio del nivel iniciacion?",
+      "options": [
+        "golpes basicos y defensa frontal",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Muay Thai?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Muay Thai, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Muay Thai?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "intermedio": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Muay Thai (Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Muay Thai es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel intermedio, el estudiante debe dominar combinaciones con check y contraataque.",
+      "answer": "combinaciones con check y contraataque"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Muay Thai es puntuacion efectiva y ritmo de combate.",
+      "answer": "puntuacion efectiva y ritmo de combate",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Muay Thai?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Muay Thai, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Sport, cual contenido es propio del nivel intermedio?",
+      "options": [
+        "combinaciones con check y contraataque",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Muay Thai?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Muay Thai, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Muay Thai?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "avanzado": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Muay Thai (Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Muay Thai es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel avanzado, el estudiante debe dominar lectura tactica en clinch corto.",
+      "answer": "lectura tactica en clinch corto"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Muay Thai es puntuacion efectiva y ritmo de combate.",
+      "answer": "puntuacion efectiva y ritmo de combate",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Muay Thai?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Muay Thai, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Sport, cual contenido es propio del nivel avanzado?",
+      "options": [
+        "lectura tactica en clinch corto",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Muay Thai?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Muay Thai, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Muay Thai?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "junior": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Muay Thai (Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Muay Thai es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel junior, el estudiante debe dominar ejecucion competitiva completa.",
+      "answer": "ejecucion competitiva completa"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Muay Thai es puntuacion efectiva y ritmo de combate.",
+      "answer": "puntuacion efectiva y ritmo de combate",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Muay Thai?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Muay Thai, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Sport, cual contenido es propio del nivel junior?",
+      "options": [
+        "ejecucion competitiva completa",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Muay Thai?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Muay Thai, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Muay Thai?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ]
+}

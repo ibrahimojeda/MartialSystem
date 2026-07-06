@@ -1,0 +1,466 @@
+{
+  "iniciacion": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Judo (IJF Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama tatami de competencia.",
+      "answer": "tatami de competencia",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Judo es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel iniciacion, el estudiante debe dominar tecnicas basicas seguras.",
+      "answer": "tecnicas basicas seguras"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Judo es eficiencia con control reglamentario.",
+      "answer": "eficiencia con control reglamentario",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Judo?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Judo, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para IJF Sport, cual contenido es propio del nivel iniciacion?",
+      "options": [
+        "tecnicas basicas seguras",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Judo?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Judo, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Judo?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "intermedio": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Judo (IJF Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama tatami de competencia.",
+      "answer": "tatami de competencia",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Judo es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel intermedio, el estudiante debe dominar ataques encadenados y defensa de agarres.",
+      "answer": "ataques encadenados y defensa de agarres"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Judo es eficiencia con control reglamentario.",
+      "answer": "eficiencia con control reglamentario",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Judo?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Judo, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para IJF Sport, cual contenido es propio del nivel intermedio?",
+      "options": [
+        "ataques encadenados y defensa de agarres",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Judo?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Judo, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Judo?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "avanzado": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Judo (IJF Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama tatami de competencia.",
+      "answer": "tatami de competencia",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Judo es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel avanzado, el estudiante debe dominar estrategia de combate por puntaje.",
+      "answer": "estrategia de combate por puntaje"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Judo es eficiencia con control reglamentario.",
+      "answer": "eficiencia con control reglamentario",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Judo?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Judo, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para IJF Sport, cual contenido es propio del nivel avanzado?",
+      "options": [
+        "estrategia de combate por puntaje",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Judo?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Judo, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Judo?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "junior": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Judo (IJF Sport), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama tatami de competencia.",
+      "answer": "tatami de competencia",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Judo es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel junior, el estudiante debe dominar gestion de combate con ritmo competitivo.",
+      "answer": "gestion de combate con ritmo competitivo"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Judo es eficiencia con control reglamentario.",
+      "answer": "eficiencia con control reglamentario",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Judo?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Judo, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para IJF Sport, cual contenido es propio del nivel junior?",
+      "options": [
+        "gestion de combate con ritmo competitivo",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Judo?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Judo, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Judo?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ]
+}

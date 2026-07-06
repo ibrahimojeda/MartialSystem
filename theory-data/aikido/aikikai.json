@@ -1,0 +1,466 @@
+{
+  "iniciacion": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Aikido (Aikikai), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama dojo.",
+      "answer": "dojo",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Aikido es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel iniciacion, el estudiante debe dominar ukemi y tai sabaki basicos.",
+      "answer": "ukemi y tai sabaki basicos"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Aikido es irimi tenkan y ukemi seguro.",
+      "answer": "irimi tenkan y ukemi seguro",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Aikido?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Aikido, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Aikikai, cual contenido es propio del nivel iniciacion?",
+      "options": [
+        "ukemi y tai sabaki basicos",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Aikido?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Aikido, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Aikido?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "intermedio": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Aikido (Aikikai), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama dojo.",
+      "answer": "dojo",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Aikido es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel intermedio, el estudiante debe dominar ikkyo/nikyo con control postural.",
+      "answer": "ikkyo/nikyo con control postural"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Aikido es irimi tenkan y ukemi seguro.",
+      "answer": "irimi tenkan y ukemi seguro",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Aikido?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Aikido, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Aikikai, cual contenido es propio del nivel intermedio?",
+      "options": [
+        "ikkyo/nikyo con control postural",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Aikido?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Aikido, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Aikido?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "avanzado": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Aikido (Aikikai), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama dojo.",
+      "answer": "dojo",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Aikido es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel avanzado, el estudiante debe dominar proyecciones y controles enlazados.",
+      "answer": "proyecciones y controles enlazados"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Aikido es irimi tenkan y ukemi seguro.",
+      "answer": "irimi tenkan y ukemi seguro",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Aikido?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Aikido, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Aikikai, cual contenido es propio del nivel avanzado?",
+      "options": [
+        "proyecciones y controles enlazados",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Aikido?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Aikido, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Aikido?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "junior": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Aikido (Aikikai), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama dojo.",
+      "answer": "dojo",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Aikido es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel junior, el estudiante debe dominar randori controlado multi-ataque.",
+      "answer": "randori controlado multi-ataque"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Aikido es irimi tenkan y ukemi seguro.",
+      "answer": "irimi tenkan y ukemi seguro",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Aikido?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Aikido, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Aikikai, cual contenido es propio del nivel junior?",
+      "options": [
+        "randori controlado multi-ataque",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Aikido?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Aikido, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Aikido?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ]
+}

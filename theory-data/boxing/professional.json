@@ -1,0 +1,466 @@
+{
+  "iniciacion": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Boxing (Professional), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Boxing es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel iniciacion, el estudiante debe dominar tecnica base de guardia y jab.",
+      "answer": "tecnica base de guardia y jab"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Boxing es gestion de ritmo y dano efectivo.",
+      "answer": "gestion de ritmo y dano efectivo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Boxing?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Boxing, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Professional, cual contenido es propio del nivel iniciacion?",
+      "options": [
+        "tecnica base de guardia y jab",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Boxing?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Boxing, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Boxing?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "intermedio": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Boxing (Professional), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Boxing es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel intermedio, el estudiante debe dominar combinaciones de presion y salida.",
+      "answer": "combinaciones de presion y salida"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Boxing es gestion de ritmo y dano efectivo.",
+      "answer": "gestion de ritmo y dano efectivo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Boxing?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Boxing, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Professional, cual contenido es propio del nivel intermedio?",
+      "options": [
+        "combinaciones de presion y salida",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Boxing?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Boxing, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Boxing?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "avanzado": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Boxing (Professional), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Boxing es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel avanzado, el estudiante debe dominar control del centro y timing de contra.",
+      "answer": "control del centro y timing de contra"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Boxing es gestion de ritmo y dano efectivo.",
+      "answer": "gestion de ritmo y dano efectivo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Boxing?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Boxing, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Professional, cual contenido es propio del nivel avanzado?",
+      "options": [
+        "control del centro y timing de contra",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Boxing?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Boxing, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Boxing?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ],
+  "junior": [
+    {
+      "type": "fill_blank",
+      "prompt": "En Boxing (Professional), el objetivo principal de evaluacion es disciplina tecnica y control.",
+      "answer": "disciplina tecnica y control",
+      "aliases": [
+        "control tecnico"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El saludo o protocolo base en esta disciplina se identifica como reiho.",
+      "answer": "reiho",
+      "aliases": [
+        "etiqueta",
+        "protocolo"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "El area principal de practica o competencia se llama ring.",
+      "answer": "ring",
+      "aliases": [
+        "dojang",
+        "ring",
+        "tatami"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Una prioridad de seguridad en Boxing es control de contacto y autocuidado.",
+      "answer": "control de contacto y autocuidado",
+      "aliases": [
+        "control de contacto"
+      ]
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Para el nivel junior, el estudiante debe dominar plan tactico por rounds largos.",
+      "answer": "plan tactico por rounds largos"
+    },
+    {
+      "type": "fill_blank",
+      "prompt": "Un principio tecnico clave en Boxing es gestion de ritmo y dano efectivo.",
+      "answer": "gestion de ritmo y dano efectivo",
+      "aliases": [
+        "tecnica eficiente"
+      ]
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cual describe mejor el enfoque tecnico de Boxing?",
+      "options": [
+        "Solo fuerza sin tecnica",
+        "Tecnica, control y progresion estructurada",
+        "Improvisacion sin base",
+        "Contacto total sin reglas"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "En Boxing, cual opcion corresponde a etiqueta correcta?",
+      "options": [
+        "Entrar sin saludar y hablar en voz alta",
+        "Seguir indicaciones, saludar y respetar turnos",
+        "Interrumpir al instructor continuamente",
+        "Omitir el uniforme reglamentario"
+      ],
+      "answer": "B"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Para Professional, cual contenido es propio del nivel junior?",
+      "options": [
+        "plan tactico por rounds largos",
+        "Contenido de nivel previo",
+        "Contenido fuera del programa",
+        "Solo teoria sin practica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que criterio suele tener mayor peso en examen practico de Boxing?",
+      "options": [
+        "Postura, control, precision y toma de decision",
+        "Solo potencia maxima",
+        "Solo velocidad sin control",
+        "Solo resistencia fisica"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Cuando se evalua control en Boxing, se espera principalmente:",
+      "options": [
+        "Mantener tecnica limpia y distancia correcta",
+        "Reducir guardia para atacar mas",
+        "Ignorar el equilibrio corporal",
+        "Usar fuerza desmedida en todo momento"
+      ],
+      "answer": "A"
+    },
+    {
+      "type": "multiple_choice",
+      "q": "Que accion mejora la progresion al siguiente nivel en Boxing?",
+      "options": [
+        "Practica constante, correccion tecnica y buena actitud",
+        "Entrenar sin descanso ni plan",
+        "Memorizar terminos sin ejecutar tecnicas",
+        "Evitar sparring o evaluaciones"
+      ],
+      "answer": "A"
+    }
+  ]
+}

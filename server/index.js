@@ -521,6 +521,206 @@ const mapUsernameSchemaError = (message) => {
   return text;
 };
 
+
+// ─── Trial Users ──────────────────────────────────────────────────────────
+const getTrialUsersStore = () => {
+  const data = readJsonStore(trialUsersPath, {});
+  return data && typeof data === 'object' ? data : {};
+};
+
+const saveTrialUsersStore = (store) => {
+  writeJsonStore(trialUsersPath, store || {});
+};
+
+const TRIAL_DAYS = 30;
+
+const isTrialExpired = (trialUser) => {
+  if (!trialUser) return true;
+  if (trialUser.unlimited === true) return false;
+  const createdAt = new Date(trialUser.createdAt).getTime();
+  const now = Date.now();
+  return (now - createdAt) > (TRIAL_DAYS * 86400000);
+};
+
+// POST /api/trial/signup — Create a trial owner account (30-day limit)
+app.post('/api/trial/signup', async (req, res) => {
+  const { fullName, username, password, establishmentName, disciplineCodes } = req.body || {};
+
+  const normalizedUsername = normalizeUsername(username);
+  if (!fullName || !normalizedUsername || !password || !establishmentName) {
+    return res.status(400).json({ ok: false, error: 'fullName, username, password and establishmentName are required' });
+  }
+
+  const selectedCodes = Array.isArray(disciplineCodes) ? disciplineCodes.filter(Boolean) : [];
+  if (selectedCodes.length === 0) {
+    return res.status(400).json({ ok: false, error: 'Select at least one discipline' });
+  }
+
+  const { data: existingProfile, error: lookupError } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('username', normalizedUsername)
+    .maybeSingle();
+  if (lookupError) return res.status(500).json({ ok: false, error: mapUsernameSchemaError(lookupError.message) });
+  if (existingProfile?.id) return res.status(400).json({ ok: false, error: 'username is already in use' });
+
+  const email = buildInternalEmail(normalizedUsername);
+  const created = { authUserId: null, establishmentId: null };
+
+  try {
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, username: normalizedUsername }
+    });
+    if (authError || !authData?.user?.id) {
+      return res.status(500).json({ ok: false, error: authError?.message || 'Could not create user' });
+    }
+    created.authUserId = authData.user.id;
+
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+      id: created.authUserId,
+      full_name: fullName,
+      role: ROLE_OWNER,
+      username: normalizedUsername,
+      auth_email: email,
+      is_active: true
+    });
+    if (profileError) throw new Error(profileError.message);
+
+    const { data: estData, error: estError } = await supabaseAdmin
+      .from('establishments')
+      .insert({ name: establishmentName, is_active: true })
+      .select('id')
+      .single();
+    if (estError || !estData?.id) throw new Error(estError?.message || 'Could not create establishment');
+    created.establishmentId = estData.id;
+
+    const { error: memberError } = await supabaseAdmin.from('establishment_members').insert({
+      establishment_id: created.establishmentId,
+      profile_id: created.authUserId,
+      role: ROLE_OWNER
+    });
+    if (memberError) throw new Error(memberError.message);
+
+    const { data: disciplines, error: discError } = await supabaseAdmin
+      .from('disciplines')
+      .select('id, code, name')
+      .in('code', selectedCodes);
+    if (discError) throw new Error(discError.message);
+    if (!disciplines || disciplines.length === 0) throw new Error('No discipline codes matched');
+
+    const edRows = disciplines.map(d => ({
+      establishment_id: created.establishmentId,
+      discipline_id: d.id,
+      is_active: true
+    }));
+    const { error: edError } = await supabaseAdmin.from('establishment_disciplines').insert(edRows);
+    if (edError) throw new Error(edError.message);
+
+    const configRows = disciplines.map(d => ({
+      establishment_id: created.establishmentId,
+      discipline_id: d.id,
+      config: defaultTreeForDiscipline(d.name)
+    }));
+    await supabaseAdmin.from('discipline_configs').upsert(configRows, { onConflict: 'establishment_id,discipline_id' });
+
+    // Register trial user
+    const trialStore = getTrialUsersStore();
+    trialStore[created.authUserId] = {
+      profileId: created.authUserId,
+      establishmentId: created.establishmentId,
+      username: normalizedUsername,
+      fullName,
+      createdAt: new Date().toISOString(),
+      unlimited: false
+    };
+    saveTrialUsersStore(trialStore);
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        message: 'Trial account created. Expires in 30 days.',
+        establishmentId: created.establishmentId,
+        userId: created.authUserId,
+        disciplines: disciplines.map(d => ({ code: d.code, name: d.name }))
+      }
+    });
+  } catch (err) {
+    if (created.establishmentId) {
+      await supabaseAdmin.from('establishments').delete().eq('id', created.establishmentId);
+    }
+    if (created.authUserId) {
+      await supabaseAdmin.auth.admin.deleteUser(created.authUserId);
+    }
+    return res.status(500).json({ ok: false, error: err.message || 'Trial signup failed' });
+  }
+});
+
+// GET /api/trial/status — Check if current user's trial is expired
+app.get('/api/trial/status', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  if (req.isSuperadmin) {
+    return res.json({ ok: true, data: { isSuperadmin: true, trial: false } });
+  }
+
+  const trialStore = getTrialUsersStore();
+  const trialUser = trialStore[profileId];
+  if (!trialUser) {
+    return res.json({ ok: true, data: { trial: false, message: 'Not a trial user' } });
+  }
+
+  const expired = isTrialExpired(trialUser);
+  const createdAt = new Date(trialUser.createdAt);
+  const expiresAt = new Date(createdAt.getTime() + TRIAL_DAYS * 86400000);
+  const daysLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 86400000));
+
+  return res.json({
+    ok: true,
+    data: {
+      trial: true,
+      expired,
+      unlimited: trialUser.unlimited === true,
+      createdAt: trialUser.createdAt,
+      expiresAt: expiresAt.toISOString(),
+      daysLeft,
+      daysTotal: TRIAL_DAYS
+    }
+  });
+});
+
+// GET /api/trial/users — List all trial users (superadmin only)
+app.get('/api/trial/users', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  const trialStore = getTrialUsersStore();
+  const users = Object.values(trialStore).map(u => ({
+    ...u,
+    expired: isTrialExpired(u),
+    daysSinceCreation: Math.floor((Date.now() - new Date(u.createdAt).getTime()) / 86400000)
+  }));
+
+  return res.json({ ok: true, data: users });
+});
+
+// PUT /api/trial/users/:profileId — Update trial user (set unlimited by superadmin)
+app.put('/api/trial/users/:profileId', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  const { profileId } = req.params;
+  const { unlimited } = req.body || {};
+
+  const trialStore = getTrialUsersStore();
+  if (!trialStore[profileId]) return res.status(404).json({ ok: false, error: 'Trial user not found' });
+
+  trialStore[profileId].unlimited = unlimited === true;
+  saveTrialUsersStore(trialStore);
+
+  return res.json({ ok: true, data: trialStore[profileId] });
+});
+
+// ─── Login with trial check ──────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, app: 'MartialSystem', ts: new Date().toISOString() });
 });

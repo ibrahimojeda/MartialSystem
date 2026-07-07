@@ -81,6 +81,7 @@ const financeTargetsPath = path.join(__dirname, '..', 'data', 'finance-targets.j
 const absencesPath = path.join(__dirname, '..', 'data', 'absences.json');
 const appSettingsPath = path.join(__dirname, '..', 'data', 'app-settings.json');
 const marketplaceImagesPath = path.join(__dirname, '..', 'data', 'marketplace-images.json');
+const whatsappConfigPath = path.join(__dirname, '..', 'data', 'whatsapp-config.json');
 
 const SUPERADMIN_USERNAME = String(process.env.SUPERADMIN_USERNAME || 'venta').trim().toLowerCase();
 const SUPERADMIN_PASSWORD = String(process.env.SUPERADMIN_PASSWORD || 'Venta@Dojo2026!');
@@ -5475,6 +5476,183 @@ app.post('/api/attendance/qr-scan', requireAuth, async (req, res) => {
     return res.json({ ok: true, data: data || [], scanned: { studentId, name: payload.name } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not process QR scan' });
+  }
+});
+
+// ─── WhatsApp Notifications ──────────────────────────────────────────────
+const getWhatsappConfig = () => {
+  const data = readJsonStore(whatsappConfigPath, {});
+  return data && typeof data === 'object' ? data : {};
+};
+
+const saveWhatsappConfig = (store) => {
+  writeJsonStore(whatsappConfigPath, store || {});
+};
+
+// GET /api/whatsapp/config — Get WhatsApp config for an establishment
+app.get('/api/whatsapp/config', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const store = getWhatsappConfig();
+    const config = store[String(establishmentId)] || {};
+    return res.json({
+      ok: true,
+      data: {
+        enabled: Boolean(config.enabled),
+        phoneNumber: config.phoneNumber || '',
+        messageTemplate: config.messageTemplate || 'Hola {{name}}, te recordamos que tienes clase de {{discipline}} el {{date}} a las {{time}}.'
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load WhatsApp config' });
+  }
+});
+
+// PUT /api/whatsapp/config — Update WhatsApp config for an establishment
+app.put('/api/whatsapp/config', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, enabled, phoneNumber, messageTemplate } = req.body || {};
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (!isManagerRole(membership.role)) {
+      return res.status(403).json({ ok: false, error: 'Only manager roles can configure WhatsApp' });
+    }
+
+    const store = getWhatsappConfig();
+    store[String(establishmentId)] = {
+      enabled: enabled !== undefined ? Boolean(enabled) : false,
+      phoneNumber: phoneNumber ? String(phoneNumber).trim() : '',
+      messageTemplate: messageTemplate ? String(messageTemplate).trim() : 'Hola {{name}}, te recordamos que tienes clase de {{discipline}} el {{date}} a las {{time}}.'
+    };
+    saveWhatsappConfig(store);
+
+    return res.json({ ok: true, data: store[String(establishmentId)] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not save WhatsApp config' });
+  }
+});
+
+// POST /api/whatsapp/send — Send a WhatsApp message via Twilio
+app.post('/api/whatsapp/send', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, to, message } = req.body || {};
+
+  if (!establishmentId || !to || !message) {
+    return res.status(400).json({ ok: false, error: 'establishmentId, to and message are required' });
+  }
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (!canCreateNotifications(membership.role)) {
+      return res.status(403).json({ ok: false, error: 'No permission to send WhatsApp messages' });
+    }
+
+    const accountSid = String(process.env.TWILIO_ACCOUNT_SID || '').trim();
+    const authToken = String(process.env.TWILIO_AUTH_TOKEN || '').trim();
+    const twilioNumber = String(process.env.TWILIO_WHATSAPP_NUMBER || '').trim();
+
+    if (!accountSid || !authToken || !twilioNumber) {
+      return res.status(400).json({ ok: false, error: 'Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_NUMBER in .env' });
+    }
+
+    // Format phone number: ensure it starts with +
+    const formattedTo = String(to).trim().startsWith('+') ? String(to).trim() : `+${String(to).trim()}`;
+    const formattedFrom = `whatsapp:${twilioNumber}`;
+    const formattedToWhatsApp = `whatsapp:${formattedTo}`;
+
+    // Use Twilio API via https
+    const https = require('https');
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+    const postData = new URLSearchParams({
+      To: formattedToWhatsApp,
+      From: formattedFrom,
+      Body: String(message)
+    }).toString();
+
+    const result = await new Promise((resolve, reject) => {
+      const req = https.request(twilioUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData)
+        }
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, body: JSON.parse(data) });
+          } catch (_) {
+            resolve({ status: res.statusCode, body: data });
+          }
+        });
+      });
+      req.on('error', reject);
+      req.write(postData);
+      req.end();
+    });
+
+    if (result.status >= 200 && result.status < 300) {
+      return res.json({ ok: true, data: { sid: result.body?.sid || null, status: result.body?.status || 'sent', to: formattedTo } });
+    } else {
+      return res.status(500).json({ ok: false, error: result.body?.message || result.body || 'Twilio send failed' });
+    }
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not send WhatsApp message' });
+  }
+});
+
+// POST /api/whatsapp/send-batch — Send WhatsApp to multiple recipients
+app.post('/api/whatsapp/send-batch', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, recipients, message } = req.body || {};
+
+  if (!establishmentId || !Array.isArray(recipients) || recipients.length === 0 || !message) {
+    return res.status(400).json({ ok: false, error: 'establishmentId, recipients[] and message are required' });
+  }
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (!canCreateNotifications(membership.role)) {
+      return res.status(403).json({ ok: false, error: 'No permission to send WhatsApp messages' });
+    }
+
+    const results = [];
+    for (const recipient of recipients) {
+      const phone = String(recipient.phone || recipient || '').trim();
+      if (!phone) continue;
+      try {
+        const response = await fetch(`http://localhost:${PORT}/api/whatsapp/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': req.headers.authorization },
+          body: JSON.stringify({ establishmentId, to: phone, message })
+        });
+        const data = await response.json();
+        results.push({ phone, ok: data.ok, error: data.error || null });
+      } catch (err) {
+        results.push({ phone, ok: false, error: err.message });
+      }
+    }
+
+    const sent = results.filter(r => r.ok).length;
+    const failed = results.filter(r => !r.ok).length;
+    return res.json({ ok: true, data: { sent, failed, total: recipients.length, results } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not send batch WhatsApp' });
   }
 });
 

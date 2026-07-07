@@ -1792,6 +1792,40 @@
         <pre id="notifications-output" style="display:none;">Sin datos</pre>
       </article>
 
+      <article class="card" style="margin-top:10px;">
+        <h3>WhatsApp</h3>
+        <form id="whatsapp-config-form" class="form" style="margin-bottom:10px;">
+          <div>
+            <label>Habilitar WhatsApp</label>
+            <select id="wp-enabled">
+              <option value="false">No</option>
+              <option value="true">Si</option>
+            </select>
+          </div>
+          <div>
+            <label>Número del dojo (Twilio)</label>
+            <input id="wp-phone" placeholder="+50760000000">
+          </div>
+          <div class="full">
+            <label>Plantilla de mensaje</label>
+            <textarea id="wp-template" rows="2" placeholder="Hola {{name}}, te recordamos tu clase de {{discipline}} el {{date}} a las {{time}}."></textarea>
+          </div>
+          <div class="full">
+            <button class="btn alt" id="wp-save-config" type="button">Guardar config WhatsApp</button>
+            <button class="btn alt" id="wp-load-config" type="button">Cargar config</button>
+          </div>
+        </form>
+        <div class="full" style="margin-top:8px;">
+          <label>Enviar WhatsApp manual</label>
+          <div class="row">
+            <input id="wp-to" placeholder="+50760000000" style="max-width:200px;">
+            <input id="wp-msg" placeholder="Mensaje" style="flex:1;">
+            <button class="btn alt" id="wp-send" type="button">Enviar</button>
+          </div>
+        </div>
+        <pre id="wp-output" style="display:none;font-size:11px;">Sin datos</pre>
+      </article>
+
       <article class="card full" id="portal-template-card">
         <h3>Portal alumno/guardian</h3>
         <form id="portal-student-form" class="form" style="margin-bottom:10px;">
@@ -6200,6 +6234,52 @@
       } catch (err) {
         ids('notifications-output').textContent = err.message;
       }
+    });
+
+    // ─── WhatsApp ──────────────────────────────────────────────────────
+    ids('wp-load-config')?.addEventListener('click', async () => {
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) { ids('wp-output').textContent = 'Selecciona establecimiento primero'; return; }
+      try {
+        const result = await api(`/api/whatsapp/config?establishmentId=${encodeURIComponent(establishmentId)}`);
+        const data = result?.data || {};
+        ids('wp-enabled').value = String(data.enabled);
+        ids('wp-phone').value = data.phoneNumber || '';
+        ids('wp-template').value = data.messageTemplate || '';
+        ids('wp-output').textContent = JSON.stringify(result, null, 2);
+      } catch (err) { ids('wp-output').textContent = err.message; }
+    });
+
+    ids('wp-save-config')?.addEventListener('click', async () => {
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) { ids('wp-output').textContent = 'Selecciona establecimiento primero'; return; }
+      try {
+        const result = await api('/api/whatsapp/config', {
+          method: 'PUT',
+          body: JSON.stringify({
+            establishmentId,
+            enabled: ids('wp-enabled').value === 'true',
+            phoneNumber: ids('wp-phone').value.trim(),
+            messageTemplate: ids('wp-template').value.trim()
+          })
+        });
+        ids('wp-output').textContent = JSON.stringify(result, null, 2);
+      } catch (err) { ids('wp-output').textContent = err.message; }
+    });
+
+    ids('wp-send')?.addEventListener('click', async () => {
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) { ids('wp-output').textContent = 'Selecciona establecimiento primero'; return; }
+      const to = ids('wp-to').value.trim();
+      const message = ids('wp-msg').value.trim();
+      if (!to || !message) { ids('wp-output').textContent = 'Ingresa número y mensaje'; return; }
+      try {
+        const result = await api('/api/whatsapp/send', {
+          method: 'POST',
+          body: JSON.stringify({ establishmentId, to, message })
+        });
+        ids('wp-output').textContent = JSON.stringify(result, null, 2);
+      } catch (err) { ids('wp-output').textContent = err.message; }
     });
 
     ids('market-form')?.addEventListener('submit', async (e) => {

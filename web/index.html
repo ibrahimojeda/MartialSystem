@@ -1583,6 +1583,7 @@
         </form>
         <div class="row" style="margin-bottom:8px;">
           <button class="btn alt" id="rp-operational" type="button">Cargar reporte operativo</button>
+          <button class="btn alt" id="rp-churn" type="button">Churn Rate (abandono)</button>
           <button class="btn alt" id="rp-export-operational" type="button">Exportar detalle CSV</button>
         </div>
         <div id="reports-kpi-wrap" class="finance-kpis" style="display:none;"></div>
@@ -6011,6 +6012,63 @@
         ].filter(Boolean).join('&');
         const result = await api(`/api/reports/operational?${qs}`);
         renderOperationalReport(result);
+        ids('reports-output').textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        ids('reports-output').textContent = err.message;
+      }
+    });
+
+    // ─── Churn Rate ──────────────────────────────────────────────────
+    ids('rp-churn')?.addEventListener('click', async () => {
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) {
+        ids('reports-output').textContent = 'Selecciona establecimiento primero';
+        return;
+      }
+      try {
+        const disciplineCode = ids('rp-discipline').value;
+        const qs = [
+          `establishmentId=${encodeURIComponent(establishmentId)}`,
+          disciplineCode ? `disciplineCode=${encodeURIComponent(disciplineCode)}` : '',
+          'daysInactive=15'
+        ].filter(Boolean).join('&');
+        const result = await api(`/api/reports/churn?${qs}`);
+        const data = result?.data || {};
+        const atRisk = data.atRisk || [];
+        const churnRate = data.churnRate || 0;
+        const totalActive = data.totalActive || 0;
+        const atRiskCount = data.atRiskCount || 0;
+
+        const wrap = ids('reports-operational-wrap');
+        if (wrap) {
+          wrap.style.display = 'block';
+          wrap.style.gridTemplateColumns = '1fr';
+          const rowsHtml = atRisk.length > 0 ? atRisk.map(r => `<tr>
+            <td style="${tdStyle()}">${r.fullName || '-'}</td>
+            <td style="${tdStyle()}">${r.discipline?.name || r.discipline?.code || '-'}</td>
+            <td style="${tdStyle()}">${r.currentRank || '-'}</td>
+            <td style="${tdStyle()}">${r.lastAttendance ? new Date(r.lastAttendance).toLocaleDateString() : 'Nunca'}</td>
+            <td style="${tdStyle()}">${r.daysSinceLastClass !== null ? r.daysSinceLastClass + ' días' : '-'}</td>
+            <td style="${tdStyle()}">${r.phone || '-'}</td>
+            <td style="${tdStyle()}">${r.email || '-'}</td>
+          </tr>`).join('') : '<tr><td style="' + tdStyle() + '" colspan="7">No hay estudiantes en riesgo</td></tr>';
+
+          wrap.innerHTML = `
+            <div class="finance-kpis" style="margin-bottom:10px;">
+              ${kpiCard('Tasa de abandono', churnRate + '%', '#e76f51')}
+              ${kpiCard('En riesgo', String(atRiskCount), '#d18a2e')}
+              ${kpiCard('Activos totales', String(totalActive), '#2e8b57')}
+              ${kpiCard('Umbral', (data.threshold || 15) + ' días', '#2f6fa3')}
+            </div>
+            <div class="card" style="padding:10px;">
+              <h4 style="margin:0 0 8px;">Estudiantes en riesgo de abandono</h4>
+              <table style="${tblStyles()}"><thead><tr>
+                <th style="${thStyle()}">Nombre</th><th style="${thStyle()}">Disciplina</th><th style="${thStyle()}">Rango</th>
+                <th style="${thStyle()}">Última asistencia</th><th style="${thStyle()}">Días sin clase</th>
+                <th style="${thStyle()}">Teléfono</th><th style="${thStyle()}">Email</th>
+              </tr></thead><tbody>${rowsHtml}</tbody></table>
+            </div>`;
+        }
         ids('reports-output').textContent = JSON.stringify(result, null, 2);
       } catch (err) {
         ids('reports-output').textContent = err.message;

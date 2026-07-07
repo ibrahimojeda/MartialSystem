@@ -5262,6 +5262,122 @@ app.post('/api/prospects/:id/convert', requireAuth, async (req, res) => {
   }
 });
 
+// ─── Churn Rate ──────────────────────────────────────────────────────────
+// GET /api/reports/churn — Detect students at risk of dropping out
+app.get('/api/reports/churn', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, disciplineCode, daysInactive } = req.query;
+
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  const inactiveThreshold = Number(daysInactive) || 15;
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const allowedDisciplineIds = await getAllowedDisciplineIds(membership.role, profileId, establishmentId);
+    const targetDiscipline = await resolveDisciplineFilter(establishmentId, disciplineCode, allowedDisciplineIds).catch(() => null);
+    const filteredDisciplineIds = targetDiscipline
+      ? allowedDisciplineIds.filter(id => id === targetDiscipline.id)
+      : allowedDisciplineIds;
+
+    if (filteredDisciplineIds.length === 0) {
+      return res.json({ ok: true, data: { atRisk: [], churnRate: 0, totalActive: 0, threshold: inactiveThreshold } });
+    }
+
+    // Get active enrollments
+    const { data: enrollments, error: enrollmentError } = await supabaseAdmin
+      .from('student_enrollments')
+      .select('student_id, discipline_id, current_rank, joined_at')
+      .in('discipline_id', filteredDisciplineIds)
+      .eq('status', 'active')
+      .limit(5000);
+    if (enrollmentError) throw new Error(enrollmentError.message);
+
+    const studentIds = [...new Set((enrollments || []).map(e => e.student_id).filter(Boolean))];
+    if (studentIds.length === 0) {
+      return res.json({ ok: true, data: { atRisk: [], churnRate: 0, totalActive: 0, threshold: inactiveThreshold } });
+    }
+
+    // Get latest attendance for each student
+    const { data: attendanceRecords, error: attendanceError } = await supabaseAdmin
+      .from('class_attendance_records')
+      .select('student_id, marked_at')
+      .in('student_id', studentIds)
+      .order('marked_at', { ascending: false })
+      .limit(10000);
+    if (attendanceError) throw new Error(attendanceError.message);
+
+    // Get students info
+    const [{ data: students }, { data: disciplines }] = await Promise.all([
+      supabaseAdmin.from('students').select('id, full_name, email, phone').in('id', studentIds),
+      supabaseAdmin.from('disciplines').select('id, code, name').in('id', filteredDisciplineIds)
+    ]);
+
+    const discMap = new Map((disciplines || []).map(d => [d.id, { code: d.code, name: d.name }]));
+    const studentMap = new Map((students || []).map(s => [s.id, s]));
+    const enrollByStudent = new Map((enrollments || []).map(e => [e.student_id, e]));
+
+    // Find latest attendance per student
+    const latestAttendance = new Map();
+    (attendanceRecords || []).forEach(r => {
+      const sid = r.student_id;
+      const existing = latestAttendance.get(sid);
+      if (!existing || new Date(r.marked_at) > new Date(existing)) {
+        latestAttendance.set(sid, r.marked_at);
+      }
+    });
+
+    const now = Date.now();
+    const cutoff = now - (inactiveThreshold * 86400000);
+
+    const atRisk = [];
+    studentIds.forEach(sid => {
+      const lastDate = latestAttendance.get(sid);
+      const lastTs = lastDate ? new Date(lastDate).getTime() : 0;
+      const daysSince = Math.floor((now - lastTs) / 86400000);
+      const student = studentMap.get(sid);
+      const enrollment = enrollByStudent.get(sid);
+      if (!student || !enrollment) return;
+
+      if (!lastDate || daysSince >= inactiveThreshold) {
+        atRisk.push({
+          studentId: sid,
+          fullName: student.full_name || '-',
+          email: student.email || null,
+          phone: student.phone || null,
+          discipline: discMap.get(enrollment.discipline_id) || { code: '-', name: '-' },
+          currentRank: enrollment.current_rank || null,
+          joinedAt: enrollment.joined_at || null,
+          lastAttendance: lastDate || null,
+          daysSinceLastClass: lastDate ? daysSince : null,
+          status: lastDate ? 'inactive' : 'never_attended'
+        });
+      }
+    });
+
+    atRisk.sort((a, b) => (b.daysSinceLastClass || 999) - (a.daysSinceLastClass || 999));
+
+    const totalActive = studentIds.length;
+    const churnRate = totalActive > 0 ? Number(((atRisk.length / totalActive) * 100).toFixed(2)) : 0;
+
+    return res.json({
+      ok: true,
+      data: {
+        atRisk,
+        churnRate,
+        totalActive,
+        atRiskCount: atRisk.length,
+        threshold: inactiveThreshold,
+        discipline: targetDiscipline || null
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load churn report' });
+  }
+});
+
 // ─── QR de Identificación ──────────────────────────────────────────────────
 const QRCode = require('qrcode');
 

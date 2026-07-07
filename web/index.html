@@ -1088,6 +1088,37 @@
         </form>
         <pre id="login-output">Sin sesion</pre>
       </article>
+
+      <article class="card full" id="trial-signup-card">
+        <h3>Registrarse (Prueba gratis 30 días)</h3>
+        <p class="muted">Crea una cuenta de dueño de dojo con acceso completo por 30 días sin costo.</p>
+        <form id="trial-signup-form" class="form">
+          <div class="full">
+            <label>Nombre completo</label>
+            <input id="ts-name" placeholder="Tu nombre completo" required>
+          </div>
+          <div class="full">
+            <label>Usuario</label>
+            <input id="ts-username" placeholder="elije_un_usuario" required autocomplete="username">
+          </div>
+          <div class="full">
+            <label>Contraseña</label>
+            <input id="ts-password" type="password" placeholder="Min 6 caracteres" required autocomplete="new-password">
+          </div>
+          <div class="full">
+            <label>Nombre del dojo / establecimiento</label>
+            <input id="ts-est-name" placeholder="Academia Elite" required>
+          </div>
+          <div class="full">
+            <label>Disciplinas activas</label>
+            <div id="ts-discipline-checks" class="list"></div>
+          </div>
+          <div class="full">
+            <button class="btn" type="submit">Crear cuenta gratis</button>
+          </div>
+        </form>
+        <pre id="trial-signup-output" style="display:none;">Completa el formulario para registrarte.</pre>
+      </article>
     </section>
 
     <section id="tab-onboarding" class="grid hidden">
@@ -5058,6 +5089,54 @@
         showTab(allowed[0] || 'operacion');
       } catch (err) {
         ids('login-output').textContent = err.message;
+      }
+    });
+
+    // ─── Trial sign-up ───────────────────────────────────────────────────
+    function renderTrialDisciplineChecks() {
+      const wrap = ids('ts-discipline-checks');
+      if (!wrap) return;
+      wrap.innerHTML = state.disciplines.map(d => `
+        <label class="discipline-item">
+          <input type="checkbox" name="ts-discipline" value="${d.code}">
+          <span class="discipline-name">${d.name}</span>
+        </label>`).join('');
+    }
+
+    // Load disciplines for trial signup form after initial load
+    const origLoadDebug = loadDebug;
+    loadDebug = async function() {
+      await origLoadDebug();
+      renderTrialDisciplineChecks();
+    };
+
+    ids('trial-signup-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const output = ids('trial-signup-output');
+      output.style.display = 'block';
+      try {
+        const selectedCodes = Array.from(document.querySelectorAll('input[name="ts-discipline"]:checked')).map(cb => cb.value);
+        if (selectedCodes.length === 0) {
+          output.textContent = 'Selecciona al menos una disciplina';
+          return;
+        }
+        const result = await api('/api/trial/signup', {
+          method: 'POST',
+          body: JSON.stringify({
+            fullName: ids('ts-name').value.trim(),
+            username: ids('ts-username').value.trim(),
+            password: ids('ts-password').value,
+            establishmentName: ids('ts-est-name').value.trim(),
+            disciplineCodes: selectedCodes
+          })
+        });
+        output.textContent = JSON.stringify(result, null, 2);
+        if (result.ok) {
+          ids('login-username').value = ids('ts-username').value.trim();
+          ids('login-output').textContent = 'Cuenta creada! Ahora inicia sesion con tu usuario y contraseña.';
+        }
+      } catch (err) {
+        output.textContent = err.message;
       }
     });
 

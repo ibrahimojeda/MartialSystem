@@ -1042,6 +1042,12 @@
   </style>
 </head>
 <body>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MartialSys">
+  <meta name="theme-color" content="#c23b2a">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
   <main class="wrap">
     <section class="hero">
       <div class="hero-left">
@@ -1069,56 +1075,59 @@
       </div>
     </section>
 
-    <section id="login-gate" class="grid">
-      <article class="card full" id="login-card">
-        <h3>Acceso al sistema</h3>
-        <p class="muted">Login obligatorio antes de navegar en modulos.</p>
-        <form id="login-form" class="form">
-          <div class="full">
-            <label>Usuario</label>
-            <input id="login-username" required placeholder="superadmin o owner username" autocomplete="username">
-          </div>
-          <div class="full">
-            <label>Password</label>
-            <input id="login-password" type="password" required autocomplete="current-password">
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Iniciar sesion</button>
-          </div>
-        </form>
-        <pre id="login-output">Sin sesion</pre>
-      </article>
+    <section id="login-gate" style="display:flex;justify-content:center;align-items:flex-start;padding-top:40px;min-height:80vh;">
+      <div style="width:100%;max-width:480px;">
+        <article class="card full" id="login-card" style="margin-bottom:16px;">
+          <h3>Acceso al sistema</h3>
+          <p class="muted">Ingresa tus credenciales para acceder.</p>
+          <form id="login-form" class="form">
+            <div class="full">
+              <label>Usuario</label>
+              <input id="login-username" required placeholder="superadmin o owner username" autocomplete="username">
+            </div>
+            <div class="full">
+              <label>Password</label>
+              <input id="login-password" type="password" required autocomplete="current-password">
+            </div>
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" type="submit" style="flex:1;">Iniciar sesion</button>
+              <button class="btn alt" id="show-trial-btn" type="button" style="flex:1;">Crear cuenta gratis</button>
+            </div>
+          </form>
+          <pre id="login-output" class="muted" style="display:none;margin-top:10px;font-size:12px;"></pre>
+        </article>
 
-      <article class="card full" id="trial-signup-card">
-        <h3>Registrarse (Prueba gratis 30 días)</h3>
-        <p class="muted">Crea una cuenta de dueño de dojo con acceso completo por 30 días sin costo.</p>
-        <form id="trial-signup-form" class="form">
-          <div class="full">
-            <label>Nombre completo</label>
-            <input id="ts-name" placeholder="Tu nombre completo" required>
-          </div>
-          <div class="full">
-            <label>Usuario</label>
-            <input id="ts-username" placeholder="elije_un_usuario" required autocomplete="username">
-          </div>
-          <div class="full">
-            <label>Contraseña</label>
-            <input id="ts-password" type="password" placeholder="Min 6 caracteres" required autocomplete="new-password">
-          </div>
-          <div class="full">
-            <label>Nombre del dojo / establecimiento</label>
-            <input id="ts-est-name" placeholder="Academia Elite" required>
-          </div>
-          <div class="full">
-            <label>Disciplinas activas</label>
-            <div id="ts-discipline-checks" class="list"></div>
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Crear cuenta gratis</button>
-          </div>
-        </form>
-        <pre id="trial-signup-output" style="display:none;">Completa el formulario para registrarte.</pre>
-      </article>
+        <article class="card full" id="trial-signup-card" style="display:none;">
+          <h3>Crear cuenta nueva</h3>
+          <form id="trial-signup-form" class="form">
+            <div class="full">
+              <label>Nombre completo</label>
+              <input id="ts-name" placeholder="Tu nombre completo" required>
+            </div>
+            <div class="full">
+              <label>Usuario</label>
+              <input id="ts-username" placeholder="elije_un_usuario" required autocomplete="username">
+            </div>
+            <div class="full">
+              <label>Contraseña</label>
+              <input id="ts-password" type="password" placeholder="Min 6 caracteres" required autocomplete="new-password">
+            </div>
+            <div class="full">
+              <label>Nombre del dojo / establecimiento</label>
+              <input id="ts-est-name" placeholder="Academia Elite" required>
+            </div>
+            <div class="full">
+              <label>Disciplinas activas</label>
+              <div id="ts-discipline-checks" class="list"></div>
+            </div>
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" type="submit" style="flex:1;">Crear cuenta</button>
+              <button class="btn alt" id="cancel-trial-btn" type="button" style="flex:1;">Cancelar</button>
+            </div>
+          </form>
+          <pre id="trial-signup-output" style="display:none;">Completa el formulario para registrarte.</pre>
+        </article>
+      </div>
     </section>
 
     <section id="tab-onboarding" class="grid hidden">
@@ -1529,6 +1538,7 @@
           <button class="module-sub-btn active" data-tab="finanzas">Pagos</button>
           <button class="module-sub-btn" data-tab="comisiones">Comisiones</button>
           <button class="module-sub-btn" data-tab="pasarela">Pasarela de Pago</button>
+          <button class="module-sub-btn" data-tab="facturacion">🧾 Facturación</button>
         </div>
         <div class="finance-kpis" id="finance-kpis-wrap">
           <div class="kpi-tile"><div class="kpi-label">Pagos totales</div><div class="kpi-value">$0.00</div></div>
@@ -2169,6 +2179,24 @@
         <div id="comm-kpi" style="display:none;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;"></div>
         <div id="comm-table-wrap"></div>
         <p id="comm-msg" class="muted"></p>
+      </article>
+    </section>
+
+    <section id="tab-facturacion" class="grid hidden">
+      <article class="card full">
+        <h3>🧾 Facturación Electrónica</h3>
+        <div class="module-subnav" id="subnav-finanzas-fact">
+          <button class="module-sub-btn" data-tab="finanzas">Pagos</button>
+          <button class="module-sub-btn" data-tab="comisiones">Comisiones</button>
+          <button class="module-sub-btn" data-tab="pasarela">Pasarela de Pago</button>
+          <button class="module-sub-btn active" data-tab="facturacion">🧾 Facturación</button>
+        </div>
+        <p class="muted">Facturación electrónica DGI Panamá. Accede al panel completo de facturación.</p>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn" onclick="window.open('/invoicing.html','_blank')" type="button">📋 Abrir módulo de facturación</button>
+        </div>
+        <p>El módulo completo de facturación está disponible en una interfaz dedicada.</p>
+        <pre id="fact-output" style="display:none;"></pre>
       </article>
     </section>
 
@@ -2872,13 +2900,14 @@
     }
 
     // â”€â”€ NAVEGACIÃ“N DE TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const ALL_TABS = ['onboarding','operacion','prospectos','calendario','academico','teoria','administracion','roles','torneos','comunidad','marketplace','finanzas','inventario','comisiones','pasarela','configuracion','debug'];
+    const ALL_TABS = ['onboarding','operacion','prospectos','calendario','academico','teoria','administracion','roles','torneos','comunidad','marketplace','finanzas','inventario','comisiones','pasarela','facturacion','configuracion','debug'];
     const TOP_TABS = ['operacion','prospectos','calendario','academico','administracion','torneos','comunidad','marketplace','finanzas','configuracion','debug'];
     const TAB_PARENT = {
       teoria: 'academico',
       inventario: 'marketplace',
       comisiones: 'finanzas',
       pasarela: 'finanzas',
+      facturacion: 'finanzas',
       roles: 'configuracion',
       onboarding: 'configuracion'
     };
@@ -5090,6 +5119,15 @@
       } catch (err) {
         ids('login-output').textContent = err.message;
       }
+    });
+
+    // ─── Toggle trial signup form ────────────────────────────────────────
+    ids('show-trial-btn')?.addEventListener('click', () => {
+      ids('trial-signup-card').style.display = 'block';
+      ids('trial-signup-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    ids('cancel-trial-btn')?.addEventListener('click', () => {
+      ids('trial-signup-card').style.display = 'none';
     });
 
     // ─── Trial sign-up ───────────────────────────────────────────────────
@@ -9635,6 +9673,19 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="features.js"></script>
+  <script>
+    // ─── PWA: Register Service Worker ──────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          console.log('[PWA] SW registered, scope:', reg.scope);
+        }).catch((err) => {
+          console.warn('[PWA] SW registration failed:', err.message);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
 

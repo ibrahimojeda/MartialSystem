@@ -82,6 +82,7 @@ const absencesPath = path.join(__dirname, '..', 'data', 'absences.json');
 const appSettingsPath = path.join(__dirname, '..', 'data', 'app-settings.json');
 const marketplaceImagesPath = path.join(__dirname, '..', 'data', 'marketplace-images.json');
 const whatsappConfigPath = path.join(__dirname, '..', 'data', 'whatsapp-config.json');
+const trialUsersPath = path.join(__dirname, '..', 'data', 'trial-users.json');
 
 const SUPERADMIN_USERNAME = String(process.env.SUPERADMIN_USERNAME || 'venta').trim().toLowerCase();
 const SUPERADMIN_PASSWORD = String(process.env.SUPERADMIN_PASSWORD || 'Venta@Dojo2026!');
@@ -2399,6 +2400,336 @@ app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
   }
 });
 
+// ===== DASHBOARD: STUDENT/GUARDIAN =====
+app.get('/api/dashboard/student', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (![ROLE_STUDENT, ROLE_GUARDIAN].includes(membership.role)) {
+      return res.status(403).json({ ok: false, error: 'Only student/guardian can access this dashboard' });
+    }
+
+    // Find student record linked to this profile
+    const { data: student, error: studentErr } = await supabaseAdmin
+      .from('students')
+      .select('id, full_name, email, phone, birth_date')
+      .eq('establishment_id', establishmentId)
+      .eq('profile_id', profileId)
+      .single();
+    if (studentErr || !student) {
+      return res.json({ ok: true, data: { student: null, enrollments: [], attendance: { rate: null, present: 0, total: 0 }, lastEvaluation: null, upcomingClasses: [], payments: [], notifications: [] } });
+    }
+
+    const studentId = student.id;
+
+    // Enrollments with discipline info
+    const { data: enrollments } = await supabaseAdmin
+      .from('student_enrollments')
+      .select('id, discipline_id, current_rank, status, joined_at')
+      .eq('student_id', studentId)
+      .limit(50);
+
+    const disciplineIds = [...new Set((enrollments || []).map(e => e.discipline_id).filter(Boolean))];
+    const { data: disciplines } = disciplineIds.length > 0
+      ? await supabaseAdmin.from('disciplines').select('id, code, name').in('id', disciplineIds)
+      : { data: [] };
+    const discMap = new Map((disciplines || []).map(d => [d.id, d]));
+    const enrollmentData = (enrollments || []).map(e => ({
+      ...e,
+      discipline: discMap.get(e.discipline_id) || null
+    }));
+
+    // Instructor names from student_instructor file links
+    const fileLinks = getStudentInstructorLinks(establishmentId, studentId);
+    let instructorNames = [];
+    if (fileLinks.length > 0) {
+      const { data: instrProfiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', fileLinks);
+      instructorNames = (instrProfiles || []).map(p => p.full_name).filter(Boolean);
+    }
+
+    // Attendance stats
+    const { data: attendanceRecords } = await supabaseAdmin
+      .from('class_attendance_records')
+      .select('status')
+      .eq('student_id', studentId)
+      .limit(500);
+    const totalAtt = (attendanceRecords || []).length;
+    const presentAtt = (attendanceRecords || []).filter(r => r.status === 'present' || r.status === 'late').length;
+    const attendanceRate = totalAtt > 0 ? Math.round((presentAtt / totalAtt) * 100) : null;
+
+    // Latest evaluation
+    const { data: evaluations } = await supabaseAdmin
+      .from('student_evaluations')
+      .select('id, discipline_id, score, passed, notes, next_rank, evaluated_at')
+      .eq('establishment_id', establishmentId)
+      .eq('student_id', studentId)
+      .order('evaluated_at', { ascending: false })
+      .limit(5);
+    const lastEval = (evaluations || [])[0] || null;
+    if (lastEval && lastEval.discipline_id) {
+      lastEval.discipline_name = discMap.get(lastEval.discipline_id)?.name || null;
+    }
+
+    // Upcoming classes (today and future) for enrolled disciplines
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: upcomingClasses } = await supabaseAdmin
+      .from('class_sessions')
+      .select('id, title, scheduled_date, start_time, end_time, location, discipline_id')
+      .eq('establishment_id', establishmentId)
+      .gte('scheduled_date', today)
+      .in('discipline_id', disciplineIds.length > 0 ? disciplineIds : ['__none__'])
+      .order('scheduled_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(10);
+    const classesData = (upcomingClasses || []).map(c => ({
+      ...c,
+      discipline_name: discMap.get(c.discipline_id)?.name || null
+    }));
+
+    // Payments
+    const { data: payments } = await supabaseAdmin
+      .from('payments')
+      .select('id, amount, currency, method, concept, paid_at, discipline_id')
+      .eq('establishment_id', establishmentId)
+      .eq('student_id', studentId)
+      .order('paid_at', { ascending: false })
+      .limit(10);
+    const paymentsData = (payments || []).map(p => ({
+      ...p,
+      discipline_name: p.discipline_id ? (discMap.get(p.discipline_id)?.name || null) : null
+    }));
+
+    // Notifications
+    const { data: notifications } = await supabaseAdmin
+      .from('notifications')
+      .select('id, title, body, is_read, created_at')
+      .eq('establishment_id', establishmentId)
+      .or(`recipient_profile_id.eq.${profileId},audience_role.eq.all,audience_role.eq.student`)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Check for upcoming exam (from academic_exam_requests or similar)
+    const { data: nextRank } = await supabaseAdmin
+      .from('student_evaluations')
+      .select('next_rank, discipline_id, evaluated_at')
+      .eq('establishment_id', establishmentId)
+      .eq('student_id', studentId)
+      .order('evaluated_at', { ascending: false })
+      .limit(1);
+
+    return res.json({
+      ok: true,
+      data: {
+        student,
+        enrollments: enrollmentData,
+        instructorNames,
+        attendance: { rate: attendanceRate, present: presentAtt, total: totalAtt },
+        lastEvaluation: lastEval,
+        nextRank: (nextRank || [])[0] || null,
+        upcomingClasses: classesData,
+        payments: paymentsData,
+        notifications: (notifications || []).slice(0, 5)
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load student dashboard' });
+  }
+});
+
+// ===== DASHBOARD: SENSEI/INSTRUCTOR =====
+app.get('/api/dashboard/sensei', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (![ROLE_SENSEI, ROLE_INSTRUCTOR].includes(membership.role)) {
+      return res.status(403).json({ ok: false, error: 'Only sensei/instructor can access this dashboard' });
+    }
+
+    const isSensei = membership.role === ROLE_SENSEI;
+
+    // Get instructor's disciplines
+    const { data: instrDisciplines } = await supabaseAdmin
+      .from('instructor_disciplines')
+      .select('discipline_id')
+      .eq('establishment_id', establishmentId)
+      .eq('instructor_profile_id', profileId);
+
+    // For sensei: also get disciplines of their sub-instructors
+    let allDisciplineIds = (instrDisciplines || []).map(r => r.discipline_id);
+    let subInstructorIds = [];
+
+    if (isSensei) {
+      // Get sub-instructors from sensei-instructors.json
+      const senseiStore = readJsonStore(senseiInstructorPath, {});
+      const estSenseiMap = senseiStore[String(establishmentId)] || {};
+      subInstructorIds = Object.entries(estSenseiMap)
+        .filter(([, senseiId]) => senseiId === profileId)
+        .map(([instId]) => instId);
+
+      if (subInstructorIds.length > 0) {
+        const { data: subInstrDisc } = await supabaseAdmin
+          .from('instructor_disciplines')
+          .select('discipline_id')
+          .eq('establishment_id', establishmentId)
+          .in('instructor_profile_id', subInstructorIds);
+        const subDiscIds = (subInstrDisc || []).map(r => r.discipline_id);
+        allDisciplineIds = [...new Set([...allDisciplineIds, ...subDiscIds])];
+      }
+    }
+
+    // Get discipline info
+    const { data: disciplines } = allDisciplineIds.length > 0
+      ? await supabaseAdmin.from('disciplines').select('id, code, name').in('id', allDisciplineIds)
+      : { data: [] };
+    const discMap = new Map((disciplines || []).map(d => [d.id, d]));
+
+    // Students enrolled in these disciplines
+    const { data: allEnrollments } = allDisciplineIds.length > 0
+      ? await supabaseAdmin
+          .from('student_enrollments')
+          .select('student_id, discipline_id')
+          .in('discipline_id', allDisciplineIds)
+          .eq('status', 'active')
+          .limit(5000)
+      : { data: [] };
+
+    const studentIds = [...new Set((allEnrollments || []).map(e => e.student_id))];
+    const totalStudents = studentIds.length;
+
+    // Students per discipline
+    const studentsPerDisc = {};
+    (allEnrollments || []).forEach(e => {
+      const dName = discMap.get(e.discipline_id)?.name || 'Otro';
+      studentsPerDisc[dName] = (studentsPerDisc[dName] || 0) + 1;
+    });
+
+    // Today's classes
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: todayClasses } = await supabaseAdmin
+      .from('class_sessions')
+      .select('id, title, scheduled_date, start_time, end_time, location, discipline_id, instructor_profile_id, status')
+      .eq('establishment_id', establishmentId)
+      .eq('scheduled_date', today)
+      .order('start_time', { ascending: true })
+      .limit(20);
+
+    // Filter classes for this instructor (own + sensei's sub-instructors)
+    const relevantProfileIds = [profileId, ...subInstructorIds];
+    const myTodayClasses = (todayClasses || []).filter(c =>
+      relevantProfileIds.includes(c.instructor_profile_id)
+    ).map(c => ({
+      ...c,
+      discipline_name: discMap.get(c.discipline_id)?.name || null
+    }));
+
+    // Attendance for today's classes
+    let todayAttendanceStats = { total: 0, present: 0, rate: null };
+    if (myTodayClasses.length > 0) {
+      const classIds = myTodayClasses.map(c => c.id);
+      const { data: todayAtt } = await supabaseAdmin
+        .from('class_attendance_records')
+        .select('status')
+        .in('class_session_id', classIds);
+      const tTotal = (todayAtt || []).length;
+      const tPresent = (todayAtt || []).filter(r => r.status === 'present' || r.status === 'late').length;
+      todayAttendanceStats = {
+        total: tTotal,
+        present: tPresent,
+        rate: tTotal > 0 ? Math.round((tPresent / tTotal) * 100) : null
+      };
+    }
+
+    // Students with low attendance (below 70%)
+    const { data: lowAttRecords } = studentIds.length > 0
+      ? await supabaseAdmin
+          .from('class_attendance_records')
+          .select('student_id, status')
+          .in('student_id', studentIds.slice(0, 200))
+          .limit(10000)
+      : { data: [] };
+
+    const attByStudent = {};
+    (lowAttRecords || []).forEach(r => {
+      if (!attByStudent[r.student_id]) attByStudent[r.student_id] = { total: 0, present: 0 };
+      attByStudent[r.student_id].total++;
+      if (r.status === 'present' || r.status === 'late') attByStudent[r.student_id].present++;
+    });
+
+    const lowAttStudentIds = Object.entries(attByStudent)
+      .filter(([, stats]) => stats.total >= 3 && (stats.present / stats.total) < 0.7)
+      .map(([sid]) => sid);
+
+    let attentionStudents = [];
+    if (lowAttStudentIds.length > 0) {
+      const { data: attStudents } = await supabaseAdmin
+        .from('students')
+        .select('id, full_name')
+        .in('id', lowAttStudentIds.slice(0, 10));
+      attentionStudents = (attStudents || []).map(s => ({
+        ...s,
+        attendanceRate: Math.round((attByStudent[s.id].present / attByStudent[s.id].total) * 100)
+      })).sort((a, b) => a.attendanceRate - b.attendanceRate);
+    }
+
+    // Pending evaluations (students without recent evaluations)
+    const { data: recentEvals } = studentIds.length > 0
+      ? await supabaseAdmin
+          .from('student_evaluations')
+          .select('student_id, evaluated_at')
+          .eq('establishment_id', establishmentId)
+          .in('student_id', studentIds.slice(0, 200))
+          .order('evaluated_at', { ascending: false })
+          .limit(500)
+      : { data: [] };
+
+    const lastEvalByStudent = {};
+    (recentEvals || []).forEach(e => {
+      if (!lastEvalByStudent[e.student_id]) lastEvalByStudent[e.student_id] = e.evaluated_at;
+    });
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const studentsNeedingEval = studentIds.filter(sid =>
+      !lastEvalByStudent[sid] || lastEvalByStudent[sid] < thirtyDaysAgo
+    );
+
+    // Notifications
+    const { data: notifications } = await supabaseAdmin
+      .from('notifications')
+      .select('id, title, body, is_read, created_at')
+      .eq('establishment_id', establishmentId)
+      .or(`recipient_profile_id.eq.${profileId},audience_role.eq.all,audience_role.eq.instructor,audience_role.eq.sensei`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    return res.json({
+      ok: true,
+      data: {
+        disciplines: (disciplines || []).map(d => ({ ...d })),
+        totalStudents,
+        studentsPerDiscipline: studentsPerDisc,
+        todayClasses: myTodayClasses,
+        todayAttendance: todayAttendanceStats,
+        attentionStudents,
+        pendingEvaluations: studentsNeedingEval.length,
+        notifications: (notifications || []).slice(0, 5)
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load sensei dashboard' });
+  }
+});
+
 app.get('/api/module-permissions', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
   const { establishmentId } = req.query;
@@ -3960,6 +4291,90 @@ app.get('/api/disciplines', async (_req, res) => {
 
   if (error) return res.status(500).json({ ok: false, error: error.message });
   return res.json({ ok: true, data });
+});
+
+// GET /api/my-disciplines — Return only disciplines the user is enrolled in (for student/guardian)
+app.get('/api/my-disciplines', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+
+    // For student: find their student record and return only enrolled disciplines
+    if (membership.role === ROLE_STUDENT) {
+      const { data: student } = await supabaseAdmin
+        .from('students')
+        .select('id')
+        .eq('establishment_id', establishmentId)
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+      if (!student) return res.json({ ok: true, data: [] });
+
+      const { data: enrollments } = await supabaseAdmin
+        .from('student_enrollments')
+        .select('discipline_id')
+        .eq('student_id', student.id)
+        .eq('status', 'active');
+
+      const discIds = [...new Set((enrollments || []).map(e => e.discipline_id).filter(Boolean))];
+      if (!discIds.length) return res.json({ ok: true, data: [] });
+
+      const { data: disciplines } = await supabaseAdmin
+        .from('disciplines')
+        .select('id, code, name')
+        .in('id', discIds)
+        .order('name', { ascending: true });
+
+      return res.json({ ok: true, data: disciplines || [] });
+    }
+
+    // For guardian: find linked students' disciplines
+    if (membership.role === ROLE_GUARDIAN) {
+      const { data: links } = await supabaseAdmin
+        .from('guardian_students')
+        .select('student_id')
+        .eq('establishment_id', establishmentId)
+        .eq('guardian_profile_id', profileId);
+
+      const studentIds = [...new Set((links || []).map(l => l.student_id).filter(Boolean))];
+      if (!studentIds.length) return res.json({ ok: true, data: [] });
+
+      const { data: enrollments } = await supabaseAdmin
+        .from('student_enrollments')
+        .select('discipline_id')
+        .in('student_id', studentIds)
+        .eq('status', 'active');
+
+      const discIds = [...new Set((enrollments || []).map(e => e.discipline_id).filter(Boolean))];
+      if (!discIds.length) return res.json({ ok: true, data: [] });
+
+      const { data: disciplines } = await supabaseAdmin
+        .from('disciplines')
+        .select('id, code, name')
+        .in('id', discIds)
+        .order('name', { ascending: true });
+
+      return res.json({ ok: true, data: disciplines || [] });
+    }
+
+    // For owner/sensei/admin/superadmin/instructor: return establishment disciplines
+    const allowedIds = await getAllowedDisciplineIds(membership.role, profileId, establishmentId);
+    if (!allowedIds.length) return res.json({ ok: true, data: [] });
+
+    const { data: disciplines } = await supabaseAdmin
+      .from('disciplines')
+      .select('id, code, name')
+      .in('id', allowedIds)
+      .order('name', { ascending: true });
+
+    return res.json({ ok: true, data: disciplines || [] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load disciplines' });
+  }
 });
 
 app.get('/api/establishment-disciplines', requireAuth, async (req, res) => {
@@ -5853,6 +6268,1148 @@ app.post('/api/whatsapp/send-batch', requireAuth, async (req, res) => {
     return res.json({ ok: true, data: { sent, failed, total: recipients.length, results } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not send batch WhatsApp' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// FASE 3: PASARELAS DE PAGO (Stripe / PagueloFacil / PayPal)
+// ══════════════════════════════════════════════════════════════
+
+const stripe = require('stripe');
+const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '').trim();
+const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+const APP_BASE_URL = String(process.env.APP_BASE_URL || `http://localhost:${PORT}`).trim();
+const PAGUELOFACIL_API_KEY = String(process.env.PAGUELOFACIL_API_KEY || '').trim();
+const PAGUELOFACIL_SECRET = String(process.env.PAGUELOFACIL_SECRET || '').trim();
+const PAGUELOFACIL_MODE = String(process.env.PAGUELOFACIL_MODE || 'sandbox').trim();
+const PAYPAL_CLIENT_ID = String(process.env.PAYPAL_CLIENT_ID || '').trim();
+const PAYPAL_CLIENT_SECRET = String(process.env.PAYPAL_CLIENT_SECRET || '').trim();
+const PAYPAL_MODE = String(process.env.PAYPAL_MODE || 'sandbox').trim();
+const PAYPAL_API_BASE = PAYPAL_MODE === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+
+let stripeClient = null;
+if (STRIPE_SECRET_KEY) {
+  try {
+    stripeClient = stripe(STRIPE_SECRET_KEY);
+    console.log('[Stripe] SDK initialized');
+  } catch (err) {
+    console.warn('[Stripe] SDK init error:', err.message);
+  }
+}
+
+// ─── Stripe: Create Payment Intent ─────────────────────────────
+app.post('/api/payments/stripe/create-payment-intent', requireAuth, async (req, res) => {
+  if (!stripeClient) return res.status(400).json({ ok: false, error: 'Stripe not configured. Set STRIPE_SECRET_KEY in .env' });
+  const profileId = req.authUser.id;
+  const { establishmentId, studentId, amount, currency, description, metadata } = req.body || {};
+  if (!establishmentId || !amount || amount <= 0) return res.status(400).json({ ok: false, error: 'establishmentId and amount (positive) are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const paymentIntent = await stripeClient.paymentIntents.create({
+      amount: Math.round(Number(amount) * 100),
+      currency: currency || 'usd',
+      description: description || 'MartialSystem payment',
+      metadata: { establishmentId, studentId: studentId || '', profileId, ...(metadata || {}) },
+      automatic_payment_methods: { enabled: true }
+    });
+    const { error: logError } = await supabaseAdmin.from('payment_intents').insert({
+      establishment_id: establishmentId, student_id: studentId || null, profile_id: profileId,
+      provider: 'stripe', provider_payment_id: paymentIntent.id, amount: Number(amount),
+      currency: currency || 'USD', status: paymentIntent.status, client_secret: paymentIntent.client_secret
+    });
+    if (logError) console.warn('[Stripe] Log error:', logError.message);
+    return res.json({ ok: true, data: { clientSecret: paymentIntent.client_secret, paymentIntentId: paymentIntent.id, amount: paymentIntent.amount / 100, currency: paymentIntent.currency.toUpperCase() } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── Stripe: Create Setup Intent (save card) ──────────────────
+app.post('/api/payments/stripe/create-setup-intent', requireAuth, async (req, res) => {
+  if (!stripeClient) return res.status(400).json({ ok: false, error: 'Stripe not configured' });
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.body || {};
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const setupIntent = await stripeClient.setupIntents.create({ metadata: { establishmentId, profileId } });
+    return res.json({ ok: true, data: { clientSecret: setupIntent.client_secret } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── Stripe: Create Subscription ──────────────────────────────
+app.post('/api/payments/stripe/create-subscription', requireAuth, async (req, res) => {
+  if (!stripeClient) return res.status(400).json({ ok: false, error: 'Stripe not configured' });
+  const profileId = req.authUser.id;
+  const { establishmentId, studentId, priceId, customerId } = req.body || {};
+  if (!establishmentId || !priceId) return res.status(400).json({ ok: false, error: 'establishmentId and priceId are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    let stripeCustomerId = customerId;
+    if (!stripeCustomerId) {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('full_name, auth_email').eq('id', profileId).single();
+      const customer = await stripeClient.customers.create({ email: profile?.auth_email || undefined, name: profile?.full_name || undefined, metadata: { establishmentId, profileId } });
+      stripeCustomerId = customer.id;
+    }
+    const subscription = await stripeClient.subscriptions.create({
+      customer: stripeCustomerId, items: [{ price: priceId }],
+      payment_behavior: 'default_incomplete', expand: ['latest_invoice.payment_intent'],
+      metadata: { establishmentId, studentId: studentId || '', profileId }
+    });
+    await supabaseAdmin.from('payment_subscriptions').upsert({
+      establishment_id: establishmentId, student_id: studentId || null, profile_id: profileId,
+      provider: 'stripe', provider_subscription_id: subscription.id, provider_customer_id: stripeCustomerId,
+      status: subscription.status, plan_data: { priceId }
+    }, { onConflict: 'establishment_id,profile_id,provider_subscription_id' });
+    return res.json({ ok: true, data: { subscriptionId: subscription.id, clientSecret: subscription.latest_invoice?.payment_intent?.client_secret || null, status: subscription.status } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── Stripe: Webhook ──────────────────────────────────────────
+app.post('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripeClient) return res.status(400).json({ ok: false, error: 'Stripe not configured' });
+  let event; const sig = req.headers['stripe-signature'];
+  if (STRIPE_WEBHOOK_SECRET && sig) {
+    try { event = stripeClient.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET); }
+    catch (err) { return res.status(400).json({ ok: false, error: `Webhook Error: ${err.message}` }); }
+  } else { try { event = JSON.parse(req.body.toString()); } catch (err) { return res.status(400).json({ ok: false, error: 'Invalid payload' }); } }
+  try {
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object; const { establishmentId, studentId, profileId } = pi.metadata || {};
+      if (establishmentId && pi.amount) {
+        await supabaseAdmin.from('payments').insert({ establishment_id: establishmentId, student_id: studentId || null, amount: pi.amount / 100, currency: (pi.currency || 'usd').toUpperCase(), method: 'stripe', concept: `Stripe ${pi.id}`, paid_at: new Date().toISOString(), created_by: profileId || 'stripe_webhook' });
+      }
+      await supabaseAdmin.from('payment_intents').update({ status: 'succeeded' }).eq('provider_payment_id', pi.id);
+    }
+    if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object;
+      await supabaseAdmin.from('payment_intents').update({ status: 'failed', error_message: pi.last_payment_error?.message || null }).eq('provider_payment_id', pi.id);
+    }
+    if (event.type === 'invoice.payment_succeeded') {
+      const invoice = event.data.object; const subId = invoice.subscription;
+      if (subId) await supabaseAdmin.from('payment_subscriptions').update({ status: 'active' }).eq('provider_subscription_id', subId);
+    }
+    if (event.type === 'customer.subscription.deleted') {
+      const sub = event.data.object;
+      await supabaseAdmin.from('payment_subscriptions').update({ status: 'canceled' }).eq('provider_subscription_id', sub.id);
+    }
+    return res.json({ received: true });
+  } catch (err) { console.error('[Stripe] Webhook error:', err.message); return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── PagueloFacil (Panamá) ────────────────────────────────────
+app.get('/api/payments/paguelofacil/config', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id; const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const storePath = path.join(__dirname, '..', 'data', 'paguelofacil-config.json');
+    const config = readJsonStore(storePath, {}); const estConfig = config[String(establishmentId)] || {};
+    return res.json({ ok: true, data: { enabled: Boolean(estConfig.enabled), apiKey: estConfig.apiKey ? estConfig.apiKey.slice(0, 8) + '...' : '', storeId: estConfig.storeId || '', currency: estConfig.currency || 'USD', mode: PAGUELOFACIL_MODE } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+app.put('/api/payments/paguelofacil/config', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id; const { establishmentId, apiKey, storeId, currency, enabled } = req.body || {};
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (!isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const storePath = path.join(__dirname, '..', 'data', 'paguelofacil-config.json');
+    const config = readJsonStore(storePath, {});
+    config[String(establishmentId)] = { enabled: enabled !== undefined ? Boolean(enabled) : true, apiKey: apiKey || '', storeId: storeId || '', currency: currency || 'USD', updatedAt: new Date().toISOString() };
+    writeJsonStore(storePath, config);
+    return res.json({ ok: true, data: config[String(establishmentId)] });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+app.post('/api/payments/paguelofacil/create-link', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, studentId, amount, currency, concept, payerName, payerEmail, payerPhone } = req.body || {};
+  if (!establishmentId || !amount || amount <= 0) return res.status(400).json({ ok: false, error: 'establishmentId and amount are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const storePath = path.join(__dirname, '..', 'data', 'paguelofacil-config.json');
+    const config = readJsonStore(storePath, {});
+    const estConfig = config[String(establishmentId)];
+    const effectiveApiKey = estConfig?.apiKey || PAGUELOFACIL_API_KEY;
+    if (!effectiveApiKey) return res.status(400).json({ ok: false, error: 'PagueloFacil not configured for this establishment' });
+    const referenceId = `PF-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const successUrl = `${APP_BASE_URL}/payment/success?ref=${referenceId}`;
+    const cancelUrl = `${APP_BASE_URL}/payment/cancel?ref=${referenceId}`;
+    const notifyUrl = `${APP_BASE_URL}/api/payments/paguelofacil/webhook`;
+    const paymentUrl = `https://www.paguelofacil.com/pay?apiKey=${effectiveApiKey}&amount=${Number(amount).toFixed(2)}&currency=${currency || 'USD'}&reference=${referenceId}&description=${encodeURIComponent(concept || 'Pago MartialSystem')}&successUrl=${encodeURIComponent(successUrl)}&cancelUrl=${encodeURIComponent(cancelUrl)}&notifyUrl=${encodeURIComponent(notifyUrl)}${payerEmail ? '&email=' + encodeURIComponent(payerEmail) : ''}${payerName ? '&name=' + encodeURIComponent(payerName) : ''}`;
+    return res.json({ ok: true, data: { paymentUrl, referenceId, amount: Number(amount).toFixed(2), currency: currency || 'USD', successUrl, cancelUrl } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+app.post('/api/payments/paguelofacil/webhook', async (req, res) => {
+  const { reference, status, transactionId, amount, currency } = req.body || {};
+  if (!reference) return res.status(400).json({ ok: false, error: 'reference is required' });
+  try {
+    if (status === 'completed' || status === 'approved') {
+      await supabaseAdmin.from('payments').insert({
+        amount: Number(amount || 0), currency: currency || 'USD', method: 'paguelofacil',
+        concept: `PagueloFacil ${reference}`, paid_at: new Date().toISOString(),
+        paguelofacil_reference: reference, paguelofacil_transaction_id: transactionId || null
+      });
+    }
+    return res.json({ received: true });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── PayPal ───────────────────────────────────────────────────
+app.post('/api/payments/paypal/create-order', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, studentId, amount, currency, description } = req.body || {};
+  if (!establishmentId || !amount || amount <= 0) return res.status(400).json({ ok: false, error: 'establishmentId and amount are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) return res.status(400).json({ ok: false, error: 'PayPal not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in .env' });
+    const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const tokenRes = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, { method: 'POST', headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=client_credentials' });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok) throw new Error(tokenData.error_description || 'PayPal auth failed');
+    const orderRes = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+      method: 'POST', headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intent: 'CAPTURE', purchase_units: [{ reference_id: `${establishmentId}-${Date.now()}`, description: description || 'MartialSystem payment', amount: { currency_code: (currency || 'USD').toUpperCase(), value: Number(amount).toFixed(2) } }] })
+    });
+    const orderData = await orderRes.json();
+    if (!orderRes.ok) throw new Error(orderData.message || 'PayPal order creation failed');
+    const approvalUrl = orderData.links?.find(l => l.rel === 'approve')?.href || '';
+    return res.json({ ok: true, data: { orderId: orderData.id, status: orderData.status, approvalUrl, amount: Number(amount).toFixed(2), currency: currency || 'USD' } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+app.post('/api/payments/paypal/capture-order', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { orderId, establishmentId, studentId } = req.body || {};
+  if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+  try {
+    if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) return res.status(400).json({ ok: false, error: 'PayPal not configured' });
+    const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const tokenRes = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, { method: 'POST', headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=client_credentials' });
+    const tokenData = await tokenRes.json();
+    if (!tokenRes.ok) throw new Error(tokenData.error_description || 'PayPal auth failed');
+    const captureRes = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}/capture`, { method: 'POST', headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' } });
+    const captureData = await captureRes.json();
+    if (!captureRes.ok) throw new Error(captureData.message || 'PayPal capture failed');
+    if (captureData.status === 'COMPLETED' && establishmentId) {
+      const amount = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount;
+      await supabaseAdmin.from('payments').insert({
+        establishment_id: establishmentId, student_id: studentId || null,
+        amount: Number(amount?.value || 0), currency: amount?.currency_code || 'USD',
+        method: 'paypal', concept: `PayPal ${orderId}`, paid_at: new Date().toISOString(),
+        paypal_order_id: orderId, created_by: profileId
+      });
+    }
+    return res.json({ ok: true, data: { status: captureData.status, orderId } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+app.post('/api/payments/paypal/webhook', async (req, res) => {
+  const eventBody = req.body || {};
+  try {
+    if (eventBody.event_type === 'CHECKOUT.ORDER.APPROVED' || eventBody.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+      const resource = eventBody.resource || {};
+      const orderId = resource.id || resource.supplementary_data?.related_ids?.order_id || '';
+      const amount = resource.purchase_units?.[0]?.payments?.captures?.[0]?.amount;
+      if (orderId) {
+        await supabaseAdmin.from('payments').upsert({
+          amount: Number(amount?.value || 0), currency: amount?.currency_code || 'USD',
+          method: 'paypal', concept: `PayPal ${orderId}`, paid_at: new Date().toISOString(),
+          paypal_order_id: orderId
+        }, { onConflict: 'paypal_order_id' });
+      }
+    }
+    return res.json({ received: true });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// ─── Payment success/cancel pages ─────────────────────────────
+app.get('/payment/success', (req, res) => {
+  const { ref, paymentId } = req.query;
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pago exitoso - MartialSystem</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0f1318;color:#eaf0f7;}.card{background:#171d24;border:1px solid #2b3645;border-radius:14px;padding:30px;text-align:center;max-width:420px;}.icon{font-size:48px;margin-bottom:10px;}.btn{display:inline-block;background:linear-gradient(180deg,#c64834,#a73727);color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:16px;}</style></head><body><div class="card"><div class="icon">✅</div><h1>Pago exitoso</h1><p>Tu pago se ha procesado correctamente.</p>${ref ? `<p style="font-size:12px;color:#aab7c8;">Ref: ${ref}</p>` : ''}${paymentId ? `<p style="font-size:12px;color:#aab7c8;">ID: ${paymentId}</p>` : ''}<a class="btn" href="/">Volver al inicio</a></div></body></html>`);
+});
+
+app.get('/payment/cancel', (req, res) => {
+  const { ref, paymentId } = req.query;
+  res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pago cancelado - MartialSystem</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0f1318;color:#eaf0f7;}.card{background:#171d24;border:1px solid #2b3645;border-radius:14px;padding:30px;text-align:center;max-width:420px;}.icon{font-size:48px;margin-bottom:10px;}.btn{display:inline-block;background:linear-gradient(180deg,#35506f,#2b3f59);color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:16px;}</style></head><body><div class="card"><div class="icon">↩️</div><h1>Pago cancelado</h1><p>El proceso de pago fue cancelado. No se ha realizado ningun cargo.</p>${ref ? `<p style="font-size:12px;color:#aab7c8;">Ref: ${ref}</p>` : ''}${paymentId ? `<p style="font-size:12px;color:#aab7c8;">ID: ${paymentId}</p>` : ''}<a class="btn" href="/">Volver al inicio</a></div></body></html>`);
+});
+
+// ══════════════════════════════════════════════════════════════
+// DASHBOARD: OWNER (Dueño de Dojo)
+// ══════════════════════════════════════════════════════════════
+
+app.get('/api/dashboard/owner', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (![ROLE_OWNER, ROLE_SENSEI].includes(membership.role) && !req.isSuperadmin) {
+      return res.status(403).json({ ok: false, error: 'Only owner/sensei can access this dashboard' });
+    }
+
+    // Get students scoped to THIS establishment only
+    const { data: students } = await supabaseAdmin
+      .from('students')
+      .select('id, full_name, establishment_id')
+      .eq('establishment_id', establishmentId)
+      .limit(10000);
+
+    const studentIds = (students || []).map(s => s.id);
+    const studentIdSet = new Set(studentIds);
+
+    // Get enrollments only for students of THIS establishment
+    const { data: enrollments } = studentIds.length > 0
+      ? await supabaseAdmin
+          .from('student_enrollments')
+          .select('student_id, discipline_id, current_rank, status')
+          .in('student_id', studentIds)
+          .limit(5000)
+      : { data: [] };
+
+    const estEnrollments = (enrollments || []).filter(e => studentIdSet.has(e.student_id));
+    const activeEnrollments = estEnrollments.filter(e => e.status === 'active');
+    const totalStudents = new Set(activeEnrollments.map(e => e.student_id)).size;
+
+    // Disciplines
+    const disciplineIds = [...new Set(estEnrollments.map(e => e.discipline_id).filter(Boolean))];
+    const { data: disciplines } = disciplineIds.length > 0
+      ? await supabaseAdmin.from('disciplines').select('id, code, name').in('id', disciplineIds)
+      : { data: [] };
+    const discMap = new Map((disciplines || []).map(d => [d.id, d]));
+
+    // Students per discipline
+    const studentsPerDisc = {};
+    activeEnrollments.forEach(e => {
+      const dName = discMap.get(e.discipline_id)?.name || 'Otro';
+      studentsPerDisc[dName] = (studentsPerDisc[dName] || 0) + 1;
+    });
+
+    // Today's classes
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: todayClasses } = await supabaseAdmin
+      .from('class_sessions')
+      .select('id, title, scheduled_date, start_time, end_time, discipline_id, instructor_profile_id, status')
+      .eq('establishment_id', establishmentId)
+      .gte('scheduled_date', today)
+      .order('scheduled_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(20);
+
+    const classesData = (todayClasses || []).map(c => ({
+      ...c,
+      discipline_name: discMap.get(c.discipline_id)?.name || null
+    }));
+
+    // Attendance rate (last 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data: classes30 } = await supabaseAdmin
+      .from('class_sessions')
+      .select('id')
+      .eq('establishment_id', establishmentId)
+      .gte('scheduled_date', thirtyDaysAgo.slice(0, 10))
+      .limit(500);
+
+    let attendanceStats = { total: 0, present: 0, rate: null };
+    if ((classes30 || []).length > 0) {
+      const classIds = classes30.map(c => c.id);
+      const { data: attRecords } = await supabaseAdmin
+        .from('class_attendance_records')
+        .select('status')
+        .in('class_session_id', classIds)
+        .limit(10000);
+      const total = (attRecords || []).length;
+      const present = (attRecords || []).filter(r => r.status === 'present' || r.status === 'late').length;
+      attendanceStats = { total, present, rate: total > 0 ? Math.round((present / total) * 100) : null };
+    }
+
+    // Payments (this month)
+    const now = new Date();
+    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const firstOfMonth = `${monthKey}-01T00:00:00.000Z`;
+    const { data: monthPayments } = await supabaseAdmin
+      .from('payments')
+      .select('amount, paid_at, discipline_id')
+      .eq('establishment_id', establishmentId)
+      .gte('paid_at', firstOfMonth)
+      .limit(5000);
+
+    const totalReceived = Number((monthPayments || []).reduce((s, p) => s + Number(p.amount || 0), 0).toFixed(2));
+
+    // Expected income
+    const activeByDisc = {};
+    activeEnrollments.forEach(e => {
+      const code = discMap.get(e.discipline_id)?.code;
+      if (code) activeByDisc[code] = (activeByDisc[code] || 0) + 1;
+    });
+    const expectedIncome = Number(Object.entries(activeByDisc).reduce((acc, [code, count]) => {
+      return acc + (count * getExpectedFeeForDiscipline(establishmentId, code));
+    }, 0).toFixed(2));
+
+    // Notifications
+    const { data: notifications } = await supabaseAdmin
+      .from('notifications')
+      .select('id, title, body, is_read, created_at')
+      .eq('establishment_id', establishmentId)
+      .or(`recipient_profile_id.eq.${profileId},audience_role.eq.all,audience_role.eq.owner`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    // Students with low payment (morosos)
+    const { data: allPayments } = await supabaseAdmin
+      .from('payments')
+      .select('student_id, paid_at, amount')
+      .eq('establishment_id', establishmentId)
+      .order('paid_at', { ascending: false })
+      .limit(5000);
+
+    const lastPayByStudent = {};
+    (allPayments || []).forEach(p => {
+      if (!lastPayByStudent[p.student_id]) lastPayByStudent[p.student_id] = p.paid_at;
+    });
+
+    const twentyFiveDaysAgo = new Date(Date.now() - 25 * 86400000).toISOString().slice(0, 10);
+    const delinquentStudentIds = [...studentIds].filter(sid => {
+      const lastPay = lastPayByStudent[sid];
+      if (!lastPay) return true; // never paid
+      return lastPay.slice(0, 10) < twentyFiveDaysAgo;
+    });
+
+    const delinquentStudents = (students || [])
+      .filter(s => delinquentStudentIds.includes(s.id))
+      .slice(0, 10)
+      .map(s => ({ id: s.id, name: s.full_name }));
+
+    // System billing status (for overlay)
+    let systemBillStatus = null;
+    const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    try {
+      const { data: currentBill } = await supabaseAdmin
+        .from('system_usage_bills')
+        .select('id, amount, status, due_date, paid_at, confirmed_at, billing_month')
+        .eq('establishment_id', establishmentId)
+        .eq('billing_month', currentMonth)
+        .maybeSingle();
+      if (currentBill) {
+        const dueDate = new Date(currentBill.due_date);
+        const daysSinceDue = Math.max(0, Math.floor((Date.now() - dueDate.getTime()) / 86400000));
+        systemBillStatus = {
+          ...currentBill,
+          daysOverdue: currentBill.status !== 'confirmed' && currentBill.status !== 'waived' ? daysSinceDue : 0,
+          needsOverlay: currentBill.status !== 'confirmed' && currentBill.status !== 'waived' && daysSinceDue >= 5,
+          severeOverdue: currentBill.status !== 'confirmed' && currentBill.status !== 'waived' && daysSinceDue >= 15
+        };
+      }
+    } catch (_) { /* table may not exist */ }
+
+    return res.json({
+      ok: true,
+      data: {
+        totalStudents,
+        studentsPerDiscipline: studentsPerDisc,
+        disciplines: (disciplines || []).map(d => ({ id: d.id, code: d.code, name: d.name })),
+        todayClasses: classesData,
+        attendance: attendanceStats,
+        financials: { expectedIncome, receivedThisMonth: totalReceived, gap: Number(Math.max(0, expectedIncome - totalReceived).toFixed(2)) },
+        delinquentStudents,
+        notifications: (notifications || []).slice(0, 5),
+        systemBillStatus
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load owner dashboard' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// SYSTEM BILLING (Cobros por uso del sistema)
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/system-plans — List available system plans
+app.get('/api/system-plans', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('system_plans')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true, data: data || [] });
+  } catch (err) {
+    // Table may not exist yet
+    return res.json({ ok: true, data: [
+      { code: 'starter', name: 'Starter', price_usd: 49, max_dojos: 1, max_students: 50 },
+      { code: 'professional', name: 'Professional', price_usd: 99, max_dojos: 3, max_students: 250 },
+      { code: 'elite', name: 'Elite', price_usd: 199, max_dojos: 999, max_students: 999999 }
+    ] });
+  }
+});
+
+// GET /api/establishment-plan — Get current plan for an establishment
+app.get('/api/establishment-plan', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+
+    const { data, error } = await supabaseAdmin
+      .from('establishment_plans')
+      .select('*')
+      .eq('establishment_id', establishmentId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+
+    return res.json({ ok: true, data: data || { plan_code: 'starter', max_dojos: 1, max_students: 50, price_usd: 49 } });
+  } catch (err) {
+    return res.json({ ok: true, data: { plan_code: 'starter', max_dojos: 1, max_students: 50, price_usd: 49 } });
+  }
+});
+
+// PUT /api/establishment-plan/billing-days — Owner configures billing days
+app.put('/api/establishment-plan/billing-days', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, ownerBillingDay, parentBillingDay } = req.body || {};
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (membership.role !== ROLE_OWNER && !req.isSuperadmin) {
+      return res.status(403).json({ ok: false, error: 'Only owner can update billing days' });
+    }
+
+    const updatePayload = {};
+    if (ownerBillingDay !== undefined) {
+      const day = Number(ownerBillingDay);
+      if (![15, 31].includes(day)) return res.status(400).json({ ok: false, error: 'ownerBillingDay must be 15 or 31' });
+      updatePayload.owner_billing_day = day;
+    }
+    if (parentBillingDay !== undefined) {
+      const day = Number(parentBillingDay);
+      if (![15, 31].includes(day)) return res.status(400).json({ ok: false, error: 'parentBillingDay must be 15 or 31' });
+      updatePayload.parent_billing_day = day;
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.status(400).json({ ok: false, error: 'At least ownerBillingDay or parentBillingDay is required' });
+    }
+
+    // Upsert if plan row doesn't exist yet
+    const { data: existing } = await supabaseAdmin
+      .from('establishment_plans')
+      .select('id')
+      .eq('establishment_id', establishmentId)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabaseAdmin.from('establishment_plans').insert({
+        establishment_id: establishmentId,
+        plan_code: 'starter',
+        owner_billing_day: updatePayload.owner_billing_day || 15,
+        parent_billing_day: updatePayload.parent_billing_day || 15
+      });
+    } else {
+      const { error } = await supabaseAdmin
+        .from('establishment_plans')
+        .update(updatePayload)
+        .eq('establishment_id', establishmentId);
+      if (error) throw new Error(error.message);
+    }
+
+    return res.json({ ok: true, data: updatePayload });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not update billing days' });
+  }
+});
+
+// POST /api/system-billing/generate-monthly-bills — Superadmin generates bills for all active establishments
+app.post('/api/system-billing/generate-monthly-bills', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  const { billingMonth } = req.body || {};
+  const now = new Date();
+  const targetMonth = billingMonth || `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+  // Helper to compute due_date from billing_day
+  const computeDueDate = (monthKey, billingDay) => {
+    const [y, m] = monthKey.split('-').map(Number);
+    if (billingDay === 31) {
+      // Last day of month
+      const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      return `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+    }
+    return `${monthKey}-${String(billingDay || 15).padStart(2, '0')}`;
+  };
+
+  try {
+    const { data: establishments, error: estError } = await supabaseAdmin
+      .from('establishments')
+      .select('id, name')
+      .eq('is_active', true)
+      .limit(500);
+    if (estError) throw new Error(estError.message);
+
+    const results = [];
+    for (const est of (establishments || [])) {
+      const { data: ownerMember } = await supabaseAdmin
+        .from('establishment_members')
+        .select('profile_id')
+        .eq('establishment_id', est.id)
+        .eq('role', ROLE_OWNER)
+        .limit(1)
+        .maybeSingle();
+      if (!ownerMember?.profile_id) continue;
+
+      // Get plan with billing day
+      let planCode = 'starter', price = 49.00, billingDay = 15;
+      try {
+        const { data: plan } = await supabaseAdmin
+          .from('establishment_plans')
+          .select('plan_code, price_usd, owner_billing_day')
+          .eq('establishment_id', est.id)
+          .maybeSingle();
+        if (plan) {
+          planCode = plan.plan_code;
+          price = Number(plan.price_usd);
+          billingDay = plan.owner_billing_day || 15;
+        }
+      } catch (_) { /* use defaults */ }
+
+      const dueDate = computeDueDate(targetMonth, billingDay);
+
+      const { data: existingBill } = await supabaseAdmin
+        .from('system_usage_bills')
+        .select('id')
+        .eq('establishment_id', est.id)
+        .eq('billing_month', targetMonth)
+        .maybeSingle();
+      if (existingBill) {
+        results.push({ establishmentId: est.id, name: est.name, status: 'already_exists' });
+        continue;
+      }
+
+      const { data: bill, error: billError } = await supabaseAdmin
+        .from('system_usage_bills')
+        .insert({
+          establishment_id: est.id,
+          owner_profile_id: ownerMember.profile_id,
+          billing_month: targetMonth,
+          plan_code: planCode,
+          amount: price,
+          currency: 'USD',
+          status: 'pending',
+          due_date: dueDate
+        })
+        .select('id, establishment_id, amount, plan_code, due_date')
+        .single();
+      if (billError) {
+        results.push({ establishmentId: est.id, name: est.name, status: 'error', error: billError.message });
+      } else {
+        results.push({ establishmentId: est.id, name: est.name, status: 'created', bill });
+      }
+    }
+
+    return res.json({ ok: true, data: { billingMonth: targetMonth, results } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not generate bills' });
+  }
+});
+
+// POST /api/system-billing/send-parent-reminders — Owner sends payment reminders to parents
+app.post('/api/system-billing/send-parent-reminders', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.body || {};
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (membership.role !== ROLE_OWNER && !req.isSuperadmin) {
+      return res.status(403).json({ ok: false, error: 'Only owner can send reminders' });
+    }
+
+    // Get parent_billing_day for this establishment
+    let parentBillingDay = 15;
+    try {
+      const { data: plan } = await supabaseAdmin
+        .from('establishment_plans')
+        .select('parent_billing_day')
+        .eq('establishment_id', establishmentId)
+        .maybeSingle();
+      if (plan) parentBillingDay = plan.parent_billing_day || 15;
+    } catch (_) {}
+
+    const now = new Date();
+    const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    
+    // Calculate due date for current month based on parent_billing_day
+    let dueThisMonth;
+    if (parentBillingDay === 31) {
+      const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+      dueThisMonth = `${currentMonth}-${String(lastDay).padStart(2, '0')}`;
+    } else {
+      dueThisMonth = `${currentMonth}-${String(parentBillingDay).padStart(2, '0')}`;
+    }
+
+    const todayStr = now.toISOString().slice(0, 10);
+
+    // Get all active students
+    const { data: students } = await supabaseAdmin
+      .from('students')
+      .select('id, full_name, profile_id')
+      .eq('establishment_id', establishmentId)
+      .limit(5000);
+    if (!students || students.length === 0) {
+      return res.json({ ok: true, data: { sent: 0, message: 'No students found' } });
+    }
+
+    const studentIds = students.map(s => s.id);
+    
+    // Find students who haven't paid this month
+    const { data: payments } = await supabaseAdmin
+      .from('payments')
+      .select('student_id')
+      .eq('establishment_id', establishmentId)
+      .gte('paid_at', `${currentMonth}-01T00:00:00.000Z`)
+      .in('student_id', studentIds);
+    
+    const paidStudentIds = new Set((payments || []).map(p => p.student_id));
+    const unpaidStudents = students.filter(s => !paidStudentIds.has(s.id));
+
+    // Send notifications to unpaid students (or their guardians)
+    const sent = [];
+    for (const student of unpaidStudents.slice(0, 50)) {
+      const title = `Recordatorio de pago - ${student.full_name}`;
+      const body = `Recordatorio: la fecha de pago de la mensualidad del dojo es el día ${parentBillingDay === 31 ? 'último' : parentBillingDay} de cada mes. Por favor realiza tu pago correspondiente al mes de ${now.toLocaleString('es-PA', { month: 'long' })}.`;
+      
+      // Send to student's linked profile, or as general notification
+      const recipientId = student.profile_id || null;
+      try {
+        await supabaseAdmin.from('notifications').insert({
+          establishment_id: establishmentId,
+          recipient_profile_id: recipientId,
+          audience_role: 'student',
+          title,
+          body,
+          is_read: false,
+          created_by: profileId
+        });
+        sent.push({ studentId: student.id, name: student.full_name });
+      } catch (e) {
+        // skip individual errors
+      }
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        sent: sent.length,
+        totalUnpaid: unpaidStudents.length,
+        parentBillingDay,
+        dueThisMonth,
+        recipients: sent
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not send reminders' });
+  }
+});
+
+// GET /api/system-billing/bills — Owner views their bills
+app.get('/api/system-billing/bills', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+
+    const { data, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('id, billing_month, plan_code, amount, currency, status, due_date, paid_at, confirmed_at, payment_method, payment_reference, notes, created_at')
+      .eq('establishment_id', establishmentId)
+      .order('billing_month', { ascending: false })
+      .limit(50);
+    if (error) throw new Error(error.message);
+
+    return res.json({ ok: true, data: data || [] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load bills' });
+  }
+});
+
+// GET /api/system-billing/account-statement — Owner views payment history
+app.get('/api/system-billing/account-statement', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+
+    const { data: bills, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('*')
+      .eq('establishment_id', establishmentId)
+      .order('billing_month', { ascending: false })
+      .limit(100);
+    if (error) throw new Error(error.message);
+
+    const totalPaid = (bills || []).filter(b => b.status === 'confirmed').reduce((s, b) => s + Number(b.amount), 0);
+    const totalPending = (bills || []).filter(b => ['pending', 'paid', 'overdue'].includes(b.status)).reduce((s, b) => s + Number(b.amount), 0);
+    const totalOverdue = (bills || []).filter(b => b.status === 'overdue').reduce((s, b) => s + Number(b.amount), 0);
+
+    return res.json({
+      ok: true,
+      data: {
+        bills: bills || [],
+        summary: { totalPaid: Number(totalPaid.toFixed(2)), totalPending: Number(totalPending.toFixed(2)), totalOverdue: Number(totalOverdue.toFixed(2)) }
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load account statement' });
+  }
+});
+
+// POST /api/system-billing/pay — Owner marks a bill as paid
+app.post('/api/system-billing/pay', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, billId, paymentMethod, paymentReference, notes } = req.body || {};
+  if (!establishmentId || !billId) return res.status(400).json({ ok: false, error: 'establishmentId and billId are required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (membership.role !== ROLE_OWNER && !req.isSuperadmin) {
+      return res.status(403).json({ ok: false, error: 'Only owner can pay system bills' });
+    }
+
+    const { data: bill, error: billError } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('id, status')
+      .eq('id', billId)
+      .eq('establishment_id', establishmentId)
+      .single();
+    if (billError || !bill) return res.status(404).json({ ok: false, error: 'Bill not found' });
+    if (bill.status === 'confirmed' || bill.status === 'waived') {
+      return res.status(400).json({ ok: false, error: 'Bill is already confirmed/waived' });
+    }
+
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('system_usage_bills')
+      .update({
+        status: 'paid',
+        paid_at: new Date().toISOString(),
+        payment_method: paymentMethod || 'other',
+        payment_reference: paymentReference || null,
+        notes: notes || null
+      })
+      .eq('id', billId)
+      .select('id, status, paid_at')
+      .single();
+    if (updateError) throw new Error(updateError.message);
+
+    return res.json({ ok: true, data: updated });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not process payment' });
+  }
+});
+
+// GET /api/system-billing/pending-payments — Superadmin views pending payments
+app.get('/api/system-billing/pending-payments', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  try {
+    const { data: bills, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('*, establishments(name), profiles!system_usage_bills_owner_profile_id_fkey(full_name, username)')
+      .in('status', ['pending', 'paid', 'overdue'])
+      .order('due_date', { ascending: true })
+      .limit(500);
+    if (error) throw new Error(error.message);
+
+    // Update overdue status
+    const now = new Date();
+    for (const bill of (bills || [])) {
+      if (bill.status === 'pending' && new Date(bill.due_date) < now) {
+        await supabaseAdmin.from('system_usage_bills').update({ status: 'overdue' }).eq('id', bill.id);
+        bill.status = 'overdue';
+      }
+    }
+
+    return res.json({ ok: true, data: bills || [] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load pending payments' });
+  }
+});
+
+// PATCH /api/system-billing/confirm-payment/:billId — Superadmin confirms a payment
+app.patch('/api/system-billing/confirm-payment/:billId', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  const { billId } = req.params;
+  const { waive } = req.body || {};
+
+  try {
+    const newStatus = waive === true ? 'waived' : 'confirmed';
+    const { data, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .update({
+        status: newStatus,
+        confirmed_at: new Date().toISOString(),
+        confirmed_by: 'superadmin'
+      })
+      .eq('id', billId)
+      .select('id, establishment_id, status, confirmed_at')
+      .single();
+    if (error) throw new Error(error.message);
+
+    return res.json({ ok: true, data });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not confirm payment' });
+  }
+});
+
+// GET /api/system-billing/overdue-status — Owner checks if they need an overlay
+app.get('/api/system-billing/overdue-status', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+
+    const now = new Date();
+    const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    const { data: bill, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('id, billing_month, amount, status, due_date, confirmed_at')
+      .eq('establishment_id', establishmentId)
+      .eq('billing_month', currentMonth)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+
+    if (!bill) return res.json({ ok: true, data: { needsOverlay: false, hasBill: false } });
+    if (bill.status === 'confirmed' || bill.status === 'waived') {
+      return res.json({ ok: true, data: { needsOverlay: false, hasBill: true, bill } });
+    }
+
+    const dueDate = new Date(bill.due_date);
+    const daysOverdue = Math.max(0, Math.floor((now.getTime() - dueDate.getTime()) / 86400000));
+
+    return res.json({
+      ok: true,
+      data: {
+        hasBill: true,
+        bill,
+        daysOverdue,
+        needsOverlay: daysOverdue >= 5,
+        severeOverdue: daysOverdue >= 15,
+        overlayType: daysOverdue >= 15 ? 'blocking' : daysOverdue >= 5 ? 'reminder' : 'none'
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not check overdue status' });
+  }
+});
+
+// POST /api/system-billing/remind/:establishmentId — Superadmin sends a reminder
+app.post('/api/system-billing/remind/:establishmentId', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  const { establishmentId } = req.params;
+
+  try {
+    const now = new Date();
+    const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    const { data: bill, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('id, owner_profile_id')
+      .eq('establishment_id', establishmentId)
+      .eq('billing_month', currentMonth)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!bill) return res.status(404).json({ ok: false, error: 'No bill found for current month' });
+
+    const daysOverdue = Math.max(0, Math.floor((now.getTime() - new Date(bill.due_date).getTime()) / 86400000));
+    const reminderType = daysOverdue >= 15 ? '15_day_overlay' : daysOverdue >= 5 ? '5_day_overlay' : 'manual';
+
+    const { data: reminder, error: reminderError } = await supabaseAdmin
+      .from('system_usage_reminders')
+      .insert({
+        bill_id: bill.id,
+        establishment_id: establishmentId,
+        owner_profile_id: bill.owner_profile_id,
+        reminder_type: reminderType,
+        sent_by: 'superadmin'
+      })
+      .select('id, reminder_type, sent_at')
+      .single();
+    if (reminderError) throw new Error(reminderError.message);
+
+    return res.json({ ok: true, data: reminder });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not send reminder' });
+  }
+});
+
+// POST /api/system-billing/upgrade-request — Owner requests plan upgrade
+app.post('/api/system-billing/upgrade-request', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, requestedPlanCode, reason } = req.body || {};
+  if (!establishmentId || !requestedPlanCode) {
+    return res.status(400).json({ ok: false, error: 'establishmentId and requestedPlanCode are required' });
+  }
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (membership.role !== ROLE_OWNER && !req.isSuperadmin) {
+      return res.status(403).json({ ok: false, error: 'Only owner can request upgrades' });
+    }
+
+    // Get current plan
+    let currentPlanCode = 'starter';
+    try {
+      const { data: currentPlan } = await supabaseAdmin
+        .from('establishment_plans')
+        .select('plan_code')
+        .eq('establishment_id', establishmentId)
+        .maybeSingle();
+      if (currentPlan) currentPlanCode = currentPlan.plan_code;
+    } catch (_) { /* use default */ }
+
+    // Validate requested plan
+    const validPlans = ['starter', 'professional', 'elite'];
+    if (!validPlans.includes(requestedPlanCode)) {
+      return res.status(400).json({ ok: false, error: 'Invalid plan code' });
+    }
+    const planOrder = { starter: 1, professional: 2, elite: 3 };
+    if (planOrder[requestedPlanCode] <= planOrder[currentPlanCode]) {
+      return res.status(400).json({ ok: false, error: 'Requested plan must be a higher tier than current plan' });
+    }
+
+    // Check for pending request
+    const { data: pendingReq } = await supabaseAdmin
+      .from('plan_upgrade_requests')
+      .select('id')
+      .eq('establishment_id', establishmentId)
+      .eq('status', 'pending')
+      .maybeSingle();
+    if (pendingReq) {
+      return res.status(400).json({ ok: false, error: 'There is already a pending upgrade request' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('plan_upgrade_requests')
+      .insert({
+        establishment_id: establishmentId,
+        owner_profile_id: profileId,
+        current_plan_code: currentPlanCode,
+        requested_plan_code: requestedPlanCode,
+        reason: reason || null,
+        status: 'pending'
+      })
+      .select('id, current_plan_code, requested_plan_code, status, created_at')
+      .single();
+    if (error) throw new Error(error.message);
+
+    return res.status(201).json({ ok: true, data });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not create upgrade request' });
+  }
+});
+
+// GET /api/system-billing/upgrade-requests — Superadmin views upgrade requests
+app.get('/api/system-billing/upgrade-requests', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('plan_upgrade_requests')
+      .select('*, establishments(name), profiles!plan_upgrade_requests_owner_profile_id_fkey(full_name, username)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) throw new Error(error.message);
+
+    return res.json({ ok: true, data: data || [] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load upgrade requests' });
+  }
+});
+
+// PATCH /api/system-billing/approve-upgrade/:requestId — Superadmin approves/rejects upgrade
+app.patch('/api/system-billing/approve-upgrade/:requestId', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  const { requestId } = req.params;
+  const { approved, reviewNotes } = req.body || {};
+
+  try {
+    const { data: request, error: reqError } = await supabaseAdmin
+      .from('plan_upgrade_requests')
+      .select('id, establishment_id, requested_plan_code, status')
+      .eq('id', requestId)
+      .single();
+    if (reqError || !request) return res.status(404).json({ ok: false, error: 'Request not found' });
+    if (request.status !== 'pending') return res.status(400).json({ ok: false, error: 'Request already processed' });
+
+    const newStatus = approved === true ? 'approved' : 'rejected';
+
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from('plan_upgrade_requests')
+      .update({
+        status: newStatus,
+        reviewed_by: 'superadmin',
+        reviewed_at: new Date().toISOString(),
+        review_notes: reviewNotes || null
+      })
+      .eq('id', requestId)
+      .select('id, status, reviewed_at')
+      .single();
+    if (updateError) throw new Error(updateError.message);
+
+    // If approved, update establishment plan
+    if (approved === true) {
+      const planPrices = { starter: 49, professional: 99, elite: 199 };
+      const planLimits = { starter: { dojos: 1, students: 50 }, professional: { dojos: 3, students: 250 }, elite: { dojos: 999, students: 999999 } };
+      const newPlan = request.requested_plan_code;
+      const limits = planLimits[newPlan] || planLimits.starter;
+      const price = planPrices[newPlan] || 49;
+
+      await supabaseAdmin
+        .from('establishment_plans')
+        .upsert({
+          establishment_id: request.establishment_id,
+          plan_code: newPlan,
+          max_dojos: limits.dojos,
+          max_students: limits.students,
+          price_usd: price,
+          upgraded_at: new Date().toISOString()
+        }, { onConflict: 'establishment_id' });
+    }
+
+    return res.json({ ok: true, data: updated });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not process upgrade' });
   }
 });
 

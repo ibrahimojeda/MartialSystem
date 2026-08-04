@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MartialSystem — Simulador & Mantenimiento</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <div>
+    <h1>🥊 MartialSystem Simulator</h1>
+    <div class="subtitle">Herramienta de pruebas, mantenimiento y limpieza de datos</div>
+  </div>
+  <div class="row">
+    <span class="status-badge" id="connectionStatus">
+      <span class="status-dot" id="connDot"></span>
+      <span id="connText">Conectando...</span>
+    </span>
+    <span class="status-badge" id="dbStatus">
+      <span class="status-dot" id="dbDot"></span>
+      <span id="dbText">DB: --</span>
+    </span>
+  </div>
+</div>
+
+<!-- ═══ TABS ═══ -->
+<div class="tab-nav">
+  <button class="tab-btn active" data-tab="simulation">🎮 Simulación</button>
+  <button class="tab-btn" data-tab="maintenance">🔄 Mantenimiento</button>
+  <button class="tab-btn" data-tab="cleanup">🗑️ Limpieza</button>
+  <button class="tab-btn" data-tab="history">📊 Historial & Reportes</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TAB 1: SIMULACIÓN
+     ══════════════════════════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-simulation">
+
+  <!-- KPIs -->
+  <div class="grid grid-4" style="margin-bottom:14px;">
+    <div class="kpi-tile"><div class="kpi-label">Operaciones</div><div class="kpi-value" id="sim-ops">0</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Éxitos</div><div class="kpi-value ok" id="sim-success">0</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Errores</div><div class="kpi-value danger" id="sim-errors">0</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Salud</div><div class="kpi-value ok" id="sim-health">IDLE</div></div>
+  </div>
+
+  <!-- Config + Controls side by side -->
+  <div class="grid grid-2">
+    <!-- Left: Configuration -->
+    <div class="card">
+      <h3>⚙️ Parámetros de Simulación</h3>
+      <div class="grid grid-2">
+        <div class="form-group">
+          <label>Establecimientos</label>
+          <input type="number" id="sim-estCount" value="2" min="1" max="20">
+        </div>
+        <div class="form-group">
+          <label>Alumnos por establecimiento</label>
+          <input type="number" id="sim-studCount" value="20" min="1" max="500">
+        </div>
+        <div class="form-group">
+          <label>Instructores por establecimiento</label>
+          <input type="number" id="sim-instrCount" value="2" min="1" max="20">
+        </div>
+        <div class="form-group">
+          <label>Senseis por establecimiento</label>
+          <input type="number" id="sim-senseiCount" value="1" min="1" max="5">
+        </div>
+        <div class="form-group">
+          <label>Días a simular</label>
+          <input type="number" id="sim-days" value="30" min="1" max="365">
+        </div>
+        <div class="form-group">
+          <label>Clases por semana</label>
+          <input type="number" id="sim-classesPerWeek" value="5" min="1" max="14">
+        </div>
+        <div class="form-group">
+          <label>Prob. Evaluación (%)</label>
+          <input type="range" id="sim-evalChance" min="0" max="100" value="15">
+          <span id="sim-evalLabel">15%</span>
+        </div>
+        <div class="form-group">
+          <label>Prob. Pago (%)</label>
+          <input type="range" id="sim-payChance" min="0" max="100" value="80">
+          <span id="sim-payLabel">80%</span>
+        </div>
+        <div class="form-group">
+          <label>Modo Caos (%)</label>
+          <input type="range" id="sim-chaosRate" min="0" max="50" value="0">
+          <span id="sim-chaosLabel">0%</span>
+        </div>
+        <div class="form-group">
+          <label>Velocidad</label>
+          <select id="sim-speed">
+            <option value="fast">⚡ Rápido</option>
+            <option value="normal" selected>🚶 Normal</option>
+            <option value="step">👣 Paso a paso</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Disciplinas</label>
+        <div class="grid grid-auto" id="sim-disciplines" style="gap:6px;"></div>
+      </div>
+      <div class="form-group">
+        <label>Concurrencia (usuarios simultáneos)</label>
+        <input type="number" id="sim-concurrency" value="1" min="1" max="10">
+      </div>
+    </div>
+
+    <!-- Right: Controls + Log -->
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>🎮 Controles</h3>
+        <div class="row" style="margin-bottom:12px;">
+          <button class="btn btn-brand" id="btn-sim-start">▶️ Iniciar</button>
+          <button class="btn btn-accent" id="btn-sim-pause" disabled>⏸️ Pausar</button>
+          <button class="btn btn-danger" id="btn-sim-stop" disabled>⏹️ Detener</button>
+        </div>
+        <div id="sim-phase" style="font-size:13px;color:var(--muted);margin-bottom:8px;">Listo para iniciar</div>
+        <div class="progress-bar" style="margin-bottom:6px;">
+          <div class="fill ok" id="sim-progress" style="width:0%"></div>
+        </div>
+        <div id="sim-day-info" style="font-size:12px;color:var(--muted);text-align:center;">--</div>
+      </div>
+      <div class="card">
+        <h3>📋 Log en Tiempo Real</h3>
+        <div class="log-area" id="sim-log"></div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn btn-accent btn-sm" id="btn-sim-export-csv">📄 Exportar CSV</button>
+          <button class="btn btn-accent btn-sm" id="btn-sim-export-pdf">📑 Exportar PDF</button>
+          <button class="btn btn-sm" id="btn-sim-clear-log" style="background:#333;color:#aaa;">🗑️ Limpiar log</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Endpoint Ranking -->
+  <div class="card" style="margin-top:14px;">
+    <h3>📊 Ranking de Endpoints</h3>
+    <div class="table-wrap">
+      <table id="sim-endpoint-table">
+        <thead><tr><th>Endpoint</th><th>Llamadas</th><th>Éxitos</th><th>Errores</th><th>% Éxito</th><th>Avg ms</th></tr></thead>
+        <tbody><tr><td colspan="6" style="color:var(--muted);">Sin datos aún</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Anomalies -->
+  <div class="card" style="margin-top:14px;">
+    <h3>⚠️ Anomalías Detectadas</h3>
+    <div id="sim-anomalies" style="font-size:13px;color:var(--muted);">Ejecuta una simulación para ver anomalías.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TAB 2: MANTENIMIENTO
+     ══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-maintenance">
+  <!-- Controls -->
+  <div class="card" style="margin-bottom:14px;">
+    <h3>🔄 Reproducción de Línea de Tiempo</h3>
+    <div class="grid grid-4">
+      <div class="form-group">
+        <label>Desde</label>
+        <input type="date" id="maint-from">
+      </div>
+      <div class="form-group">
+        <label>Hasta</label>
+        <input type="date" id="maint-to">
+      </div>
+      <div class="form-group">
+        <label>Paso (días)</label>
+        <select id="maint-step">
+          <option value="1" selected>1 día</option>
+          <option value="7">1 semana</option>
+          <option value="30">1 mes</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <div class="row">
+          <button class="btn btn-brand" id="btn-maint-replay">▶️ Reproducir</button>
+          <button class="btn btn-ok" id="btn-maint-audit">🔍 Auditar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System stats -->
+  <div class="grid grid-4" style="margin-bottom:14px;" id="maint-stats">
+    <div class="kpi-tile"><div class="kpi-label">Establecimientos</div><div class="kpi-value" id="maint-est">--</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Alumnos</div><div class="kpi-value" id="maint-stud">--</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Clases</div><div class="kpi-value" id="maint-classes">--</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Pagos</div><div class="kpi-value" id="maint-payments">--</div></div>
+  </div>
+
+  <!-- Timeline Player -->
+  <div class="card" style="margin-bottom:14px;">
+    <h3>⏰ Línea de Tiempo</h3>
+    <div id="maint-player-controls" class="row" style="margin-bottom:10px;display:none;">
+      <button class="btn btn-accent btn-sm" id="btn-maint-prev">◀️ -1 día</button>
+      <span id="maint-current-day" style="font-weight:800;font-size:14px;min-width:120px;text-align:center;">--</span>
+      <button class="btn btn-accent btn-sm" id="btn-maint-next">▶️ +1 día</button>
+      <span id="maint-day-counter" style="font-size:12px;color:var(--muted);">0 / 0</span>
+    </div>
+    <div class="grid grid-4" style="margin-bottom:10px;" id="maint-day-metrics" style="display:none;">
+      <div class="kpi-tile"><div class="kpi-label">Alumnos activos</div><div class="kpi-value ok" id="maint-m-students">0</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Asistencia hoy</div><div class="kpi-value" id="maint-m-att">0%</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Ingresos acumulados</div><div class="kpi-value ok" id="maint-m-income">$0</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Evaluaciones</div><div class="kpi-value" id="maint-m-evals">0</div></div>
+    </div>
+    <div class="timeline-container" id="maint-timeline">
+      <div style="color:var(--muted);">Selecciona un rango de fechas y presiona "Reproducir".</div>
+    </div>
+  </div>
+
+  <!-- Integrity Audit -->
+  <div class="card" id="maint-audit-card" style="display:none;">
+    <h3>🔍 Resultado de Auditoría</h3>
+    <div id="maint-audit-score" style="margin-bottom:12px;"></div>
+    <div id="maint-findings"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TAB 3: LIMPIEZA
+     ══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-cleanup">
+  <div class="grid grid-2">
+    <div class="card">
+      <h3>🗑️ Seleccionar datos a limpiar</h3>
+      <div id="cleanup-tables" class="form-group"></div>
+      <div class="row" style="margin-top:12px;">
+        <button class="btn btn-accent" id="btn-cleanup-select-all">Seleccionar todo</button>
+        <button class="btn btn-accent" id="btn-cleanup-select-none">Deseleccionar</button>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3>📊 Estado actual de la base de datos</h3>
+        <div id="cleanup-counts" style="font-size:13px;color:var(--muted);">Cargando...</div>
+        <button class="btn btn-accent btn-sm" style="margin-top:8px;" id="btn-cleanup-refresh">🔄 Actualizar contadores</button>
+      </div>
+      <div class="card">
+        <h3>⚙️ Opciones</h3>
+        <div class="form-group">
+          <label>Filtrar por establecimiento (opcional)</label>
+          <input type="text" id="cleanup-estId" placeholder="UUID del establecimiento o dejar vacío">
+        </div>
+        <div class="form-group">
+          <label>Antes de fecha (opcional)</label>
+          <input type="date" id="cleanup-before-date">
+        </div>
+        <div class="row">
+          <button class="btn btn-accent" id="btn-cleanup-dryrun">👁️ Vista Previa (Dry Run)</button>
+          <button class="btn btn-ok" id="btn-cleanup-snapshot">📸 Crear Snapshot</button>
+          <button class="btn btn-danger" id="btn-cleanup-execute">🗑️ Ejecutar Limpieza</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cleanup Results -->
+  <div class="card" style="margin-top:14px;" id="cleanup-result-card" style="display:none;">
+    <h3>📋 Resultado de Limpieza</h3>
+    <div id="cleanup-result"></div>
+  </div>
+
+  <!-- Snapshots -->
+  <div class="card" style="margin-top:14px;">
+    <h3>📸 Snapshots Disponibles</h3>
+    <div id="snapshots-list" style="color:var(--muted);">Cargando...</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TAB 4: HISTORIAL & REPORTES
+     ══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-history">
+  <div class="card" style="margin-bottom:14px;">
+    <h3>📊 Historial de Simulaciones</h3>
+    <div id="history-list" style="color:var(--muted);">No hay simulaciones ejecutadas aún.</div>
+  </div>
+  <div class="card" style="margin-bottom:14px;">
+    <h3>📈 Comparativa</h3>
+    <div id="history-compare">
+      <div style="color:var(--muted);font-size:13px;">Selecciona simulaciones del historial para compararlas.</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row">
+      <button class="btn btn-brand" id="btn-history-export-pdf">📑 Exportar Reporte General PDF</button>
+      <button class="btn btn-accent" id="btn-history-export-csv">📄 Exportar CSV</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

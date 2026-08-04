@@ -1,0 +1,7 @@
+{
+  "d4003dac-69a7-485a-8b20-182da56f6b5f": {
+    "enabled": true,
+    "phoneNumber": "+50760000000",
+    "messageTemplate": "Hola {{name}}, clase de {{discipline}} el {{date}} a las {{time}}."
+  }
+}

@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facturación Electrónica - MartialSystem</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
+    :root {
+      --bg: #0f1318; --panel: #171d24; --panel-2: #1d2530; --line: #2b3645;
+      --brand: #c23b2a; --brand-2: #c9a227; --accent: #2f6fa3;
+      --text: #eaf0f7; --muted: #aab7c8; --ok: #2e8b57; --warn: #d18a2e; --danger: #c94a4a;
+      --shadow: 0 14px 36px rgba(0,0,0,0.32);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Manrope","Segoe UI",sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+      padding: 20px;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow);
+    }
+    .card h2, .card h3 { margin: 0 0 12px; font-family: "Rajdhani","Manrope",sans-serif; }
+    .card h2 { font-size: 1.5rem; letter-spacing: .3px; }
+    .flex { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    input, select, textarea {
+      background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 12px; color: var(--text); font-size: 13px; font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 60px; }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    .btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 6px;
+      padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: opacity 150ms; font-family: inherit; white-space: nowrap;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .btn-ok { background: var(--ok); }
+    .btn-warn { background: var(--warn); }
+    .btn-danger { background: var(--danger); }
+    .btn-outline {
+      background: transparent; border: 1px solid var(--line); color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--line); color: var(--muted); font-weight: 600; }
+    td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+    tr:hover td { background: rgba(255,255,255,.03); }
+    .tag {
+      display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px;
+      font-weight: 700; text-transform: uppercase;
+    }
+    .tag-ok { background: rgba(46,139,87,.25); color: #4cdb82; }
+    .tag-warn { background: rgba(209,138,46,.25); color: #f5c542; }
+    .tag-danger { background: rgba(201,74,74,.25); color: #ff7a7a; }
+    .tag-info { background: rgba(47,111,163,.25); color: #6fb9f0; }
+    .tag-muted { background: rgba(170,183,200,.15); color: var(--muted); }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .modal-overlay {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; max-width: 800px; width: 94%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
+    .modal h2 { margin-top: 0; }
+    .modal-close { float: right; background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; }
+    .modal-close:hover { color: var(--text); }
+    .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab-btn {
+      background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px 8px 0 0;
+      padding: 8px 16px; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600;
+      transition: all 150ms; font-family: inherit; border-bottom: none;
+    }
+    .tab-btn.active { background: var(--panel); color: var(--text); border-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .item-row { display: grid; grid-template-columns: 2fr 70px 80px 60px 80px; gap: 8px; align-items: end; margin-bottom: 8px; }
+    .item-row input, .item-row select { width: 100%; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .mt-12 { margin-top: 12px; }
+    .mb-12 { margin-bottom: 12px; }
+    .small { font-size: 11px; color: var(--muted); }
+    .error { color: var(--danger); font-size: 13px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpi { background: var(--panel-2); border-radius: 8px; padding: 14px; text-align: center; }
+    .kpi .value { font-size: 22px; font-weight: 700; font-family: "Rajdhani","Manrope",sans-serif; }
+    .kpi .label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .search-box { min-width: 220px; }
+    .hide { display: none !important; }
+    .w-100 { width: 100%; }
+    @media(max-width:640px){
+      .flex { flex-direction: column; }
+      .item-row { grid-template-columns: 1fr; }
+      .search-box { width: 100%; }
+    }
+    .back-link {
+      display: inline-block; margin-bottom: 16px; color: var(--accent);
+      text-decoration: none; font-size: 13px; cursor: pointer;
+    }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+    <div>
+      <h1 style="margin:0;font-family:'Rajdhani','Manrope',sans-serif;font-size:1.8rem;">🧾 Facturación Electrónica</h1>
+      <p class="small" style="margin:4px 0 0;">Panamá - DGI / PFE</p>
+    </div>
+    <div class="flex">
+      <select id="est-select" style="min-width:200px;"><option value="">-- Seleccionar establecimiento --</option></select>
+      <button class="btn btn-ok" id="btn-new-invoice">+ Nueva Factura</button>
+      <button class="btn btn-outline" id="btn-dgi-config">⚙️ DGI</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar" id="tab-bar">
+    <button class="tab-btn active" data-tab="invoices">📋 Facturas</button>
+    <button class="tab-btn" data-tab="clients">👥 Clientes</button>
+    <button class="tab-btn" data-tab="numbering">🔢 Numeración</button>
+    <button class="tab-btn" data-tab="reports">📊 Reportes</button>
+  </div>
+
+  <!-- Tab: Invoices -->
+  <div class="tab-panel active" id="tab-invoices">
+    <div class="card">
+      <div class="flex-between mb-12">
+        <div class="flex">
+          <select id="inv-filter-estado" style="min-width:140px;">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="autorizado">Autorizado</option>
+            <option value="anulado">Anulado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+          <input type="date" id="inv-filter-from" style="width:150px;">
+          <input type="date" id="inv-filter-to" style="width:150px;">
+        </div>
+        <button class="btn btn-sm" id="btn-refresh-invoices">⟳</button>
+      </div>
+      <div id="inv-loading" class="small" style="display:none;">Cargando...</div>
+      <div id="inv-table-wrap" style="overflow:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Clients -->
+  <div class="tab-panel" id="tab-clients">
+    <div class="card">
+      <div class="flex-between mb-12">
+        <input class="search-box" id="client-search" placeholder="Buscar cliente...">
+        <button class="btn btn-sm btn-ok" id="btn-new-client">+ Nuevo Cliente</button>
+      </div>
+      <div id="client-table-wrap" style="overflow:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Numbering -->
+  <div class="tab-panel" id="tab-numbering">
+    <div class="card">
+      <div class="flex-between mb-12">
+        <h3 style="margin:0;">Resoluciones de Numeración</h3>
+        <button class="btn btn-sm btn-ok" id="btn-new-numbering">+ Nueva Resolución</button>
+      </div>
+      <div id="numbering-table-wrap" style="overflow:auto;"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Reports -->
+  <div class="tab-panel" id="tab-reports">
+    <div class="card">
+      <h3>Reporte de Facturación</h3>
+      <div class="flex mb-12">
+        <input type="date" id="rep-from">
+        <input type="date" id="rep-to">
+        <button class="btn btn-sm" id="btn-load-report">Cargar</button>
+      </div>
+      <div id="rep-kpis" class="kpi-grid"></div>
+      <div id="rep-table-wrap" style="overflow:auto;margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New/Edit Invoice -->
+<div class="modal-overlay hide" id="modal-invoice">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-invoice')">×</button>
+    <h2 id="inv-modal-title">Nueva Factura</h2>
+    
+    <div class="grid-2" style="margin-bottom:12px;">
+      <div>
+        <label>Cliente *</label>
+        <select id="inv-client" style="width:100%;" required><option value="">-- Seleccionar --</option></select>
+      </div>
+      <div>
+        <label>Fecha de emisión</label>
+        <input type="datetime-local" id="inv-fecha" style="width:100%;">
+      </div>
+      <div>
+        <label>Estudiante (opcional)</label>
+        <select id="inv-student" style="width:100%;"><option value="">-- Ninguno --</option></select>
+      </div>
+      <div>
+        <label>Vencimiento pago</label>
+        <input type="date" id="inv-vencimiento" style="width:100%;">
+      </div>
+    </div>
+
+    <div>
+      <label>Concepto general</label>
+      <input type="text" id="inv-concepto" style="width:100%;" placeholder="Ej: Mensualidad Julio 2026 - Karate">
+    </div>
+
+    <h3 style="margin-top:16px;">Items</h3>
+    <div id="inv-items-wrap"></div>
+    <button class="btn btn-sm btn-outline" id="btn-add-item" style="margin-top:8px;">+ Agregar Item</button>
+
+    <div style="margin-top:12px;padding:12px;background:var(--panel-2);border-radius:8px;text-align:right;">
+      <div>Subtotal: <strong id="inv-subtotal">$0.00</strong></div>
+      <div>Descuento: <input type="number" id="inv-descuento" style="width:80px;text-align:right;" value="0" min="0" step="0.01"></div>
+      <div>ITBMS (7%): <strong id="inv-itbms">$0.00</strong></div>
+      <div style="font-size:18px;margin-top:4px;">TOTAL: <strong id="inv-total">$0.00</strong></div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Notas</label>
+      <textarea id="inv-notas" style="width:100%;"></textarea>
+    </div>
+
+    <div class="flex" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeModal('modal-invoice')">Cancelar</button>
+      <button class="btn btn-ok" id="btn-save-invoice">💾 Emitir Factura</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New Client -->
+<div class="modal-overlay hide" id="modal-client">
+  <div class="modal" style="max-width:500px;">
+    <button class="modal-close" onclick="closeModal('modal-client')">×</button>
+    <h2>Nuevo Cliente</h2>
+    <div class="grid-2">
+      <div>
+        <label>Tipo ID *</label>
+        <select id="cl-tipo" style="width:100%;">
+          <option value="cedula">Cédula</option>
+          <option value="ruc">RUC</option>
+          <option value="pasaporte">Pasaporte</option>
+          <option value="extranjero">Extranjero</option>
+        </select>
+      </div>
+      <div>
+        <label>Identificación *</label>
+        <input type="text" id="cl-id" style="width:100%;" placeholder="8-123-456">
+      </div>
+      <div id="cl-dv-wrap">
+        <label>DV (RUC)</label>
+        <input type="text" id="cl-dv" style="width:100%;" placeholder="00">
+      </div>
+      <div>
+        <label>Nombre *</label>
+        <input type="text" id="cl-nombre" style="width:100%;" placeholder="Nombre">
+      </div>
+      <div>
+        <label>Apellido *</label>
+        <input type="text" id="cl-apellido" style="width:100%;" placeholder="Apellido">
+      </div>
+      <div>
+        <label>Razón Social</label>
+        <input type="text" id="cl-razon" style="width:100%;" placeholder="Empresa XYZ, S.A.">
+      </div>
+      <div>
+        <label>Correo</label>
+        <input type="email" id="cl-email" style="width:100%;">
+      </div>
+      <div>
+        <label>Teléfono</label>
+        <input type="text" id="cl-phone" style="width:100%;">
+      </div>
+    </div>
+    <div style="margin-top:8px;">
+      <label>Dirección</label>
+      <input type="text" id="cl-direccion" style="width:100%;">
+    </div>
+    <div class="flex" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeModal('modal-client')">Cancelar</button>
+      <button class="btn btn-ok" id="btn-save-client">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: DGI Config -->
+<div class="modal-overlay hide" id="modal-dgi">
+  <div class="modal" style="max-width:550px;">
+    <button class="modal-close" onclick="closeModal('modal-dgi')">×</button>
+    <h2>Configuración DGI</h2>
+    <p class="small">Datos del emisor según Registro Único de Contribuyentes (RUC)</p>
+    <div class="grid-2">
+      <div><label>RUC *</label><input type="text" id="dgi-ruc" style="width:100%;" placeholder="0000000-0-000000"></div>
+      <div><label>DV *</label><input type="text" id="dgi-dv" style="width:100%;" placeholder="00"></div>
+      <div style="grid-column:1/-1;"><label>Razón Social *</label><input type="text" id="dgi-razon" style="width:100%;"></div>
+      <div style="grid-column:1/-1;"><label>Nombre Comercial</label><input type="text" id="dgi-nombre" style="width:100%;"></div>
+      <div style="grid-column:1/-1;"><label>Dirección</label><input type="text" id="dgi-direccion" style="width:100%;"></div>
+      <div><label>Correo</label><input type="email" id="dgi-email" style="width:100%;"></div>
+      <div><label>Teléfono</label><input type="text" id="dgi-phone" style="width:100%;"></div>
+      <div><label>Régimen</label><select id="dgi-regimen" style="width:100%;"><option value="general">General</option><option value="pequeno_contribuyente">Pequeño Contribuyente</option><option value="servicios_profesionales">Servicios Profesionales</option></select></div>
+      <div><label>Resolución</label><select id="dgi-resolucion" style="width:100%;"><option value="nuevo_resuelto">Nuevo Resuelto</option><option value="resuelto_200">Resuelto 200</option><option value="resuelto_201">Resuelto 201</option></select></div>
+      <div><label>PI (Provincia)</label><input type="text" id="dgi-pi" style="width:100%;" placeholder="00" value="00"></div>
+      <div><label>Sucursal</label><input type="text" id="dgi-sucursal" style="width:100%;" placeholder="0001" value="0001"></div>
+      <div><label>Ambiente</label><select id="dgi-ambiente" style="width:100%;"><option value="test">Pruebas (Test)</option><option value="production">Producción</option></select></div>
+    </div>
+    <div class="flex" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeModal('modal-dgi')">Cancelar</button>
+      <button class="btn btn-ok" id="btn-save-dgi">💾 Guardar Configuración DGI</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: New Numbering -->
+<div class="modal-overlay hide" id="modal-numbering">
+  <div class="modal" style="max-width:500px;">
+    <button class="modal-close" onclick="closeModal('modal-numbering')">×</button>
+    <h2>Nueva Resolución</h2>
+    <div class="grid-2">
+      <div><label>Tipo Documento</label><select id="num-tipo" style="width:100%;"><option value="factura">Factura</option><option value="nota_credito">Nota de Crédito</option><option value="nota_debito">Nota de Débito</option></select></div>
+      <div><label>Prefijo</label><input type="text" id="num-prefijo" style="width:100%;" placeholder="FA"></div>
+      <div style="grid-column:1/-1;"><label>Resolución DGI</label><input type="text" id="num-resolucion" style="width:100%;" placeholder="N° de resolución DGI"></div>
+      <div><label>Fecha Autorización</label><input type="date" id="num-fecha-aut" style="width:100%;"></div>
+      <div><label>Fecha Vencimiento</label><input type="date" id="num-fecha-venc" style="width:100%;"></div>
+      <div><label>N° Inicial</label><input type="number" id="num-inicial" style="width:100%;" value="1"></div>
+      <div><label>N° Final</label><input type="number" id="num-final" style="width:100%;" value="99999999"></div>
+    </div>
+    <div class="flex" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeModal('modal-numbering')">Cancelar</button>
+      <button class="btn btn-ok" id="btn-save-numbering">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Invoice Detail -->
+<div class="modal-overlay hide" id="modal-invoice-detail">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('modal-invoice-detail')">×</button>
+    <div id="inv-detail-content"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const API = '/api';
+let TOKEN = localStorage.getItem('ms_token') || '';
+let EST_ID = '';
+
+function ids(id) { return document.getElementById(id); }
+function qs(sel) { return document.querySelector(sel); }
+function qsa(sel) { return document.querySelectorAll(sel); }
+
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...opts,
+    headers: { ...apiHeaders(), ...(opts.headers || {}) }
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'API error');
+  return data;
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+async function init() {
+  // Get token from parent window
+  try {
+    if (window.parent && window.parent.state) {
+      TOKEN = window.parent.state.accessToken || TOKEN;
+    }
+    if (!TOKEN) TOKEN = localStorage.getItem('ms_token') || '';
+  } catch (_) {}
+
+  if (!TOKEN) {
+    ids('app').innerHTML = '<div class="card"><p class="error">No hay sesión activa. Inicia sesión primero.</p><button class="btn" onclick="window.location=\'/\'">Ir al login</button></div>';
+    return;
+  }
+
+  // Load establishments
+  try {
+    const me = await api('/me');
+    const memberships = me.data?.memberships || [];
+    const sel = ids('est-select');
+    sel.innerHTML = '<option value="">-- Seleccionar establecimiento --</option>';
+    memberships.forEach(m => {
+      if (m.establishment?.id) {
+        sel.innerHTML += `<option value="${m.establishment.id}">${m.establishment.name}</option>`;
+      }
+    });
+    if (memberships.length === 1) {
+      sel.value = memberships[0].establishment.id;
+      sel.dispatchEvent(new Event('change'));
+    }
+  } catch (err) {
+    ids('app').innerHTML = `<div class="card"><p class="error">Error: ${err.message}</p></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════
+// ESTABLISHMENT SELECT
+// ═══════════════════════════════════════════
+ids('est-select').addEventListener('change', () => {
+  EST_ID = ids('est-select').value;
+  if (EST_ID) {
+    loadInvoices();
+    loadClients();
+    loadNumbering();
+    loadReport();
+  }
+});
+
+// ═══════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════
+qsa('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    qsa('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    qsa('.tab-panel').forEach(p => p.classList.remove('active'));
+    ids(`tab-${tab}`).classList.add('active');
+    if (tab === 'invoices' && EST_ID) loadInvoices();
+    if (tab === 'clients' && EST_ID) loadClients();
+    if (tab === 'numbering' && EST_ID) loadNumbering();
+    if (tab === 'reports' && EST_ID) loadReport();
+  });
+});
+
+// ═══════════════════════════════════════════
+// INVOICES
+// ═══════════════════════════════════════════
+async function loadInvoices() {
+  if (!EST_ID) return;
+  const wrap = ids('inv-table-wrap');
+  const loading = ids('inv-loading');
+  loading.style.display = 'block';
+
+  try {
+    const estado = ids('inv-filter-estado').value;
+    const from = ids('inv-filter-from').value;
+    const to = ids('inv-filter-to').value;
+    let q = `establishmentId=${EST_ID}&limit=200`;
+    if (estado) q += `&estado=${estado}`;
+    if (from) q += `&from=${from}`;
+    if (to) q += `&to=${to}`;
+
+    const result = await api(`/invoices?${q}`);
+    const invoices = result.data || [];
+    loading.style.display = 'none';
+
+    if (!invoices.length) {
+      wrap.innerHTML = '<p class="small" style="padding:12px;">No hay facturas. Crea una nueva factura para comenzar.</p>';
+      return;
+    }
+
+    wrap.innerHTML = `<table>
+      <thead><tr>
+        <th># Factura</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Estado DGI</th><th>Acciones</th>
+      </tr></thead><tbody>
+      ${invoices.map(inv => {
+        const client = inv.client || {};
+        const clientName = client.razon_social || `${client.nombre || ''} ${client.apellido || ''}`.trim() || '-';
+        const fecha = new Date(inv.fecha_emision).toLocaleDateString('es-PA');
+        const estadoTag = inv.estado_dgi === 'autorizado' ? 'tag-ok' :
+          inv.estado_dgi === 'pendiente' ? 'tag-warn' :
+          inv.estado_dgi === 'anulado' ? 'tag-danger' : 'tag-muted';
+        return `<tr>
+          <td><strong>${inv.numero_completo}</strong></td>
+          <td>${clientName}</td>
+          <td>${fecha}</td>
+          <td class="text-right"><strong>$${Number(inv.total).toFixed(2)}</strong></td>
+          <td><span class="tag ${estadoTag}">${inv.estado_dgi}</span></td>
+          <td>
+            <button class="btn btn-sm" onclick="viewInvoice('${inv.id}')">👁️</button>
+            <button class="btn btn-sm btn-outline" onclick="viewInvoicePDF('${inv.id}')">📄</button>
+            ${inv.estado_dgi === 'pendiente' ? `<button class="btn btn-sm btn-ok" onclick="sendToDGI('${inv.id}')">📤 Enviar DGI</button>` : ''}
+            ${inv.estado_dgi !== 'anulado' ? `<button class="btn btn-sm btn-danger" onclick="cancelInvoice('${inv.id}')">✕</button>` : ''}
+          </td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`;
+  } catch (err) {
+    loading.style.display = 'none';
+    wrap.innerHTML = `<p class="error">${err.message}</p>`;
+  }
+}
+
+ids('btn-refresh-invoices').addEventListener('click', loadInvoices);
+ids('inv-filter-estado').addEventListener('change', loadInvoices);
+ids('inv-filter-from').addEventListener('change', loadInvoices);
+ids('inv-filter-to').addEventListener('change', loadInvoices);
+
+// ─── New Invoice Modal ────────────────────
+let invoiceItems = [];
+
+function initItemRow(item = {}) {
+  return {
+    descripcion: item.descripcion || '',
+    cantidad: item.cantidad || 1,
+    precio_unitario: item.precio_unitario || 0,
+    tipoItbms: item.tipoItbms || '07',
+    codigo: item.codigo || ''
+  };
+}
+
+function renderInvoiceItems() {
+  const wrap = ids('inv-items-wrap');
+  wrap.innerHTML = invoiceItems.map((item, i) => `
+    <div class="item-row" data-idx="${i}">
+      <div>
+        <label style="font-size:10px;">Descripción</label>
+        <input type="text" value="${item.descripcion}" onchange="updateItem(${i},'descripcion',this.value)" placeholder="Clase de Karate - Julio 2026">
+      </div>
+      <div>
+        <label style="font-size:10px;">Cant.</label>
+        <input type="number" value="${item.cantidad}" min="0.01" step="0.01" onchange="updateItem(${i},'cantidad',Number(this.value))">
+      </div>
+      <div>
+        <label style="font-size:10px;">Precio $</label>
+        <input type="number" value="${item.precio_unitario}" min="0" step="0.01" onchange="updateItem(${i},'precio_unitario',Number(this.value))">
+      </div>
+      <div>
+        <label style="font-size:10px;">ITBMS</label>
+        <select onchange="updateItem(${i},'tipoItbms',this.value)">
+          <option value="07" ${item.tipoItbms === '07' ? 'selected' : ''}>7%</option>
+          <option value="03" ${item.tipoItbms === '03' ? 'selected' : ''}>Exento</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;">&nbsp;</label>
+        <button class="btn btn-sm btn-danger" onclick="removeItem(${i})" style="width:100%;">✕</button>
+      </div>
+    </div>
+  `).join('');
+  calcTotals();
+}
+
+function updateItem(idx, field, value) {
+  if (idx >= 0 && idx < invoiceItems.length) {
+    invoiceItems[idx][field] = value;
+    calcTotals();
+  }
+}
+
+function removeItem(idx) {
+  invoiceItems.splice(idx, 1);
+  renderInvoiceItems();
+}
+
+function calcTotals() {
+  const discount = Number(ids('inv-descuento')?.value || 0);
+  const subTotal = invoiceItems.reduce((sum, item) => {
+    return sum + (Number(item.cantidad || 1) * Number(item.precio_unitario || 0));
+  }, 0);
+  const base = subTotal - discount;
+  const itbms = invoiceItems.reduce((sum, item) => {
+    const lineBase = Number(item.cantidad || 1) * Number(item.precio_unitario || 0);
+    return sum + (item.tipoItbms === '07' ? lineBase * 0.07 : 0);
+  }, 0);
+  const total = base + itbms;
+
+  ids('inv-subtotal').textContent = `$${subTotal.toFixed(2)}`;
+  ids('inv-itbms').textContent = `$${itbms.toFixed(2)}`;
+  ids('inv-total').textContent = `$${total.toFixed(2)}`;
+}
+
+ids('btn-add-item').addEventListener('click', () => {
+  invoiceItems.push(initItemRow());
+  renderInvoiceItems();
+});
+
+ids('inv-descuento').addEventListener('input', calcTotals);
+
+// Open new invoice modal
+ids('btn-new-invoice').addEventListener('click', async () => {
+  if (!EST_ID) return alert('Selecciona un establecimiento primero');
+  
+  // Load clients
+  try {
+    const result = await api(`/invoice-clients?establishmentId=${EST_ID}`);
+    const clients = result.data || [];
+    const sel = ids('inv-client');
+    sel.innerHTML = '<option value="">-- Seleccionar --</option>';
+    clients.forEach(c => {
+      const name = c.razon_social || `${c.nombre} ${c.apellido}`.trim();
+      sel.innerHTML += `<option value="${c.id}">${name} (${c.tipo_identificacion}: ${c.identificacion})</option>`;
+    });
+  } catch (_) {}
+
+  // Load students
+  try {
+    const result = await api(`/students?establishmentId=${EST_ID}`);
+    const students = result.data || [];
+    const sel = ids('inv-student');
+    sel.innerHTML = '<option value="">-- Ninguno --</option>';
+    students.forEach(s => {
+      sel.innerHTML += `<option value="${s.student?.id}">${s.student?.full_name || '-'}</option>`;
+    });
+  } catch (_) {}
+
+  // Reset form
+  invoiceItems = [initItemRow({ descripcion: 'Mensualidad - Artes Marciales', cantidad: 1, precio_unitario: 50 })];
+  renderInvoiceItems();
+  ids('inv-fecha').value = new Date().toISOString().slice(0, 16);
+  ids('inv-vencimiento').value = '';
+  ids('inv-concepto').value = '';
+  ids('inv-notas').value = '';
+  ids('inv-descuento').value = '0';
+  ids('inv-modal-title').textContent = 'Nueva Factura Electrónica';
+  openModal('modal-invoice');
+});
+
+// Save invoice
+ids('btn-save-invoice').addEventListener('click', async () => {
+  const clientId = ids('inv-client').value;
+  if (!clientId) return alert('Selecciona un cliente');
+  if (invoiceItems.length === 0) return alert('Agrega al menos un item');
+
+  const descuento = Number(ids('inv-descuento').value || 0);
+  const subTotal = invoiceItems.reduce((s, i) => s + (Number(i.cantidad || 1) * Number(i.precio_unitario || 0)), 0);
+  const itbms = invoiceItems.reduce((s, i) => {
+    const base = Number(i.cantidad || 1) * Number(i.precio_unitario || 0);
+    return s + (i.tipoItbms === '07' ? base * 0.07 : 0);
+  }, 0);
+  const total = (subTotal - descuento) + itbms;
+
+  try {
+    const btn = ids('btn-save-invoice');
+    btn.textContent = '⏳ Emitiendo...';
+    btn.disabled = true;
+
+    const result = await api('/invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        establishmentId: EST_ID,
+        clientId,
+        studentId: ids('inv-student').value || null,
+        items: invoiceItems,
+        conceptoGeneral: ids('inv-concepto').value || null,
+        notas: ids('inv-notas').value || null,
+        fechaEmision: ids('inv-fecha').value ? new Date(ids('inv-fecha').value).toISOString() : null,
+        fechaVencimientoPago: ids('inv-vencimiento').value || null,
+        descuento,
+        moneda: 'USD'
+      })
+    });
+
+    closeModal('modal-invoice');
+    loadInvoices();
+    alert(`✅ Factura ${result.data?.numero_completo} emitida exitosamente`);
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  } finally {
+    ids('btn-save-invoice').textContent = '💾 Emitir Factura';
+    ids('btn-save-invoice').disabled = false;
+  }
+});
+
+// ─── View Invoice Detail ──────────────────
+async function viewInvoice(id) {
+  try {
+    const result = await api(`/invoices/${id}`);
+    const inv = result.data;
+    const client = inv.client || {};
+    const items = inv.items || [];
+    const dgi = inv.dgiConfig;
+
+    const fecha = new Date(inv.fecha_emision).toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' });
+    const clientName = client.razon_social || `${client.nombre || ''} ${client.apellido || ''}`.trim() || '-';
+
+    let itemsHtml = items.map((item, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${item.descripcion}</td>
+        <td class="text-center">${Number(item.cantidad).toFixed(2)}</td>
+        <td class="text-right">$${Number(item.precio_unitario).toFixed(2)}</td>
+        <td class="text-right">$${Number(item.total_linea).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    ids('inv-detail-content').innerHTML = `
+      <div style="text-align:center;margin-bottom:16px;">
+        <h2 style="margin:0;">FACTURA ELECTRÓNICA</h2>
+        <h3 style="color:var(--muted);margin:4px 0;">${inv.numero_completo}</h3>
+        ${dgi ? `<p class="small">RUC: ${dgi.ruc}-${dgi.dv}</p>` : ''}
+        <span class="tag ${inv.estado_dgi === 'autorizado' ? 'tag-ok' : inv.estado_dgi === 'pendiente' ? 'tag-warn' : 'tag-danger'}">${inv.estado_dgi.toUpperCase()}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div><strong>Cliente:</strong> ${clientName}<br>
+          <strong>ID:</strong> ${client.tipo_identificacion?.toUpperCase()}: ${client.identificacion}${client.dv ? '-'+client.dv : ''}</div>
+        <div style="text-align:right;"><strong>Fecha:</strong> ${fecha}<br>
+          <strong>Moneda:</strong> ${inv.moneda}</div>
+      </div>
+      ${inv.concepto_general ? `<p><strong>Concepto:</strong> ${inv.concepto_general}</p>` : ''}
+      <table style="margin-top:12px;">
+        <thead><tr><th>#</th><th>Descripción</th><th class="text-center">Cant.</th><th class="text-right">Precio</th><th class="text-right">Total</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <div style="margin-top:12px;text-align:right;">
+        <p style="margin:2px;">Subtotal: <strong>$${Number(inv.subtotal).toFixed(2)}</strong></p>
+        ${Number(inv.descuento) > 0 ? `<p style="margin:2px;">Descuento: <strong>-$${Number(inv.descuento).toFixed(2)}</strong></p>` : ''}
+        <p style="margin:2px;">ITBMS: <strong>$${Number(inv.itbms).toFixed(2)}</strong></p>
+        <p style="margin:2px;font-size:22px;">TOTAL: <strong>$${Number(inv.total).toFixed(2)}</strong></p>
+      </div>
+      ${inv.codigo_autorizacion ? `<div style="margin-top:12px;padding:10px;background:var(--panel-2);border-radius:6px;font-size:11px;">
+        <p><strong>Código Autorización:</strong> ${inv.codigo_autorizacion}</p>
+        ${inv.fecha_autorizacion_dgi ? `<p><strong>Fecha Autorización:</strong> ${new Date(inv.fecha_autorizacion_dgi).toLocaleDateString('es-PA')}</p>` : ''}
+      </div>` : ''}
+      ${inv.notas ? `<p class="small" style="margin-top:8px;"><strong>Notas:</strong> ${inv.notas}</p>` : ''}
+      <div class="flex" style="margin-top:16px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="viewInvoicePDF('${inv.id}')">📄 Ver PDF</button>
+        ${inv.estado_dgi === 'pendiente' ? `<button class="btn btn-ok" onclick="sendToDGI('${inv.id}')">📤 Enviar a DGI</button>` : ''}
+      </div>
+    `;
+    openModal('modal-invoice-detail');
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+}
+
+async function viewInvoicePDF(id) {
+  window.open(`${API}/invoices/${id}/pdf?token=${TOKEN}`, '_blank');
+}
+
+async function sendToDGI(id) {
+  if (!confirm('¿Enviar esta factura a la DGI para su autorización?')) return;
+  try {
+    const result = await api(`/invoices/${id}/send-dgi`, { method: 'POST' });
+    alert(`✅ Factura autorizada: ${result.data?.codigoAutorizacion}`);
+    loadInvoices();
+    if (!ids('modal-invoice-detail').classList.contains('hide')) viewInvoice(id);
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  }
+}
+
+async function cancelInvoice(id) {
+  const motivo = prompt('Motivo de anulación (opcional):') || 'Anulación manual';
+  if (!confirm(`¿Anular la factura #${id}?`)) return;
+  try {
+    await api(`/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ motivo }) });
+    alert('✅ Factura anulada');
+    loadInvoices();
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════
+// CLIENTS
+// ═══════════════════════════════════════════
+async function loadClients() {
+  if (!EST_ID) return;
+  const wrap = ids('client-table-wrap');
+  try {
+    const search = ids('client-search').value;
+    let q = `establishmentId=${EST_ID}&limit=500`;
+    if (search) q += `&search=${encodeURIComponent(search)}`;
+    const result = await api(`/invoice-clients?${q}`);
+    const clients = result.data || [];
+
+    if (!clients.length) {
+      wrap.innerHTML = '<p class="small" style="padding:12px;">No hay clientes registrados. Crea el primer cliente.</p>';
+      return;
+    }
+
+    wrap.innerHTML = `<table>
+      <thead><tr><th>Nombre</th><th>ID</th><th>Correo</th><th>Teléfono</th><th>Razón Social</th></tr></thead>
+      <tbody>${clients.map(c => {
+        const name = c.razon_social || `${c.nombre} ${c.apellido}`.trim() || '-';
+        return `<tr>
+          <td><strong>${name}</strong></td>
+          <td>${c.tipo_identificacion.toUpperCase()}: ${c.identificacion}${c.dv ? '-'+c.dv : ''}</td>
+          <td>${c.correo || '-'}</td>
+          <td>${c.telefono || '-'}</td>
+          <td>${c.razon_social || '-'}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  } catch (err) {
+    wrap.innerHTML = `<p class="error">${err.message}</p>`;
+  }
+}
+
+ids('client-search').addEventListener('input', () => {
+  clearTimeout(window.__clientSearch);
+  window.__clientSearch = setTimeout(loadClients, 300);
+});
+
+// ─── New Client Modal ─────────────────────
+ids('btn-new-client').addEventListener('click', () => {
+  ids('cl-tipo').value = 'cedula';
+  ids('cl-id').value = '';
+  ids('cl-dv').value = '';
+  ids('cl-nombre').value = '';
+  ids('cl-apellido').value = '';
+  ids('cl-razon').value = '';
+  ids('cl-email').value = '';
+  ids('cl-phone').value = '';
+  ids('cl-direccion').value = '';
+  openModal('modal-client');
+});
+
+ids('cl-tipo').addEventListener('change', () => {
+  const tipo = ids('cl-tipo').value;
+  ids('cl-dv-wrap').style.display = tipo === 'ruc' ? '' : 'none';
+});
+
+ids('btn-save-client').addEventListener('click', async () => {
+  const data = {
+    tipoIdentificacion: ids('cl-tipo').value,
+    identificacion: ids('cl-id').value,
+    dv: ids('cl-dv').value,
+    nombre: ids('cl-nombre').value,
+    apellido: ids('cl-apellido').value || '-',
+    razonSocial: ids('cl-razon').value || null,
+    correo: ids('cl-email').value || null,
+    telefono: ids('cl-phone').value || null,
+    direccion: ids('cl-direccion').value || null
+  };
+  if (!data.identificacion || !data.nombre) return alert('Identificación y nombre son requeridos');
+
+  try {
+    await api('/invoice-clients', {
+      method: 'POST',
+      body: JSON.stringify({ establishmentId: EST_ID, ...data })
+    });
+    closeModal('modal-client');
+    loadClients();
+    alert('✅ Cliente guardado');
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  }
+});
+
+// ═══════════════════════════════════════════
+// DGI CONFIG
+// ═══════════════════════════════════════════
+ids('btn-dgi-config').addEventListener('click', async () => {
+  if (!EST_ID) return alert('Selecciona un establecimiento primero');
+  try {
+    const result = await api(`/dgi/config?establishmentId=${EST_ID}`);
+    const cfg = result.data || {};
+    ids('dgi-ruc').value = cfg.ruc || '';
+    ids('dgi-dv').value = cfg.dv || '';
+    ids('dgi-razon').value = cfg.razon_social || '';
+    ids('dgi-nombre').value = cfg.nombre_comercial || '';
+    ids('dgi-direccion').value = cfg.direccion || '';
+    ids('dgi-email').value = cfg.email || '';
+    ids('dgi-phone').value = cfg.telefono || '';
+    ids('dgi-regimen').value = cfg.regimen || 'general';
+    ids('dgi-resolucion').value = cfg.resolvedor || 'nuevo_resuelto';
+    ids('dgi-pi').value = cfg.pi || '00';
+    ids('dgi-sucursal').value = cfg.sucursal || '0001';
+    ids('dgi-ambiente').value = cfg.ambiente || 'test';
+    openModal('modal-dgi');
+  } catch (err) {
+    alert(`Error al cargar configuración DGI: ${err.message}`);
+  }
+});
+
+ids('btn-save-dgi').addEventListener('click', async () => {
+  const data = {
+    ruc: ids('dgi-ruc').value,
+    dv: ids('dgi-dv').value,
+    razon_social: ids('dgi-razon').value,
+    nombre_comercial: ids('dgi-nombre').value || null,
+    direccion: ids('dgi-direccion').value || null,
+    email: ids('dgi-email').value || null,
+    telefono: ids('dgi-phone').value || null,
+    regimen: ids('dgi-regimen').value,
+    resolvedor: ids('dgi-resolucion').value,
+    pi: ids('dgi-pi').value,
+    sucursal: ids('dgi-sucursal').value,
+    ambiente: ids('dgi-ambiente').value
+  };
+  if (!data.ruc || !data.dv || !data.razon_social) return alert('RUC, DV y Razón Social son requeridos');
+
+  try {
+    await api('/dgi/config', {
+      method: 'PUT',
+      body: JSON.stringify({ establishmentId: EST_ID, ...data })
+    });
+    closeModal('modal-dgi');
+    alert('✅ Configuración DGI guardada');
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  }
+});
+
+// ═══════════════════════════════════════════
+// NUMBERING
+// ═══════════════════════════════════════════
+async function loadNumbering() {
+  if (!EST_ID) return;
+  const wrap = ids('numbering-table-wrap');
+  try {
+    const result = await api(`/invoice-numbering?establishmentId=${EST_ID}`);
+    const rows = result.data || [];
+
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="small" style="padding:12px;">No hay resoluciones configuradas. Agrega una resolución DGI.</p>';
+      return;
+    }
+
+    wrap.innerHTML = `<table>
+      <thead><tr><th>Resolución</th><th>Tipo</th><th>Prefijo</th><th>N° Actual</th><th>Rango</th><th>Vencimiento</th><th>Activo</th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td>${r.resolucion}</td>
+          <td>${r.tipo_documento}</td>
+          <td><strong>${r.prefijo}</strong></td>
+          <td>${r.numero_actual}</td>
+          <td>${r.numero_inicial} - ${r.numero_final}</td>
+          <td>${new Date(r.fecha_vencimiento).toLocaleDateString('es-PA')}</td>
+          <td><span class="tag ${r.is_active ? 'tag-ok' : 'tag-danger'}">${r.is_active ? 'SI' : 'NO'}</span></td>
+        </tr>`).join('')}</tbody></table>`;
+  } catch (err) {
+    wrap.innerHTML = `<p class="error">${err.message}</p>`;
+  }
+}
+
+ids('btn-new-numbering').addEventListener('click', () => {
+  ids('num-tipo').value = 'factura';
+  ids('num-prefijo').value = 'FA';
+  ids('num-resolucion').value = '';
+  ids('num-fecha-aut').value = new Date().toISOString().slice(0, 10);
+  const nextYear = new Date(); nextYear.setFullYear(nextYear.getFullYear() + 1);
+  ids('num-fecha-venc').value = nextYear.toISOString().slice(0, 10);
+  ids('num-inicial').value = '1';
+  ids('num-final').value = '99999999';
+  openModal('modal-numbering');
+});
+
+ids('btn-save-numbering').addEventListener('click', async () => {
+  const data = {
+    establishmentId: EST_ID,
+    tipoDocumento: ids('num-tipo').value,
+    prefijo: ids('num-prefijo').value,
+    resolucion: ids('num-resolucion').value,
+    fechaAutorizacion: ids('num-fecha-aut').value,
+    fechaVencimiento: ids('num-fecha-venc').value,
+    numeroInicial: Number(ids('num-inicial').value),
+    numeroFinal: Number(ids('num-final').value)
+  };
+  if (!data.resolucion || !data.prefijo) return alert('Resolución y prefijo son requeridos');
+
+  try {
+    await api('/invoice-numbering', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+    closeModal('modal-numbering');
+    loadNumbering();
+    alert('✅ Resolución guardada');
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  }
+});
+
+// ═══════════════════════════════════════════
+// REPORTS
+// ═══════════════════════════════════════════
+async function loadReport() {
+  if (!EST_ID) return;
+  const kpiWrap = ids('rep-kpis');
+  const tableWrap = ids('rep-table-wrap');
+
+  try {
+    const from = ids('rep-from').value;
+    const to = ids('rep-to').value;
+    let q = `establishmentId=${EST_ID}`;
+    if (from) q += `&from=${from}`;
+    if (to) q += `&to=${to}`;
+
+    const result = await api(`/reports/invoicing?${q}`);
+    const data = result.data || {};
+
+    kpiWrap.innerHTML = `
+      <div class="kpi"><div class="value">${data.totalEmitidas || 0}</div><div class="label">Total Emitidas</div></div>
+      <div class="kpi"><div class="value">${data.totalAutorizadas || 0}</div><div class="label">Autorizadas</div></div>
+      <div class="kpi"><div class="value">${data.totalPendientes || 0}</div><div class="label">Pendientes</div></div>
+      <div class="kpi"><div class="value">${data.totalAnuladas || 0}</div><div class="label">Anuladas</div></div>
+      <div class="kpi"><div class="value" style="color:var(--ok);">$${Number(data.sumTotal || 0).toFixed(2)}</div><div class="label">Total Facturado</div></div>
+      <div class="kpi"><div class="value" style="color:var(--warn);">$${Number(data.sumITBMS || 0).toFixed(2)}</div><div class="label">ITBMS Recaudado</div></div>
+    `;
+
+    const invoices = data.invoices || [];
+    if (invoices.length) {
+      tableWrap.innerHTML = `<table>
+        <thead><tr><th>N° Factura</th><th>Fecha</th><th>Subtotal</th><th>ITBMS</th><th>Total</th><th>Estado</th></tr></thead>
+        <tbody>${invoices.slice(0, 100).map(inv => {
+          const estadoTag = inv.estado_dgi === 'autorizado' ? 'tag-ok' : inv.estado_dgi === 'pendiente' ? 'tag-warn' : 'tag-danger';
+          return `<tr>
+            <td>${inv.numero_completo || inv.id?.slice(0, 8)}</td>
+            <td>${new Date(inv.fecha_emision).toLocaleDateString('es-PA')}</td>
+            <td class="text-right">$${Number(inv.subtotal).toFixed(2)}</td>
+            <td class="text-right">$${Number(inv.itbms).toFixed(2)}</td>
+            <td class="text-right"><strong>$${Number(inv.total).toFixed(2)}</strong></td>
+            <td><span class="tag ${estadoTag}">${inv.estado_dgi}</span></td>
+          </tr>`;
+        }).join('')}</tbody></table>`;
+    } else {
+      tableWrap.innerHTML = '<p class="small">Sin facturas en el período seleccionado.</p>';
+    }
+  } catch (err) {
+    kpiWrap.innerHTML = '';
+    tableWrap.innerHTML = `<p class="error">${err.message}</p>`;
+  }
+}
+
+ids('btn-load-report').addEventListener('click', loadReport);
+
+// ═══════════════════════════════════════════
+// MODAL UTILITIES
+// ═══════════════════════════════════════════
+function openModal(id) {
+  ids(id).classList.remove('hide');
+}
+
+function closeModal(id) {
+  ids(id).classList.add('hide');
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', (e) => {
+    if (e.target === el) el.classList.add('hide');
+  });
+});
+
+// ═══════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════
+init();
+</script>
+</body>
+</html>

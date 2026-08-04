@@ -1042,6 +1042,12 @@
   </style>
 </head>
 <body>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MartialSys">
+  <meta name="theme-color" content="#c23b2a">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
   <main class="wrap">
     <section class="hero">
       <div class="hero-left">
@@ -1052,6 +1058,7 @@
         <button class="mode-btn" id="ui-clean-btn" type="button">Ultra Clean</button>
         <button class="mode-btn active" id="ui-dojo-btn" type="button">Dojo Competitiva</button>
         <span class="pill">Dojo Operations Suite</span>
+        <span id="user-info" style="display:none;font-size:12px;color:var(--text);margin-right:6px;"></span>
         <button class="btn alt hidden" id="logout-btn" type="button">Cerrar sesion</button>
       </div>
 
@@ -1069,56 +1076,59 @@
       </div>
     </section>
 
-    <section id="login-gate" class="grid">
-      <article class="card full" id="login-card">
-        <h3>Acceso al sistema</h3>
-        <p class="muted">Login obligatorio antes de navegar en modulos.</p>
-        <form id="login-form" class="form">
-          <div class="full">
-            <label>Usuario</label>
-            <input id="login-username" required placeholder="superadmin o owner username" autocomplete="username">
-          </div>
-          <div class="full">
-            <label>Password</label>
-            <input id="login-password" type="password" required autocomplete="current-password">
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Iniciar sesion</button>
-          </div>
-        </form>
-        <pre id="login-output">Sin sesion</pre>
-      </article>
+    <section id="login-gate" style="display:flex;justify-content:center;align-items:flex-start;padding-top:40px;min-height:80vh;">
+      <div style="width:100%;max-width:480px;">
+        <article class="card full" id="login-card" style="margin-bottom:16px;">
+          <h3>Acceso al sistema</h3>
+          <p class="muted">Ingresa tus credenciales para acceder.</p>
+          <form id="login-form" class="form">
+            <div class="full">
+              <label>Usuario</label>
+              <input id="login-username" required placeholder="superadmin o owner username" autocomplete="username">
+            </div>
+            <div class="full">
+              <label>Password</label>
+              <input id="login-password" type="password" required autocomplete="current-password">
+            </div>
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" type="submit" style="flex:1;">Iniciar sesion</button>
+              <button class="btn alt" id="show-trial-btn" type="button" style="flex:1;">Crear cuenta gratis</button>
+            </div>
+          </form>
+          <pre id="login-output" class="muted" style="display:none;margin-top:10px;font-size:12px;"></pre>
+        </article>
 
-      <article class="card full" id="trial-signup-card">
-        <h3>Registrarse (Prueba gratis 30 días)</h3>
-        <p class="muted">Crea una cuenta de dueño de dojo con acceso completo por 30 días sin costo.</p>
-        <form id="trial-signup-form" class="form">
-          <div class="full">
-            <label>Nombre completo</label>
-            <input id="ts-name" placeholder="Tu nombre completo" required>
-          </div>
-          <div class="full">
-            <label>Usuario</label>
-            <input id="ts-username" placeholder="elije_un_usuario" required autocomplete="username">
-          </div>
-          <div class="full">
-            <label>Contraseña</label>
-            <input id="ts-password" type="password" placeholder="Min 6 caracteres" required autocomplete="new-password">
-          </div>
-          <div class="full">
-            <label>Nombre del dojo / establecimiento</label>
-            <input id="ts-est-name" placeholder="Academia Elite" required>
-          </div>
-          <div class="full">
-            <label>Disciplinas activas</label>
-            <div id="ts-discipline-checks" class="list"></div>
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Crear cuenta gratis</button>
-          </div>
-        </form>
-        <pre id="trial-signup-output" style="display:none;">Completa el formulario para registrarte.</pre>
-      </article>
+        <article class="card full" id="trial-signup-card" style="display:none;">
+          <h3>Crear cuenta nueva</h3>
+          <form id="trial-signup-form" class="form">
+            <div class="full">
+              <label>Nombre completo</label>
+              <input id="ts-name" placeholder="Tu nombre completo" required>
+            </div>
+            <div class="full">
+              <label>Usuario</label>
+              <input id="ts-username" placeholder="elije_un_usuario" required autocomplete="username">
+            </div>
+            <div class="full">
+              <label>Contraseña</label>
+              <input id="ts-password" type="password" placeholder="Min 6 caracteres" required autocomplete="new-password">
+            </div>
+            <div class="full">
+              <label>Nombre del dojo / establecimiento</label>
+              <input id="ts-est-name" placeholder="Academia Elite" required>
+            </div>
+            <div class="full">
+              <label>Disciplinas activas</label>
+              <div id="ts-discipline-checks" class="list"></div>
+            </div>
+            <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" type="submit" style="flex:1;">Crear cuenta</button>
+              <button class="btn alt" id="cancel-trial-btn" type="button" style="flex:1;">Cancelar</button>
+            </div>
+          </form>
+          <pre id="trial-signup-output" style="display:none;">Completa el formulario para registrarte.</pre>
+        </article>
+      </div>
     </section>
 
     <section id="tab-onboarding" class="grid hidden">
@@ -1183,76 +1193,56 @@
         <!-- Disciplina Actual -->
         <article class="card" style="grid-column: span 6;">
           <h3>Mi Disciplina</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-accent-text" style="font-size: 1.3rem; font-weight: 700; color: var(--brand);">Karate</div>
-            <div class="muted" style="font-size: 13px; margin-top: 4px;">Nivel actual: Cinta Blanca</div>
-            <div class="dashboard-dark-chip" style="margin-top: 12px; background: #1a2230; border-radius: 8px; padding: 8px; font-size: 12px; color: var(--muted);">
-              Instructor: Maestro Juan García
-            </div>
+          <div id="dash-student-disciplines" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Próximas Clases -->
         <article class="card" style="grid-column: span 6;">
           <h3 id="dashboard-student-upcoming-title">Próximas Clases</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; margin-bottom: 6px; font-size: 12px;">
-              <strong>Lunes 14 de mayo</strong><br>
-              <span class="muted">19:00 - 20:00 • Dojo Principal</span>
-            </div>
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; font-size: 12px;">
-              <strong>Miércoles 16 de mayo</strong><br>
-              <span class="muted">18:30 - 19:30 • Dojo Principal</span>
-            </div>
+          <div id="dash-student-upcoming" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Mi Asistencia -->
         <article class="card" style="grid-column: span 4;">
           <h3>Mi Asistencia</h3>
-          <div style="padding: 8px 0; text-align: center;">
-            <div style="font-size: 2rem; font-weight: 700; color: var(--ok);">92%</div>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">12 de 13 clases asistidas</div>
+          <div id="dash-student-attendance" style="padding: 8px 0; text-align: center;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Mis Calificaciones -->
         <article class="card" style="grid-column: span 4;">
           <h3 id="dashboard-student-score-title">Última Calificación</h3>
-          <div style="padding: 8px 0; text-align: center;">
-            <div style="font-size: 2rem; font-weight: 700; color: var(--brand-2);">85%</div>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">Evaluación mayo 2026</div>
+          <div id="dash-student-score" style="padding: 8px 0; text-align: center;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Mensajes -->
         <article class="card" style="grid-column: span 4;">
           <h3>Mensajes</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; font-size: 12px;">
-              <div class="dashboard-accent-text" style="color: var(--brand);">Maestro Juan García</div>
-              <div class="muted" style="font-size: 11px; margin-top: 2px;">Excelente técnica en kihon</div>
-            </div>
+          <div id="dash-student-notifications" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Pagos Pendientes -->
         <article class="card" style="grid-column: span 6;">
           <h3>Mi Situación de Pagos</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: #1a2230; border-radius: 8px;">
-              <span>Mayo 2026</span>
-              <span style="color: var(--ok);">Pagado</span>
-            </div>
+          <div id="dash-student-payments" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Próximo Examen -->
         <article class="card" style="grid-column: span 6;">
           <h3 id="dashboard-student-exam-title">Próximo Examen</h3>
-          <div style="padding: 8px 0; text-align: center;">
-            <div style="font-size: 1.1rem; font-weight: 700;">Junio 15, 2026</div>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">Evaluación para Cinta Amarilla</div>
+          <div id="dash-student-exam" style="padding: 8px 0; text-align: center;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
       </div>
@@ -1263,84 +1253,56 @@
         <!-- Mis Disciplinas -->
         <article class="card" style="grid-column: span 4;">
           <h3>Mis Disciplinas</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; margin-bottom: 6px; font-size: 12px;">
-              <div class="dashboard-accent-text" style="color: var(--brand);">Karate</div>
-              <div class="muted" style="font-size: 11px;">Instructor Sensei</div>
-            </div>
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; font-size: 12px;">
-              <div class="dashboard-accent-text" style="color: var(--brand);">Judo</div>
-              <div class="muted" style="font-size: 11px;">Instructor Senior</div>
-            </div>
+          <div id="dash-sensei-disciplines" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Total Estudiantes Activos -->
         <article class="card" style="grid-column: span 4;">
           <h3>Estudiantes Activos</h3>
-          <div style="padding: 8px 0; text-align: center;">
-            <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">24</div>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">Karate: 15 | Judo: 9</div>
+          <div id="dash-sensei-students" style="padding: 8px 0; text-align: center;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Asistencia Hoy -->
         <article class="card" style="grid-column: span 4;">
           <h3>Asistencia Hoy</h3>
-          <div style="padding: 8px 0; text-align: center;">
-            <div style="font-size: 2rem; font-weight: 700; color: var(--ok);">87%</div>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">13 de 15 presentes</div>
+          <div id="dash-sensei-attendance" style="padding: 8px 0; text-align: center;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Estudiantes Bajo Desempeño -->
         <article class="card" style="grid-column: span 6;">
           <h3 id="dashboard-sensei-attention-title">Requieren Atención</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid var(--warn);">
-              <strong>Ana Martínez</strong><br>
-              <span class="muted">Asistencia baja (60%)</span>
-            </div>
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; font-size: 12px; border-left: 3px solid var(--danger);">
-              <strong>Carlos López</strong><br>
-              <span class="muted">Pagos vencidos</span>
-            </div>
+          <div id="dash-sensei-attention" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Próximas Clases -->
         <article class="card" style="grid-column: span 6;">
           <h3>Mis Clases Hoy</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; margin-bottom: 6px; font-size: 12px;">
-              <strong>19:00 - 20:00</strong><br>
-              <span class="muted">Karate Infantil • 10 alumnos</span>
-            </div>
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; font-size: 12px;">
-              <strong>20:15 - 21:15</strong><br>
-              <span class="muted">Karate Adultos • 12 alumnos</span>
-            </div>
+          <div id="dash-sensei-classes" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Evaluaciones Pendientes -->
         <article class="card" style="grid-column: span 6;">
           <h3>Evaluaciones Pendientes</h3>
-          <div style="padding: 8px 0; text-align: center;">
-            <div style="font-size: 1.8rem; font-weight: 700; color: var(--warn);">3</div>
-            <div class="muted" style="font-size: 12px; margin-top: 4px;">Para registrar esta semana</div>
-            <button class="btn alt" style="margin-top: 8px; padding: 8px 12px; font-size: 12px;">Registrar ahora</button>
+          <div id="dash-sensei-evaluations" style="padding: 8px 0; text-align: center;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
 
         <!-- Comunicados no Leídos -->
         <article class="card" style="grid-column: span 6;">
           <h3>Comunicados</h3>
-          <div style="padding: 8px 0;">
-            <div class="dashboard-dark-chip" style="padding: 8px; background: #1a2230; border-radius: 8px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid var(--brand);">
-              <strong>Cambio de horario</strong><br>
-              <span class="muted">hace 2 horas</span>
-            </div>
+          <div id="dash-sensei-notifications" style="padding: 8px 0;">
+            <span class="muted" style="font-size: 12px;">Cargando...</span>
           </div>
         </article>
       </div>
@@ -1529,6 +1491,7 @@
           <button class="module-sub-btn active" data-tab="finanzas">Pagos</button>
           <button class="module-sub-btn" data-tab="comisiones">Comisiones</button>
           <button class="module-sub-btn" data-tab="pasarela">Pasarela de Pago</button>
+          <button class="module-sub-btn" data-tab="facturacion">🧾 Facturación</button>
         </div>
         <div class="finance-kpis" id="finance-kpis-wrap">
           <div class="kpi-tile"><div class="kpi-label">Pagos totales</div><div class="kpi-value">$0.00</div></div>
@@ -2169,6 +2132,24 @@
         <div id="comm-kpi" style="display:none;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;"></div>
         <div id="comm-table-wrap"></div>
         <p id="comm-msg" class="muted"></p>
+      </article>
+    </section>
+
+    <section id="tab-facturacion" class="grid hidden">
+      <article class="card full">
+        <h3>🧾 Facturación Electrónica</h3>
+        <div class="module-subnav" id="subnav-finanzas-fact">
+          <button class="module-sub-btn" data-tab="finanzas">Pagos</button>
+          <button class="module-sub-btn" data-tab="comisiones">Comisiones</button>
+          <button class="module-sub-btn" data-tab="pasarela">Pasarela de Pago</button>
+          <button class="module-sub-btn active" data-tab="facturacion">🧾 Facturación</button>
+        </div>
+        <p class="muted">Facturación electrónica DGI Panamá. Accede al panel completo de facturación.</p>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn" onclick="window.open('/invoicing.html','_blank')" type="button">📋 Abrir módulo de facturación</button>
+        </div>
+        <p>El módulo completo de facturación está disponible en una interfaz dedicada.</p>
+        <pre id="fact-output" style="display:none;"></pre>
       </article>
     </section>
 
@@ -2817,6 +2798,7 @@
       disciplines: [],
       profileRole: '',
       profileId: '',
+      profileName: '',
       theoryDisciplines: {},
       theoryLevelLabels: {},
       modulePermissions: {},
@@ -2832,6 +2814,32 @@
       marketPageSize: 12,
       marketplacePanelMode: 'catalog'
     };
+
+    // ─── Session persistence: restore token from localStorage ───────────
+    try {
+      const savedToken = localStorage.getItem('ms_token');
+      if (savedToken) {
+        state.accessToken = savedToken;
+        // Auto-restore session: refresh profile, memberships, and show dashboard
+        (async () => {
+          try {
+            await refreshMe();
+            setAuthenticated(true);
+            const allowed = allowedModulesForCurrentEstablishment();
+            showTab(allowed[0] || 'operacion');
+            const treeSelect = ids('tree-establishment');
+            if (treeSelect) {
+              treeSelect.dispatchEvent(new Event('change'));
+            }
+          } catch (_) {
+            // Token expired or invalid → clear it
+            try { localStorage.removeItem('ms_token'); } catch (_) {}
+            state.accessToken = '';
+            setAuthenticated(false);
+          }
+        })();
+      }
+    } catch (_) {}
 
     try {
       const savedMarketMode = localStorage.getItem('martialsystem-marketplace-mode');
@@ -2872,13 +2880,14 @@
     }
 
     // â”€â”€ NAVEGACIÃ“N DE TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const ALL_TABS = ['onboarding','operacion','prospectos','calendario','academico','teoria','administracion','roles','torneos','comunidad','marketplace','finanzas','inventario','comisiones','pasarela','configuracion','debug'];
+    const ALL_TABS = ['onboarding','operacion','prospectos','calendario','academico','teoria','administracion','roles','torneos','comunidad','marketplace','finanzas','inventario','comisiones','pasarela','facturacion','configuracion','debug'];
     const TOP_TABS = ['operacion','prospectos','calendario','academico','administracion','torneos','comunidad','marketplace','finanzas','configuracion','debug'];
     const TAB_PARENT = {
       teoria: 'academico',
       inventario: 'marketplace',
       comisiones: 'finanzas',
       pasarela: 'finanzas',
+      facturacion: 'finanzas',
       roles: 'configuracion',
       onboarding: 'configuracion'
     };
@@ -2944,6 +2953,7 @@
       }
     }
 
+
     async function loadSuperadminDashboard() {
       const colors = ['var(--ok)', 'var(--accent)', 'var(--brand)', 'var(--brand-2)', 'var(--warn)'];
       try {
@@ -2951,119 +2961,641 @@
         const json = await res.json();
         if (!json.ok) throw new Error(json.error);
         const d = json.data;
-
+        function hideCard(elId) { const el = ids(elId); if (el) { const card = el.closest('article.card'); if (card) card.style.display = 'none'; } }
+        function showCard(elId) { const el = ids(elId); if (el) { const card = el.closest('article.card'); if (card) card.style.display = ''; } }
         // KPI: Establecimientos
-        const et = ids('kpi-estabs-total');
-        const es = ids('kpi-estabs-sub');
+        const et = ids('kpi-estabs-total'); const es = ids('kpi-estabs-sub');
         if (et) et.textContent = d.establishments.total;
-        if (es) es.textContent = `Activos: ${d.establishments.active} | Inactivos: ${d.establishments.inactive}`;
-
-        // KPI: Usuarios
-        const ut = ids('kpi-users-total');
-        const us = ids('kpi-users-sub');
-        if (ut) ut.textContent = d.users.total;
-        if (us) {
-          const r = d.users.byRole || {};
-          const parts = Object.entries(r).map(([role, n]) => `${role}: ${n}`).join(' | ');
-          us.textContent = parts || 'Sin desglose';
-        }
-
-        // KPI: Ingresos semana
+        if (es) es.textContent = 'Activos: ' + d.establishments.active + ' | Inactivos: ' + d.establishments.inactive;
+        // KPI: Ingresos semana - hide if no payment data
         const it = ids('kpi-ingresos-total');
-        const is_ = ids('kpi-ingresos-sub');
-        if (it) it.textContent = d.payments.hasData ? `$${Number(d.payments.ingresosSemana).toLocaleString('es', {minimumFractionDigits:0})}` : 'Sin datos';
-        if (is_) is_.textContent = d.payments.hasData ? 'Tabla payments' : 'No hay pagos registrados';
-
-        // KPI: Alumnos
-        const st = ids('kpi-students-total');
-        const ss = ids('kpi-students-sub');
-        if (st) st.textContent = d.students.total;
-        if (ss) ss.textContent = 'Tabla students';
-
-        // KPI: Disciplinas
-        const dt = ids('kpi-disciplines-total');
-        const ds = ids('kpi-disciplines-sub');
-        if (dt) dt.textContent = d.disciplines.total;
-        if (ds) ds.textContent = 'Tabla disciplines (activas)';
-
-        // KPI: Memberships / roles
-        const mt = ids('kpi-memberships-total');
-        const ms = ids('kpi-memberships-sub');
-        if (mt) mt.textContent = d.users.total;
-        if (ms) {
-          const r = d.users.byRole || {};
-          const inst = r.instructor || 0;
-          const stu = r.student || 0;
-          ms.textContent = `Instructores: ${inst} | Alumnos: ${stu}`;
+        if (it) {
+          if (d.payments.hasData) { showCard('kpi-ingresos-total'); it.textContent = '$' + Number(d.payments.ingresosSemana).toLocaleString('es', {minimumFractionDigits:0}); }
+          else { it.textContent = 'Sin datos'; }
         }
-
-        // KPI: Nuevos
-        const nt = ids('kpi-new-total');
-        if (nt) nt.textContent = d.newThisWeek;
-
+        // KPI: Nuevos - hide if no new members
+        const nt = ids('kpi-new-total'); if (nt) nt.textContent = d.newThisWeek;
         // KPI: Asistencia
         const at = ids('kpi-attendance-rate');
-        const as_ = ids('kpi-attendance-sub');
         if (at) at.textContent = d.attendance.rate !== null ? d.attendance.rate + '%' : 'Sin datos';
-        if (as_) as_.textContent = d.attendance.total > 0
-          ? `${d.attendance.present}/${d.attendance.total} registros`
-          : 'Sin registros de asistencia';
-
+        if (d.attendance.rate === null) hideCard('kpi-attendance-rate');
         // Top Establecimientos
         const topEstabsEl = ids('kpi-top-estabs');
         if (topEstabsEl && d.topEstabs && d.topEstabs.length) {
-          topEstabsEl.innerHTML = d.topEstabs.map((e, i) => `
-            <div style="display:flex;justify-content:space-between;padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;">
-              <span>${e.name}</span>
-              <span style="color:${colors[i % colors.length]};">${e.students} alumnos</span>
-            </div>`).join('');
-        } else if (topEstabsEl) {
-          topEstabsEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin establecimientos</span>';
-        }
-
+          showCard('kpi-top-estabs');
+          topEstabsEl.innerHTML = d.topEstabs.map((e, i) => '<div style="display:flex;justify-content:space-between;padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;"><span>' + e.name + '</span><span style="color:' + colors[i % colors.length] + ';">' + e.students + ' alumnos</span></div>').join('');
+        } else { if (topEstabsEl) topEstabsEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin establecimientos</span>'; hideCard('kpi-top-estabs'); }
         // Top Disciplinas
         const topDiscEl = ids('kpi-top-disciplines');
         if (topDiscEl && d.topDisciplines && d.topDisciplines.length) {
+          showCard('kpi-top-disciplines');
           const max = d.topDisciplines[0].count || 1;
-          topDiscEl.innerHTML = d.topDisciplines.map((disc, i) => {
-            const pct = Math.round((disc.count / max) * 100);
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;">
-              <span>${disc.name}</span>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <div style="width:60px;height:6px;background:#2b3645;border-radius:3px;overflow:hidden;">
-                  <div style="width:${pct}%;height:100%;background:${colors[i % colors.length]};border-radius:3px;"></div>
-                </div>
-                <span style="color:var(--muted);font-size:11px;">${disc.count} locales</span>
-              </div>
-            </div>`;
-          }).join('');
-        } else if (topDiscEl) {
-          topDiscEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin disciplinas</span>';
-        }
-
+          topDiscEl.innerHTML = d.topDisciplines.map((disc, i) => { const pct = Math.round((disc.count / max) * 100); return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;"><span>' + disc.name + '</span><div style="display:flex;align-items:center;gap:6px;"><div style="width:60px;height:6px;background:#2b3645;border-radius:3px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + colors[i % colors.length] + ';border-radius:3px;"></div></div><span style="color:var(--muted);font-size:11px;">' + disc.count + ' locales</span></div></div>'; }).join('');
+        } else { if (topDiscEl) topDiscEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin disciplinas</span>'; hideCard('kpi-top-disciplines'); }
         // Transacciones
         const txEl = ids('kpi-transactions');
         if (txEl) {
           if (d.lastTransactions && d.lastTransactions.length) {
-            txEl.innerHTML = `<table style="width:100%;font-size:12px;border-collapse:collapse;">
-              <tr style="border-bottom:1px solid var(--line);">
-                <td style="padding:8px;color:var(--muted);">Fecha</td>
-                <td style="padding:8px;color:var(--muted);">Establecimiento</td>
-                <td style="padding:8px;color:var(--muted);text-align:right;">Monto</td>
-              </tr>
-              ${d.lastTransactions.map(tx => `<tr style="border-bottom:1px solid var(--line);">
-                <td style="padding:8px;">${tx.paid_at ? tx.paid_at.slice(0,10) : '-'}</td>
-                <td style="padding:8px;">${tx.establishment}</td>
-                <td style="padding:8px;text-align:right;color:var(--ok);">$${Number(tx.amount||0).toLocaleString()}</td>
-              </tr>`).join('')}
-            </table>`;
+            showCard('kpi-transactions');
+            txEl.innerHTML = '<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--line);"><td style="padding:8px;color:var(--muted);">Fecha</td><td style="padding:8px;color:var(--muted);">Establecimiento</td><td style="padding:8px;color:var(--muted);text-align:right;">Monto</td></tr>' + d.lastTransactions.map(tx => '<tr style="border-bottom:1px solid var(--line);"><td style="padding:8px;">' + (tx.paid_at ? tx.paid_at.slice(0,10) : '-') + '</td><td style="padding:8px;">' + tx.establishment + '</td><td style="padding:8px;text-align:right;color:var(--ok);">$' + Number(tx.amount||0).toLocaleString() + '</td></tr>').join('') + '</table>';
+          } else { txEl.innerHTML = '<span class="muted" style="font-size:12px;">No hay transacciones registradas</span>'; }
+        }
+      } catch (err) { console.warn('Dashboard stats error:', err.message); }
+    }
+
+    async function loadStudentDashboard() {
+      const establishmentId = ids('tree-establishment')?.value;
+      if (!establishmentId) return;
+      try {
+        const res = await fetch(`/api/dashboard/student?establishmentId=${encodeURIComponent(establishmentId)}`, { headers: { Authorization: 'Bearer ' + state.accessToken } });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+        const d = json.data;
+
+        // Disciplinas — hide card if no student or no enrollments
+        const discEl = ids('dash-student-disciplines');
+        const discCard = discEl?.closest('article.card');
+        if (discEl) {
+          const enrollments = d.enrollments || [];
+          const hasData = d.student && enrollments.length > 0;
+          if (hasData) {
+            discEl.innerHTML = enrollments.map(e => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;">
+                <div class="dashboard-accent-text" style="color:var(--brand);">${e.discipline?.name || '-'}</div>
+                <div class="muted" style="font-size:11px;">Rango: ${e.current_rank || 'Sin rango'} | Estado: ${e.status}</div>
+              </div>`).join('');
+            if (d.instructorNames && d.instructorNames.length) {
+              discEl.innerHTML += `<div class="dashboard-dark-chip" style="margin-top:8px;background:#1a2230;border-radius:8px;padding:8px;font-size:12px;color:var(--muted);">Instructor: ${d.instructorNames.join(', ')}</div>`;
+            }
+            if (discCard) discCard.style.display = '';
           } else {
-            txEl.innerHTML = '<span class="muted" style="font-size:12px;">No hay transacciones registradas</span>';
+            if (discCard) discCard.style.display = 'none';
+          }
+        }
+
+        // Próximas clases — hide card if no classes
+        const upEl = ids('dash-student-upcoming');
+        const upCard = upEl?.closest('article.card');
+        if (upEl) {
+          const classes = d.upcomingClasses || [];
+          if (classes.length) {
+            upEl.innerHTML = classes.slice(0, 5).map(c => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;">
+                <strong>${c.scheduled_date || '-'}</strong><br>
+                <span class="muted">${c.start_time || ''}${c.end_time ? ' - ' + c.end_time : ''} • ${c.title || '-'}${c.location ? ' • ' + c.location : ''}</span>
+              </div>`).join('');
+            if (upCard) upCard.style.display = '';
+          } else {
+            if (upCard) upCard.style.display = 'none';
+          }
+        }
+
+        // Asistencia — hide card if no attendance data
+        const attEl = ids('dash-student-attendance');
+        const attCard = attEl?.closest('article.card');
+        if (attEl) {
+          const rate = d.attendance?.rate;
+          if (rate !== null && rate !== undefined) {
+            attEl.innerHTML = `<div style="font-size:2rem;font-weight:700;color:var(--ok);">${rate}%</div><div class="muted" style="font-size:12px;margin-top:4px;">${d.attendance.present} de ${d.attendance.total} clases asistidas</div>`;
+            if (attCard) attCard.style.display = '';
+          } else {
+            if (attCard) attCard.style.display = 'none';
+          }
+        }
+
+        // Última calificación — hide card if no evaluation
+        const scoreEl = ids('dash-student-score');
+        const scoreCard = scoreEl?.closest('article.card');
+        if (scoreEl) {
+          const ev = d.lastEvaluation;
+          if (ev) {
+            const scoreColor = ev.passed ? 'var(--ok)' : 'var(--danger)';
+            scoreEl.innerHTML = `<div style="font-size:2rem;font-weight:700;color:${scoreColor};">${ev.score != null ? ev.score + '%' : (ev.passed ? 'Aprobado' : 'No aprobado')}</div><div class="muted" style="font-size:12px;margin-top:4px;">${ev.discipline_name || ''} • ${ev.evaluated_at ? new Date(ev.evaluated_at).toLocaleDateString() : ''}</div>`;
+            if (scoreCard) scoreCard.style.display = '';
+          } else {
+            if (scoreCard) scoreCard.style.display = 'none';
+          }
+        }
+
+        // Notificaciones — hide card if no notifications
+        const notifEl = ids('dash-student-notifications');
+        const notifCard = notifEl?.closest('article.card');
+        if (notifEl) {
+          const notifs = d.notifications || [];
+          if (notifs.length) {
+            notifEl.innerHTML = notifs.slice(0, 3).map(n => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;border-left:3px solid var(--brand);">
+                <div class="dashboard-accent-text" style="color:var(--brand);">${n.title || '-'}</div>
+                <div class="muted" style="font-size:11px;margin-top:2px;">${n.body || ''}</div>
+              </div>`).join('');
+            if (notifCard) notifCard.style.display = '';
+          } else {
+            if (notifCard) notifCard.style.display = 'none';
+          }
+        }
+
+        // Pagos — hide card if no payments
+        const payEl = ids('dash-student-payments');
+        const payCard = payEl?.closest('article.card');
+        if (payEl) {
+          const payments = d.payments || [];
+          if (payments.length) {
+            payEl.innerHTML = payments.slice(0, 5).map(p => `
+              <div class="dashboard-dark-chip" style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:#1a2230;border-radius:8px;margin-bottom:4px;font-size:12px;">
+                <span>${p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '-'} ${p.concept || ''}</span>
+                <span style="color:var(--ok);">$${Number(p.amount||0).toLocaleString()}</span>
+              </div>`).join('');
+            if (payCard) payCard.style.display = '';
+          } else {
+            if (payCard) payCard.style.display = 'none';
+          }
+        }
+
+        // Próximo examen — hide card if no next rank info
+        const examEl = ids('dash-student-exam');
+        const examCard = examEl?.closest('article.card');
+        if (examEl) {
+          const nr = d.nextRank;
+          if (nr && nr.next_rank) {
+            examEl.innerHTML = `<div style="font-size:1.1rem;font-weight:700;">Siguiente: ${nr.next_rank}</div><div class="muted" style="font-size:12px;margin-top:4px;">Disciplina: ${nr.discipline_name || '-'}</div>`;
+            if (examCard) examCard.style.display = '';
+          } else {
+            if (examCard) examCard.style.display = 'none';
           }
         }
       } catch (err) {
-        console.warn('Dashboard stats error:', err.message);
+        console.warn('Student dashboard error:', err.message);
       }
+    }
+
+    async function loadSenseiDashboard() {
+      const establishmentId = ids('tree-establishment')?.value;
+      if (!establishmentId) return;
+      try {
+        const res = await fetch(`/api/dashboard/sensei?establishmentId=${encodeURIComponent(establishmentId)}`, { headers: { Authorization: 'Bearer ' + state.accessToken } });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+        const d = json.data;
+
+        // Disciplinas — hide card if no disciplines assigned
+        const discEl = ids('dash-sensei-disciplines');
+        const discCard = discEl?.closest('article.card');
+        if (discEl) {
+          const discs = d.disciplines || [];
+          if (discs.length) {
+            discEl.innerHTML = discs.map(disc => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;">
+                <div class="dashboard-accent-text" style="color:var(--brand);">${disc.name}</div>
+                <div class="muted" style="font-size:11px;">${disc.code}</div>
+              </div>`).join('');
+            if (discCard) discCard.style.display = '';
+          } else {
+            if (discCard) discCard.style.display = 'none';
+          }
+        }
+
+        // Estudiantes activos — hide card if no students
+        const studEl = ids('dash-sensei-students');
+        const studCard = studEl?.closest('article.card');
+        if (studEl) {
+          const perDisc = d.studentsPerDiscipline || {};
+          const parts = Object.entries(perDisc).map(([name, count]) => `${name}: ${count}`).join(' | ');
+          const hasStudents = (d.totalStudents || 0) > 0;
+          if (hasStudents) {
+            studEl.innerHTML = `<div style="font-size:2rem;font-weight:700;color:var(--accent);">${d.totalStudents || 0}</div><div class="muted" style="font-size:12px;margin-top:4px;">${parts || 'Sin alumnos'}</div>`;
+            if (studCard) studCard.style.display = '';
+          } else {
+            if (studCard) studCard.style.display = 'none';
+          }
+        }
+
+        // Asistencia hoy — hide card if no data
+        const attEl = ids('dash-sensei-attendance');
+        if (attEl) {
+          const att = d.todayAttendance || {};
+          const attCard = attEl.closest('article.card');
+          if (att.rate !== null && att.rate !== undefined) {
+            attEl.innerHTML = `<div style="font-size:2rem;font-weight:700;color:var(--ok);">${att.rate}%</div><div class="muted" style="font-size:12px;margin-top:4px;">${att.present} de ${att.total} presentes hoy</div>`;
+            if (attCard) attCard.style.display = '';
+          } else {
+            if (attCard) attCard.style.display = 'none';
+          }
+        }
+
+        // Requieren atención — hide card if no at-risk students
+        const attStudEl = ids('dash-sensei-attention');
+        if (attStudEl) {
+          const attention = d.attentionStudents || [];
+          const attStudCard = attStudEl.closest('article.card');
+          if (attention.length) {
+            attStudEl.innerHTML = attention.slice(0, 5).map(s => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;border-left:3px solid var(--warn);">
+                <strong>${s.full_name || '-'}</strong><br>
+                <span class="muted">Asistencia baja (${s.attendanceRate}%)</span>
+              </div>`).join('');
+            if (attStudCard) attStudCard.style.display = '';
+          } else {
+            if (attStudCard) attStudCard.style.display = 'none';
+          }
+        }
+
+        // Clases hoy — hide card if no classes
+        const classEl = ids('dash-sensei-classes');
+        if (classEl) {
+          const classes = d.todayClasses || [];
+          const classCard = classEl.closest('article.card');
+          if (classes.length) {
+            classEl.innerHTML = classes.map(c => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;">
+                <strong>${c.start_time || ''}${c.end_time ? ' - ' + c.end_time : ''}</strong><br>
+                <span class="muted">${c.title || '-'} • ${c.discipline_name || ''}</span>
+              </div>`).join('');
+            if (classCard) classCard.style.display = '';
+          } else {
+            if (classCard) classCard.style.display = 'none';
+          }
+        }
+
+        // Evaluaciones pendientes — hide card if 0 pending
+        const evalEl = ids('dash-sensei-evaluations');
+        const evalCard = evalEl?.closest('article.card');
+        if (evalEl) {
+          const pending = d.pendingEvaluations || 0;
+          if (pending > 0) {
+            evalEl.innerHTML = `<div style="font-size:1.8rem;font-weight:700;color:var(--warn);">${pending}</div><div class="muted" style="font-size:12px;margin-top:4px;">Estudiantes sin evaluación reciente</div>`;
+            if (evalCard) evalCard.style.display = '';
+          } else {
+            if (evalCard) evalCard.style.display = 'none';
+          }
+        }
+
+        // Notificaciones — hide card if no notifications
+        const notifEl = ids('dash-sensei-notifications');
+        if (notifEl) {
+          const notifs = d.notifications || [];
+          const notifCard = notifEl.closest('article.card');
+          if (notifs.length) {
+            notifEl.innerHTML = notifs.slice(0, 3).map(n => `
+              <div class="dashboard-dark-chip" style="padding:8px;background:#1a2230;border-radius:8px;margin-bottom:6px;font-size:12px;border-left:3px solid var(--brand);">
+                <strong>${n.title || '-'}</strong><br>
+                <span class="muted">${n.body || ''}</span>
+              </div>`).join('');
+            if (notifCard) notifCard.style.display = '';
+          } else {
+            if (notifCard) notifCard.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        console.warn('Sensei dashboard error:', err.message);
+      }
+    }
+
+    async function loadOwnerDashboard() {
+      const establishmentId = ids('tree-establishment')?.value;
+      if (!establishmentId) {
+        // Try to auto-select an establishment
+        const establishmentSelect = ids('tree-establishment');
+        if (establishmentSelect && state.memberships.length > 0) {
+          // Auto-select first active membership
+          const active = state.memberships.find(m => m?.establishment?.is_active !== false);
+          if (active?.establishment?.id) {
+            establishmentSelect.value = active.establishment.id;
+            establishmentSelect.dispatchEvent(new Event('change'));
+            // Retry after change event
+            setTimeout(() => loadOwnerDashboard(), 300);
+            return;
+          }
+        }
+        // No establishment available - show message
+        const adminCard = ids('dashboard-admin-controls');
+        if (adminCard) {
+          adminCard.querySelector('article').innerHTML = '<h3>Dashboard del Dojo</h3><p class="muted">Selecciona un establecimiento en el selector superior para cargar datos del dashboard.</p>';
+        }
+        return;
+      }
+      const adminCard = ids('dashboard-admin-controls');
+      if (!adminCard) return;
+
+      // Show loading state first (elements have IDs for fault-tolerant updates)
+      adminCard.querySelector('article').innerHTML = `
+        <h3>Dashboard del Dojo</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);">Total Alumnos</div>
+            <div id="owner-kpi-students" style="font-size:1.6rem;font-weight:800;color:var(--accent);">...</div>
+          </div>
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);">Asistencia (30d)</div>
+            <div id="owner-kpi-att" style="font-size:1.6rem;font-weight:800;color:var(--ok);">...</div>
+          </div>
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);">Ingresos Mes</div>
+            <div id="owner-kpi-income" style="font-size:1.6rem;font-weight:800;color:var(--ok);">...</div>
+          </div>
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);">Brecha Cobro</div>
+            <div id="owner-kpi-gap" style="font-size:1.6rem;font-weight:800;color:var(--warn);">...</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Alumnos por Disciplina</h4>
+            <div id="owner-disc-list"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+          </div>
+          <div>
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Clases Hoy</h4>
+            <div id="owner-classes-today"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+          </div>
+          <div>
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Alumnos Morosos</h4>
+            <div id="owner-delinquent"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+          </div>
+          <div>
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Notificaciones</h4>
+            <div id="owner-notifs"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" id="btn-admin-students" type="button">Gestionar Alumnos</button>
+          <button class="btn" id="btn-admin-classes" type="button">Crear Clases</button>
+          <button class="btn" id="btn-admin-attendance" type="button">Registrar Asistencia</button>
+          <button class="btn" id="btn-admin-evaluations" type="button">Evaluaciones</button>
+        </div>
+      `;
+
+      // Fetch owner dashboard data - tolerate partial failures
+      let d = {};
+      try {
+        const res = await fetch(`/api/dashboard/owner?establishmentId=${encodeURIComponent(establishmentId)}`, { headers: { Authorization: 'Bearer ' + state.accessToken } });
+        const json = await res.json();
+        if (json.ok && json.data) {
+          d = json.data;
+        } else {
+          console.warn('Owner dashboard API returned error:', json.error);
+          // Try loading individual pieces as fallback
+        }
+      } catch (err) {
+        console.warn('Owner dashboard fetch error:', err.message);
+      }
+
+      // Each section is independent and fault-tolerant
+      // 1. KPIs (update by element ID)
+      try {
+        if (d.totalStudents !== undefined) {
+          const totalStudents = d.totalStudents || 0;
+          const attRate = d.attendance?.rate;
+          const recMonth = Number(d.financials?.receivedThisMonth || 0);
+          const gap = Number(d.financials?.gap || 0);
+          const kpiS = adminCard.querySelector('#owner-kpi-students');
+          const kpiA = adminCard.querySelector('#owner-kpi-att');
+          const kpiI = adminCard.querySelector('#owner-kpi-income');
+          const kpiG = adminCard.querySelector('#owner-kpi-gap');
+          if (kpiS) kpiS.textContent = totalStudents;
+          if (kpiA) kpiA.textContent = attRate !== null && attRate !== undefined ? attRate + '%' : 'Sin datos';
+          if (kpiI) kpiI.textContent = '$' + recMonth.toLocaleString();
+          if (kpiG) kpiG.textContent = '$' + gap.toLocaleString();
+        }
+      } catch (err) { console.warn('Owner KPI error:', err.message); }
+
+      // 2. Alumnos por Disciplina
+      try {
+        const discEl = adminCard.querySelector('#owner-disc-list');
+        if (discEl) {
+          if (d.studentsPerDiscipline && Object.keys(d.studentsPerDiscipline).length > 0) {
+            discEl.innerHTML = Object.entries(d.studentsPerDiscipline || {}).map(([name, count]) => `
+              <div style="display:flex;justify-content:space-between;padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;">
+                <span>${name}</span><span style="color:var(--accent);">${count} alumnos</span>
+              </div>`).join('');
+          } else {
+            discEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin alumnos registrados</span>';
+          }
+        }
+      } catch (err) { console.warn('Owner disc error:', err.message); }
+
+      // 3. Clases Hoy
+      try {
+        const classEl = adminCard.querySelector('#owner-classes-today');
+        if (classEl) {
+          const classes = (d.todayClasses || []).slice(0, 5);
+          if (classes.length > 0) {
+            classEl.innerHTML = classes.map(c => `
+              <div style="padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;">
+                <strong>${c.start_time || ''}${c.end_time ? '-' + c.end_time : ''}</strong> ${c.title || '-'} <span class="muted">${c.discipline_name || ''}</span>
+              </div>`).join('');
+          } else {
+            classEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin clases hoy</span>';
+          }
+        }
+      } catch (err) { console.warn('Owner classes error:', err.message); }
+
+      // 4. Alumnos Morosos
+      try {
+        const delinquentEl = adminCard.querySelector('#owner-delinquent');
+        if (delinquentEl) {
+          const delinquents = (d.delinquentStudents || []).slice(0, 5);
+          if (delinquents.length > 0) {
+            delinquentEl.innerHTML = delinquents.map(s => `
+              <div style="padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;border-left:3px solid var(--warn);">
+                ${s.name}
+              </div>`).join('');
+          } else {
+            delinquentEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin alumnos morosos</span>';
+          }
+        }
+      } catch (err) { console.warn('Owner delinquent error:', err.message); }
+
+      // 5. Notificaciones
+      try {
+        const notifEl = adminCard.querySelector('#owner-notifs');
+        if (notifEl) {
+          const notifs = (d.notifications || []).slice(0, 3);
+          if (notifs.length > 0) {
+            notifEl.innerHTML = notifs.map(n => `
+              <div style="padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;border-left:3px solid var(--brand);">${n.title || '-'}</div>`).join('');
+          } else {
+            notifEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin notificaciones</span>';
+          }
+        }
+      } catch (err) { console.warn('Owner notifs error:', err.message); }
+
+      // 6. System billing overlay
+      try {
+        if (d.systemBillStatus) {
+          const sbs = d.systemBillStatus;
+          if (sbs.needsOverlay) {
+            checkSystemBillingOverlay();
+          }
+        }
+      } catch (err) { console.warn('Owner billing overlay error:', err.message); }
+
+      // 7. Load comisiones/plan info for owner (adds to existing content)
+      try {
+        await loadComisionesOwner(establishmentId, adminCard);
+      } catch (err) { console.warn('Owner comisiones error:', err.message); }
+    }
+
+    // Load comisiones/plan info for owner - shows plan card on owner dashboard
+    async function loadComisionesOwner(establishmentId, adminCard) {
+      if (!establishmentId) return;
+      let planData = {};
+      let billsData = [];
+      try {
+        const [planRes, billsRes] = await Promise.all([
+          api(`/api/establishment-plan?establishmentId=${encodeURIComponent(establishmentId)}`).catch(() => ({ data: {} })),
+          api(`/api/system-billing/bills?establishmentId=${encodeURIComponent(establishmentId)}`).catch(() => ({ data: [] }))
+        ]);
+        planData = planRes?.data || {};
+        billsData = billsRes?.data || [];
+      } catch (_) { /* tables may not exist */ }
+
+      const planCode = planData.plan_code || 'starter';
+      const priceUsd = planData.price_usd || 49;
+      const maxDojos = planData.max_dojos || 1;
+      const maxStudents = planData.max_students || 50;
+
+      const planNames = { starter: 'Starter', professional: 'Professional', elite: 'Elite' };
+      const planColors = { starter: 'var(--accent)', professional: 'var(--brand-2)', elite: 'var(--ok)' };
+      const planName = planNames[planCode] || planCode;
+      const planColor = planColors[planCode] || 'var(--accent)';
+
+      const pendingBill = billsData.find(b => ['pending', 'paid', 'overdue'].includes(b.status)) || null;
+      const overdueBill = billsData.find(b => b.status === 'overdue') || null;
+
+      let billingHtml = '';
+      if (pendingBill) {
+        const statusColors = { pending: 'var(--warn)', paid: 'var(--accent)', overdue: 'var(--danger)' };
+        const statusLabels = { pending: 'Pendiente', paid: 'Pagado (confirme superadmin)', overdue: 'Vencido' };
+        billingHtml = `
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;margin-top:10px;">
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Factura Actual</h4>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:14px;font-weight:700;">$${Number(pendingBill.amount || 0).toFixed(2)} USD</span>
+              <span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:${statusColors[pendingBill.status] || 'var(--muted)'};color:#fff;">${statusLabels[pendingBill.status] || pendingBill.status}</span>
+            </div>
+            <div class="muted" style="font-size:11px;">Factura: ${pendingBill.billing_month || '-'} | Vence: ${pendingBill.due_date || '-'}</div>
+            ${pendingBill.status !== 'confirmed' && pendingBill.status !== 'waived' ? `
+            <div style="margin-top:8px;">
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Método de pago</label>
+              <select id="owner-pay-method" style="width:100%;padding:6px;border-radius:6px;border:1px solid #3a4960;background:#111a27;color:var(--text);font-size:12px;">
+                <option value="transfer">Transferencia bancaria</option>
+                <option value="yappy">Yappy</option>
+                <option value="cash">Efectivo</option>
+                <option value="other">Otro</option>
+              </select>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-top:6px;margin-bottom:4px;">Referencia de pago (opcional)</label>
+              <input id="owner-pay-ref" placeholder="Número de referencia" style="width:100%;padding:6px;border-radius:6px;border:1px solid #3a4960;background:#111a27;color:var(--text);font-size:12px;">
+              <button class="btn" id="owner-pay-btn" type="button" style="width:100%;margin-top:8px;">Marcar como Pagado</button>
+            </div>
+            ` : ''}
+          </div>
+        `;
+      } else if (billsData.length === 0) {
+        billingHtml = '<span class="muted" style="font-size:12px;">Sin facturas emitidas aún.</span>';
+      }
+
+      // Insert plan info after the existing dashboard content
+      const existingContent = adminCard.querySelector('article');
+      if (existingContent) {
+        const planSection = document.createElement('div');
+        planSection.innerHTML = `
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;margin-top:10px;">
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Mi Plan de Sistema</h4>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <span style="font-size:18px;font-weight:800;color:${planColor};">${planName}</span>
+                <span style="font-size:14px;font-weight:700;color:var(--text);margin-left:8px;">$${Number(priceUsd).toFixed(2)}/mes</span>
+              </div>
+            </div>
+            <div style="margin-top:6px;font-size:11px;color:var(--muted);">
+              Máx. dojos: ${maxDojos} | Máx. estudiantes: ${maxStudents}
+            </div>
+          </div>
+          ${billingHtml}
+        `;
+        existingContent.appendChild(planSection);
+
+        // Bind pay button
+        const payBtn = existingContent.querySelector('#owner-pay-btn');
+        if (payBtn && pendingBill) {
+          payBtn.addEventListener('click', async () => {
+            const methodEl = existingContent.querySelector('#owner-pay-method');
+            const refEl = existingContent.querySelector('#owner-pay-ref');
+            try {
+              payBtn.textContent = 'Procesando...';
+              payBtn.disabled = true;
+              await api('/api/system-billing/pay', {
+                method: 'POST',
+                body: JSON.stringify({
+                  establishmentId,
+                  billId: pendingBill.id,
+                  paymentMethod: methodEl?.value || 'other',
+                  paymentReference: refEl?.value || null
+                })
+              });
+              payBtn.textContent = '✓ Pagado';
+              payBtn.style.background = 'var(--ok)';
+              setTimeout(() => {
+                loadOwnerDashboard();
+              }, 1500);
+            } catch (err) {
+              payBtn.textContent = err.message;
+              payBtn.disabled = false;
+            }
+          });
+        }
+      }
+    }
+
+    async function checkSystemBillingOverlay() {
+      const establishmentId = ids('tree-establishment')?.value;
+      if (!establishmentId) return;
+      try {
+        const res = await fetch(`/api/system-billing/overdue-status?establishmentId=${encodeURIComponent(establishmentId)}`, { headers: { Authorization: 'Bearer ' + state.accessToken } });
+        const json = await res.json();
+        if (!json.ok) return;
+        const d = json.data;
+        if (!d.needsOverlay) return;
+
+        // Remove existing overlay if any
+        const existing = document.getElementById('billing-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'billing-overlay';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
+
+        const card = document.createElement('div');
+        card.style.cssText = 'background:var(--panel);border:2px solid var(--warn);border-radius:14px;padding:24px;max-width:440px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);';
+
+        const isBlocking = d.severeOverdue;
+        card.innerHTML = `
+          <div style="font-size:48px;margin-bottom:12px;">${isBlocking ? '🔒' : '⚠️'}</div>
+          <h3 style="margin:0 0 8px;color:var(--warn);">Recordatorio de Pago</h3>
+          <p style="margin:0 0 8px;font-size:14px;">${isBlocking
+            ? 'Su pago del sistema está vencido por más de 15 días. Debe realizar el pago para continuar usando el sistema.'
+            : 'Recuerde realizar el pago de su uso del sistema. Su factura está pendiente.'}</p>
+          <p style="margin:0 0 16px;font-size:12px;color:var(--muted);">Monto: $${d.bill?.amount || '---'} | Vencimiento: ${d.bill?.due_date || '---'}</p>
+          ${isBlocking ? '<button class="btn" id="billing-goto-pay" type="button" style="width:100%;">Ir a Finanzas → Comisiones → Pagar</button>' : ''}
+          ${!isBlocking ? '<p style="font-size:11px;color:var(--muted);margin-top:8px;">Este mensaje desaparecerá en 30 segundos.</p>' : ''}
+        `;
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        if (!isBlocking) {
+          setTimeout(() => { overlay.remove(); }, 30000);
+        }
+
+        if (isBlocking) {
+          const goBtn = document.getElementById('billing-goto-pay');
+          if (goBtn) {
+            goBtn.addEventListener('click', () => {
+              overlay.remove();
+              showTab('comisiones');
+            });
+          }
+        }
+      } catch (_) { /* table may not exist */ }
     }
 
     function showOperacionDashboard() {
@@ -3084,12 +3616,18 @@
       // Mostrar segÃºn rol
       if (role === 'student' || role === 'guardian') {
         if (dashboardStudent) dashboardStudent.classList.remove('hidden');
+        loadStudentDashboard();
       } else if (role === 'sensei' || role === 'instructor') {
         if (dashboardSensei) dashboardSensei.classList.remove('hidden');
+        loadSenseiDashboard();
       } else if (role === 'superadmin') {
         if (dashboardSuperadmin) dashboardSuperadmin.classList.remove('hidden');
         loadSuperadminDashboard();
-      } else if (role === 'owner' || role === 'admin') {
+      } else if (role === 'owner') {
+        if (dashboardAdmin) dashboardAdmin.classList.remove('hidden');
+        loadOwnerDashboard();
+        checkSystemBillingOverlay();
+      } else if (role === 'admin') {
         if (dashboardAdmin) dashboardAdmin.classList.remove('hidden');
       }
     }
@@ -3121,13 +3659,28 @@
       return Array.from(el.selectedOptions || []).map(o => o.value).filter(Boolean);
     }
 
+    // Returns disciplines scoped to the user's role (student/guardian get only enrolled disciplines)
+    async function getScopedDisciplines(establishmentId) {
+      const role = currentMembershipRole() || state.profileRole || '';
+      if (!establishmentId || !state.accessToken) return state.disciplines || [];
+      if (role === 'student' || role === 'guardian') {
+        try {
+          const result = await api(`/api/my-disciplines?establishmentId=${encodeURIComponent(establishmentId)}`);
+          return result.data || [];
+        } catch (_) {
+          return state.disciplines || [];
+        }
+      }
+      return state.disciplines || [];
+    }
+
     function renderDisciplineSelect(selectId, options = {}) {
       const el = ids(selectId);
       if (!el) return;
       const prev = el.multiple ? getMultiSelectValues(selectId) : [el.value];
       const includeEmpty = options.includeEmpty !== false;
       const emptyLabel = options.emptyLabel || '-- Selecciona disciplina --';
-      const rows = state.disciplines || [];
+      const rows = options.rows || state.disciplines || [];
       const base = includeEmpty ? [`<option value="">${emptyLabel}</option>`] : [];
       const opts = rows.map(d => `<option value="${d.code}">${d.name} (${d.code})</option>`);
       el.innerHTML = base.concat(opts).join('');
@@ -3459,6 +4012,10 @@
         return `<option value="${est.id}">${est.name} (${m.role})</option>`;
       }).join('');
       ids('tree-establishment').innerHTML = options || '<option value="">Sin membresias</option>';
+      // Auto-select first establishment if only one membership exists
+      if (state.memberships.length === 1 && state.memberships[0]?.establishment?.id) {
+        ids('tree-establishment').value = state.memberships[0].establishment.id;
+      }
     }
     function renderCalendarEstablishmentOptions() {
       const options = state.memberships.map(m => {
@@ -4904,6 +5461,7 @@
       state.memberships = me.data?.memberships || [];
       state.profileRole = me.data?.profile?.role || '';
       state.profileId = me.data?.profile?.id || '';
+      state.profileName = me.data?.profile?.full_name || '';
       state.modulePermissions = me.data?.modulePermissions || {};
       renderTreeEstablishmentOptions();
       renderCalendarEstablishmentOptions();
@@ -4924,6 +5482,21 @@
         else hint.textContent = 'Carga alumnos del dojo activo y administra su flujo academico por disciplina.';
       }
       return me;
+    }
+
+    function updateUserInfo() {
+      var ui = ids("user-info");
+      if (!ui) return;
+      if (!state.accessToken) { ui.style.display = "none"; return; }
+      var name = state.profileName || "Usuario";
+      var role = currentMembershipRole() || state.profileRole || "";
+      var eid = ids("tree-establishment")?.value;
+      var estName = eid ? ((state.memberships.find(function(m){return m&&m.establishment&&m.establishment.id===eid})||{}).establishment?.name || "") : "";
+      var rl = {superadmin:"Superadmin",owner:"Owner",sensei:"Sensei",admin:"Admin",instructor:"Instructor",guardian:"Guardian",student:"Student"};
+      var text = name + " \u00B7 " + (rl[role] || role);
+      if (estName) text += " \u00B7 " + estName;
+      ui.textContent = text;
+      ui.style.display = "";
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -5081,15 +5654,26 @@
           })
         });
         state.accessToken = result.data.access_token;
+        try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
         ids('login-output').textContent = JSON.stringify(result, null, 2);
         await refreshMe();
         await loadTheoryDisciplines();
         setAuthenticated(true);
+        updateUserInfo();
         const allowed = allowedModulesForCurrentEstablishment();
         showTab(allowed[0] || 'operacion');
       } catch (err) {
         ids('login-output').textContent = err.message;
       }
+    });
+
+    // ─── Toggle trial signup form ────────────────────────────────────────
+    ids('show-trial-btn')?.addEventListener('click', () => {
+      ids('trial-signup-card').style.display = 'block';
+      ids('trial-signup-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    ids('cancel-trial-btn')?.addEventListener('click', () => {
+      ids('trial-signup-card').style.display = 'none';
     });
 
     // ─── Trial sign-up ───────────────────────────────────────────────────
@@ -5144,8 +5728,10 @@
       state.accessToken = '';
       state.memberships = [];
       state.profileRole = '';
+      state.profileName = '';
       state.theoryDisciplines = {};
       state.theoryLevelLabels = {};
+      try { localStorage.removeItem('ms_token'); } catch (_) {}
       ids('login-password').value = '';
       ids('tree-establishment').innerHTML = '<option value="">Sin membresias</option>';
       const tbDiscipline = ids('tb-discipline');
@@ -5167,6 +5753,10 @@
       state.studentsPage = 1;
       syncStudentSelectorsFromRows();
       renderAcademicScopeFilters();
+      // Refresh dashboard data if the operacion tab is active
+      if (document.querySelector('#tab-operacion')?.style.display !== 'none') {
+        showOperacionDashboard();
+      }
     });
 
     ids('st-establishment')?.addEventListener('change', async () => {
@@ -9635,6 +10225,19 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="features.js"></script>
+  <script>
+    // ─── PWA: Register Service Worker ──────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          console.log('[PWA] SW registered, scope:', reg.scope);
+        }).catch((err) => {
+          console.warn('[PWA] SW registration failed:', err.message);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
 

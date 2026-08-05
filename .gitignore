@@ -1,3 +1,15 @@
 node_modules/
 .env
+# Archivos de datos locales — contienen IDs/datos de prueba y cambios en runtime
 data/student-photos.json
+data/finance-targets.json
+data/sensei-instructors.json
+data/student-instructors.json
+data/trial-users.json
+data/whatsapp-config.json
+data/module-permissions.json
+data/organizations.json
+data/absences.json
+data/app-settings.json
+data/marketplace-images.json
+data/uploads/

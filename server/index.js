@@ -85,7 +85,11 @@ const whatsappConfigPath = path.join(__dirname, '..', 'data', 'whatsapp-config.j
 const trialUsersPath = path.join(__dirname, '..', 'data', 'trial-users.json');
 
 const SUPERADMIN_USERNAME = String(process.env.SUPERADMIN_USERNAME || 'venta').trim().toLowerCase();
-const SUPERADMIN_PASSWORD = String(process.env.SUPERADMIN_PASSWORD || 'Venta@Dojo2026!');
+const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD;
+if (!SUPERADMIN_PASSWORD) {
+  console.error('FATAL: SUPERADMIN_PASSWORD no está configurada en .env');
+  process.exit(1);
+}
 const superadminSessions = new Set();
 
 const defaultTreeForDiscipline = (disciplineName) => ({

@@ -8,7 +8,7 @@
 
   const STORAGE_KEY = 'ms_server_url';
   const VERSION_URL = 'https://raw.githubusercontent.com/ibrahimojeda/MartialSystem/main/web/version.json';
-  const APK_DOWNLOAD_URL = 'https://github.com/ibrahimojeda/MartialSystem/releases/latest/download/MartialSystem.apk';
+  const APK_DOWNLOAD_URL = 'https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk';
   const CURRENT_VERSION = '1.0.0';
   const VERSION_CHECK_KEY = 'ms_last_version_check';
   const UPDATE_DISMISSED_KEY = 'ms_update_dismissed';

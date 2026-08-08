@@ -3,7 +3,7 @@
   "buildNumber": 1,
   "message": "Versión inicial con conexión directa a Supabase y auto-actualizaciones.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/latest/download/MartialSystem.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk",
   "releaseDate": "2026-08-08",
   "changelog": [
     "Conexión directa a Supabase (sin depender de localhost)",

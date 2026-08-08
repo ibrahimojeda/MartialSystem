@@ -42,21 +42,21 @@
   // ─── Auth helpers ───────────────────────────────────────────────────
   async function loginWithSupabase(username, password) {
     const sb = window.MartialSupabase || await initSupabase();
-    
-    // Buscar el email interno por username
-    const { data: profile, error: profileError } = await sb
-      .from('profiles')
-      .select('id, username, auth_email, full_name, role, is_active')
-      .eq('username', String(username || '').trim().toLowerCase())
-      .maybeSingle();
+    const normalizedUsername = String(username || '').trim().toLowerCase();
 
-    if (profileError || !profile?.auth_email) {
+    // Usar RPC (función SQL con SECURITY DEFINER) para obtener el email interno
+    // Esto bypassea RLS durante el login
+    const { data: authEmail, error: rpcError } = await sb
+      .rpc('get_auth_email_for_login', { username_param: normalizedUsername });
+
+    if (rpcError || !authEmail) {
+      console.error('[SupabaseDirect] RPC error:', rpcError);
       throw new Error('Usuario no encontrado');
     }
 
-    // Login con Supabase Auth
+    // Login con Supabase Auth usando el email interno
     const { data, error } = await sb.auth.signInWithPassword({
-      email: profile.auth_email,
+      email: authEmail,
       password: password
     });
 
@@ -64,14 +64,21 @@
       throw new Error(error?.message || 'Credenciales inválidas');
     }
 
+    // Obtener perfil después del login
+    const { data: profile } = await sb
+      .from('profiles')
+      .select('id, username, full_name, role, is_active')
+      .eq('id', data.user.id)
+      .single();
+
     return {
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
       user: {
         id: data.user.id,
-        username: profile.username,
-        role: profile.role,
-        full_name: profile.full_name || ''
+        username: profile?.username || normalizedUsername,
+        role: profile?.role || '',
+        full_name: profile?.full_name || ''
       }
     };
   }

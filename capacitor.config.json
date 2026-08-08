@@ -1,0 +1,27 @@
+{
+  "appId": "com.martialsystem.app",
+  "appName": "MartialSystem",
+  "webDir": "web",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true,
+    "hostname": "app.martialsystem.local"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0f1318",
+      "showSpinner": false
+    }
+  },
+  "android": {
+    "allowMixedContent": true,
+    "buildOptions": {
+      "keystorePath": "",
+      "keystorePassword": "",
+      "keystoreAlias": "",
+      "keystoreAliasPassword": "",
+      "releaseType": "AAB"
+    }
+  }
+}

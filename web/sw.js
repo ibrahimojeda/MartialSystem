@@ -1,12 +1,21 @@
-const CACHE_NAME = 'martialsystem-v1';
+const CACHE_NAME = 'martialsystem-v3';
+const VERSION_URL = '/version.json';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/invoicing.html',
   '/features.js',
+  '/supabase-direct.js',
+  '/mobile-connector.js',
   '/manifest.json',
+  '/version.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
   'https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap'
 ];
 
@@ -22,19 +31,29 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: clean old caches and notify clients of update
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       );
+    }).then(() => {
+      // Notify all clients that a new version is available
+      return self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({
+            type: 'SW_UPDATED',
+            cacheName: CACHE_NAME
+          });
+        });
+      });
     })
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch: network-first for API/version, cache-first for static
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -53,6 +72,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // version.json: always network-first (no cache) to detect updates
+  if (url.pathname.endsWith('/version.json')) {
+    event.respondWith(
+      fetch(request, { cache: 'no-store' }).catch(() => caches.match(request))
+    );
+    return;
+  }
+
   // Static assets: cache-first, network-update
   event.respondWith(
     caches.match(request).then((cached) => {
@@ -67,4 +94,11 @@ self.addEventListener('fetch', (event) => {
       return cached || fetchPromise;
     })
   );
+});
+
+// Listen for messages from clients
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

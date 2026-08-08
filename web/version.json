@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "buildNumber": 1,
-  "message": "Versión inicial con conexión directa a Supabase y auto-actualizaciones.",
+  "message": "Panel de diagnóstico con semáforo de conexión y logs en tiempo real. Diseño responsive mejorado.",
   "forceUpdate": false,
   "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk",
   "releaseDate": "2026-08-08",

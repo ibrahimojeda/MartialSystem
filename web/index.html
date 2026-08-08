@@ -5645,6 +5645,93 @@
       return me;
     }
 
+    // ─── refreshMeDirect: consulta Supabase directamente (sin servidor) ──
+    async function refreshMeDirect() {
+      const sb = window.MartialSupabase;
+      if (!sb) throw new Error('Supabase no inicializado');
+
+      const { data: sessionData } = await sb.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) throw new Error('No hay sesión activa');
+
+      // Obtener perfil
+      const { data: profile, error: profileError } = await sb
+        .from('profiles')
+        .select('id, full_name, role, is_active, username')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile) throw new Error('Perfil no encontrado');
+
+      state.profileRole = profile.role || '';
+      state.profileId = profile.id || '';
+      state.profileName = profile.full_name || '';
+
+      // Obtener membresías (establishments donde el usuario es miembro)
+      const { data: memberships, error: membError } = await sb
+        .from('establishment_members')
+        .select('establishment_id, role, establishment:establishments(id, name, city, country, is_active)')
+        .eq('profile_id', user.id);
+
+      if (membError) throw new Error(membError.message);
+
+      state.memberships = (memberships || []).map(m => ({
+        id: `${m.establishment_id}-${m.role}`,
+        role: m.role,
+        establishment: m.establishment || { id: m.establishment_id, name: m.establishment_id }
+      }));
+
+      // Obtener disciplinas globales
+      const { data: disciplines } = await sb
+        .from('disciplines')
+        .select('id, code, name')
+        .order('name');
+
+      state.disciplines = disciplines || [];
+
+      // Módulos por defecto según rol
+      const DEFAULT_ROLE_MODULES = {
+        superadmin: ['operacion','calendario','academico','administracion','torneos','comunidad','marketplace','finanzas','configuracion','debug'],
+        owner: ['operacion','calendario','academico','administracion','torneos','comunidad','marketplace','finanzas','configuracion'],
+        sensei: ['operacion','calendario','academico','torneos','comunidad','finanzas'],
+        admin: ['operacion','calendario','academico','comunidad','marketplace','finanzas'],
+        instructor: ['operacion','calendario','academico','comunidad'],
+        guardian: ['academico','finanzas','comunidad'],
+        student: ['academico','comunidad']
+      };
+
+      state.modulePermissions = {};
+      state.memberships.forEach(m => {
+        const estId = m.establishment?.id;
+        if (estId) {
+          state.modulePermissions[estId] = DEFAULT_ROLE_MODULES[m.role] || DEFAULT_ROLE_MODULES.student;
+        }
+      });
+
+      renderTreeEstablishmentOptions();
+      renderCalendarEstablishmentOptions();
+      renderInstructorsEstablishmentOptions();
+      renderTutorsEstablishmentOptions();
+      syncAdminPanelAccess();
+      syncTopTabsVisibility();
+      setMarketplaceMode(state.marketplacePanelMode);
+      renderAllDisciplineSelects();
+      renderDisciplineChecks();
+      await renderAcademicScopeFilters();
+      await loadPeopleSelectorsForStudents();
+
+      const role = currentMembershipRole();
+      const hint = ids('academic-scope-hint');
+      if (hint) {
+        if (role === 'instructor') hint.textContent = 'Vista filtrada a alumnos ligados al instructor en el dojo activo.';
+        else if (role === 'owner' || role === 'sensei' || role === 'admin') hint.textContent = 'Vista de alumnos de locales asociados al perfil, agrupados por disciplina.';
+        else if (role === 'superadmin') hint.textContent = 'Vista global con filtros de dojo y disciplina para reducir listas.';
+        else hint.textContent = 'Carga alumnos del dojo activo y administra su flujo academico por disciplina.';
+      }
+
+      return { ok: true, data: { profile, memberships: state.memberships } };
+    }
+
     function updateUserInfo() {
       var ui = ids("user-info");
       if (!ui) return;
@@ -5806,18 +5893,36 @@
 
     ids('login-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const username = ids('login-username').value.trim();
+      const password = ids('login-password').value;
+      const serverUrl = window.MartialMobile?.getServerUrl?.() || '';
+
       try {
-        const result = await api('/api/login', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: ids('login-username').value.trim(),
-            password: ids('login-password').value
-          })
-        });
-        state.accessToken = result.data.access_token;
+        let result;
+
+        // Si NO hay servidor configurado, usar Supabase directo
+        if (!serverUrl && window.MartialSupabaseAPI) {
+          result = await window.MartialSupabaseAPI.login(username, password);
+        } else {
+          // Modo servidor (híbrido o web)
+          result = await api('/api/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+          });
+          result = result.data;
+        }
+
+        state.accessToken = result.access_token;
         try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
-        ids('login-output').textContent = JSON.stringify(result, null, 2);
-        await refreshMe();
+        ids('login-output').textContent = JSON.stringify({ ok: true, user: result.user }, null, 2);
+
+        // Cargar perfil y membresías
+        if (!serverUrl && window.MartialSupabaseAPI) {
+          await refreshMeDirect();
+        } else {
+          await refreshMe();
+        }
+
         await loadTheoryDisciplines();
         setAuthenticated(true);
         updateUserInfo();

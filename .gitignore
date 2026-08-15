@@ -1,11 +1,21 @@
-""  
-"console.log('"  
-"m[1]))]"  
-"temp_upload_search.txt"  
-"server_output.log"  
-"simulator/reports/"  
-"# Entorno"  
-".env"  
-"# Dependencias"  
-"node_modules/"  
-"data/"  
+# Entorno
+.env
+
+# Dependencias
+node_modules/
+
+# Datos locales
+data/
+
+# Archivos temporales y logs
+temp_upload_search.txt
+server_output.log
+simulator/reports/
+
+# Archivos basura generados por herramientas de edición
+console.log(
+m[1]))]
+
+# Sistema operativo
+Thumbs.db
+.DS_Store

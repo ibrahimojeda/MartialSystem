@@ -8,12 +8,21 @@
     "start": "node server/index.js"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/preferences": "^8.0.1",
     "@supabase/supabase-js": "^2.49.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "multer": "^2.1.1",
+    "pdfkit": "^0.19.1",
     "qrcode": "^1.5.4",
     "stripe": "^22.3.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3",
+    "typescript": "^7.0.2"
   }
 }

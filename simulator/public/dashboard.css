@@ -246,6 +246,15 @@ table tr:hover td { background: rgba(47,111,163,0.08); }
 .log-entry.error { color: #ff8a8a; }
 .log-entry.info { color: #8ac4ff; }
 .log-entry.warn { color: #ffd78a; }
+.log-entry.phase {
+  color: #ffd8bc;
+  font-weight: 700;
+  background: rgba(201,162,39,0.08);
+  border-left: 3px solid var(--brand-2);
+  padding: 4px 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+}
 .log-entry .ts { color: #555; margin-right: 8px; }
 
 /* ─── Charts (Canvas) ─── */

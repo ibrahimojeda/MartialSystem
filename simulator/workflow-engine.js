@@ -46,7 +46,7 @@ class WorkflowEngine {
   }
 
   // ─── API helper that wraps Supabase with tracking ───
-  async _apiCall(label, fn) {
+  async _apiCall(label, fn, requestData = null) {
     const start = Date.now();
     try {
       // Chaos mode: inject random failures
@@ -55,14 +55,14 @@ class WorkflowEngine {
       }
       const result = await fn();
       const elapsed = Date.now() - start;
-      this.tracker.recordOperation(label, 'INTERNAL', 200, elapsed, result);
-      this.onProgress({ type: 'success', label, elapsed });
+      this.tracker.recordOperation(label, 'INTERNAL', 200, elapsed, result, requestData);
+      this.onProgress({ type: 'success', label, elapsed, result, requestData });
       return result;
     } catch (err) {
       const elapsed = Date.now() - start;
       const statusCode = err.message?.startsWith('CHAOS:') ? 500 : 400;
-      this.tracker.recordOperation(label, 'INTERNAL', statusCode, elapsed, err.message);
-      this.onProgress({ type: 'error', label, error: err.message, elapsed });
+      this.tracker.recordOperation(label, 'INTERNAL', statusCode, elapsed, err.message, requestData);
+      this.onProgress({ type: 'error', label, error: err.message, elapsed, requestData });
       return null;
     }
   }
@@ -119,6 +119,7 @@ class WorkflowEngine {
         await this._delay();
         await this._createEstablishment(est, validCodes);
       }
+      this.onProgress({ type: 'phase', phase: 'establishments_done', message: `✅ ${this.establishments.length} establecimiento(s) creados: ${this.establishments.map(e => e.name).join(', ')}` });
 
       // Phase 3: Create staff per establishment
       for (const est of this.establishments) {
@@ -151,6 +152,8 @@ class WorkflowEngine {
       // Phase 4: Create students
       await this._waitIfPaused();
       this.onProgress({ type: 'phase', phase: 'students', message: `Creando ${studentCount} alumno(s)...` });
+      let createdStudents = 0;
+      let linkedGuardians = 0;
       const studentsPerEst = Math.ceil(studentCount / establishmentCount);
       for (const est of this.establishments) {
         const estInstructors = this.profiles.filter(p => p.role === 'instructor' && p.establishmentId === est.id);
@@ -169,14 +172,21 @@ class WorkflowEngine {
           // Link some students to guardians
           if (estGuardians.length > 0 && Math.random() < guardianRatio) {
             const guardian = dg.pick(estGuardians);
-            await this._linkGuardian(est.id, guardian.id, student._createdId);
+            const linkOk = await this._linkGuardian(est.id, guardian.id, student._createdId);
+            if (linkOk) linkedGuardians++;
           }
+          if (student._createdId) createdStudents++;
         }
       }
+      this.onProgress({ type: 'phase', phase: 'students_done', message: `✅ ${createdStudents} alumno(s) creados, ${linkedGuardians} vinculados a guardianes.` });
 
       // Phase 5: Simulate day-by-day operations
       await this._waitIfPaused();
       this.onProgress({ type: 'phase', phase: 'operations', message: `Simulando ${daysToSimulate} días de operaciones...` });
+      let classCount = 0;
+      let paymentCount = 0;
+      let evalCount = 0;
+      let attendanceCount = 0;
 
       const currentDate = new Date(simStartDate);
       const endDate = new Date(simEndDate);
@@ -209,19 +219,20 @@ class WorkflowEngine {
             const endHour = parseInt(startTime.split(':')[0]) + 1;
             const classTitle = `Clase ${discCode} ${dateStr} ${startTime}`;
 
-            const result = await this._apiCall('POST /api/classes', async () => {
-              return this.sb.from('class_sessions').insert({
-                establishment_id: est.id,
-                discipline_id: this.disciplineIds[discCode],
-                instructor_profile_id: instructor.id,
-                title: classTitle,
-                scheduled_date: dateStr,
-                start_time: startTime,
-                end_time: `${String(endHour).padStart(2, '0')}:00`,
-                location: `Sala ${dg.rand(1, 5)}`,
-                status: 'completed'
-              }).select('id').single();
-            });
+              const location = `Sala ${dg.rand(1, 5)}`;
+              const result = await this._apiCall('POST /api/classes', async () => {
+                return this.sb.from('class_sessions').insert({
+                  establishment_id: est.id,
+                  discipline_id: this.disciplineIds[discCode],
+                  instructor_profile_id: instructor.id,
+                  title: classTitle,
+                  scheduled_date: dateStr,
+                  start_time: startTime,
+                  end_time: `${String(endHour).padStart(2, '0')}:00`,
+                  location,
+                  status: 'completed'
+                }).select('id').single();
+              }, { discipline: discCode, date: dateStr, start_time: startTime, location, instructor: instructor?.username || instructor?.id });
 
             if (result?.data?.id) {
               this.classes.push({ id: result.data.id, establishmentId: est.id, date: dateStr, discipline: discCode });
@@ -243,7 +254,7 @@ class WorkflowEngine {
                 await this._delay();
                 await this._apiCall('POST /api/attendance', async () => {
                   return this.sb.from('class_attendance_records').insert(attendanceEntries);
-                });
+                }, { class_session_id: result.data.id, discipline: discCode, registros: attendanceEntries.length, alumnos: enrolledStudents.map(s => s.fullName) });
               }
             }
           }
@@ -255,18 +266,20 @@ class WorkflowEngine {
           const payStudents = dg.pickN(activeStudents, Math.ceil(activeStudents.length * 0.3));
           for (const s of payStudents) {
             await this._delay();
+            const amount = dg.rand(30, 100);
+            const method = dg.pick(dg.PAYMENT_METHODS);
             await this._apiCall('POST /api/payments', async () => {
               return this.sb.from('payments').insert({
                 establishment_id: s.establishmentId,
                 student_id: s._createdId,
                 discipline_id: this.disciplineIds[s.disciplineCodes?.[0]] || null,
-                amount: dg.rand(30, 100),
+                amount,
                 currency: 'USD',
-                method: dg.pick(dg.PAYMENT_METHODS),
+                method,
                 concept: 'Mensualidad',
                 paid_at: new Date(dateStr + 'T12:00:00Z').toISOString()
               });
-            });
+            }, { estudiante: s.fullName, monto: `$${amount}`, metodo: method, disciplina: s.disciplineCodes?.[0], fecha: dateStr });
           }
         }
 
@@ -291,7 +304,7 @@ class WorkflowEngine {
                 next_rank: nextRank,
                 evaluated_at: new Date(dateStr + 'T14:00:00Z').toISOString()
               });
-            });
+            }, { estudiante: s.fullName, disciplina: discCode, score: evalResult.score, aprobado: evalResult.passed ? 'SI' : 'NO', siguiente_rank: nextRank });
           }
         }
 
@@ -311,7 +324,7 @@ class WorkflowEngine {
             body: 'El simulador ha completado la carga de datos exitosamente.',
             is_read: false
           });
-        });
+        }, { establecimiento: est.name, audience_role: 'all', titulo: 'Bienvenido al sistema' });
       }
 
       // Phase 7: Marketplace items
@@ -320,16 +333,19 @@ class WorkflowEngine {
       for (const est of this.establishments) {
         for (let i = 0; i < 5; i++) {
           await this._delay();
+          const mpTitle = dg.pick(['Guantes de sparring', 'Protector bucal', 'Cinturón', 'Uniforme Dobok', 'Vendas', 'Kimono', 'Protectores de tibia', 'Saco de boxeo']);
+          const mpDisc = dg.pick(validCodes);
+          const mpPrice = dg.rand(15, 200);
           await this._apiCall('POST /api/marketplace', async () => {
             return this.sb.from('marketplace_items').insert({
               establishment_id: est.id,
-              discipline_id: this.disciplineIds[dg.pick(validCodes)],
-              title: dg.pick(['Guantes de sparring', 'Protector bucal', 'Cinturón', 'Uniforme Dobok', 'Vendas', 'Kimono', 'Protectores de tibia', 'Saco de boxeo']),
+              discipline_id: this.disciplineIds[mpDisc],
+              title: mpTitle,
               description: 'Producto de prueba del simulador',
-              price: dg.rand(15, 200),
+              price: mpPrice,
               is_active: true
             });
-          });
+          }, { establecimiento: est.name, producto: mpTitle, disciplina: mpDisc, precio: `$${mpPrice}` });
         }
       }
 
@@ -364,26 +380,45 @@ class WorkflowEngine {
       // Add disciplines to establishment
       for (const code of disciplineCodes) {
         if (this.disciplineIds[code]) {
+          // Retry helper for upserts to handle intermittent conflicts under concurrency
+          const withRetry = async (fn) => {
+            let lastErr;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                return await fn();
+              } catch (err) {
+                lastErr = err;
+                // Retry on transient conflicts with a small backoff
+                await this._sleep(50 * (attempt + 1));
+              }
+            }
+            throw lastErr;
+          };
+
           await this._apiCall('INSERT establishment_disciplines', async () => {
-            const { error } = await this.sb.from('establishment_disciplines')
-              .upsert({
-                establishment_id: est.id,
-                discipline_id: this.disciplineIds[code],
-                is_active: true
-              }, { onConflict: 'establishment_id,discipline_id' });
-            if (error) throw error;
-          });
+            await withRetry(async () => {
+              const { error } = await this.sb.from('establishment_disciplines')
+                .upsert({
+                  establishment_id: est.id,
+                  discipline_id: this.disciplineIds[code],
+                  is_active: true
+                }, { onConflict: 'establishment_id,discipline_id' });
+              if (error) throw error;
+            });
+          }, { establishment_id: est.id, discipline_id: this.disciplineIds[code], is_active: true });
 
           // Add discipline config
           await this._apiCall('INSERT discipline_configs', async () => {
-            const { error } = await this.sb.from('discipline_configs')
-              .upsert({
-                establishment_id: est.id,
-                discipline_id: this.disciplineIds[code],
-                config: { modules: [{ id: 'students', label: 'Alumnos' }, { id: 'attendance', label: 'Asistencia' }, { id: 'exams', label: 'Examenes' }] }
-              }, { onConflict: 'establishment_id,discipline_id' });
-            if (error) throw error;
-          });
+            await withRetry(async () => {
+              const { error } = await this.sb.from('discipline_configs')
+                .upsert({
+                  establishment_id: est.id,
+                  discipline_id: this.disciplineIds[code],
+                  config: { modules: [{ id: 'students', label: 'Alumnos' }, { id: 'attendance', label: 'Asistencia' }, { id: 'exams', label: 'Examenes' }] }
+                }, { onConflict: 'establishment_id,discipline_id' });
+              if (error) throw error;
+            });
+          }, { establishment_id: est.id, discipline_id: this.disciplineIds[code], config: 'modules: students, attendance, exams' });
         }
       }
 
@@ -394,55 +429,61 @@ class WorkflowEngine {
 
   // ─── Create user profile + membership ───
   async _createUser(establishmentId, role, index) {
-    const userData = dg.generateUserForRole(role, index);
-    const email = `${userData.username}@users.martialsystem.local`;
+    let userData = dg.generateUserForRole(role, index);
+    let email = dg.generateUniqueEmail(userData.username);
 
+    // Try up to 3 attempts to avoid unique constraints (email/username)
     const result = await this._apiCall(`CREATE user (${role})`, async () => {
-      // Create auth user
-      const { data: authData, error: authError } = await this.sb.auth.admin.createUser({
-        email,
-        password: userData.password,
-        email_confirm: true,
-        user_metadata: { full_name: userData.fullName, username: userData.username }
-      });
-      if (authError || !authData?.user?.id) throw new Error(authError?.message || 'Could not create user');
+      let attempt = 0;
+      while (attempt < 3) {
+        const { data: authData, error: authError } = await this.sb.auth.admin.createUser({
+          email,
+          password: userData.password,
+          email_confirm: true,
+          user_metadata: { full_name: userData.fullName, username: userData.username }
+        });
+        if (!authError && authData?.user?.id) {
+          // Create profile
+          const { error: profileError } = await this.sb.from('profiles').insert({
+            id: authData.user.id,
+            full_name: userData.fullName,
+            role,
+            username: userData.username,
+            auth_email: email,
+            is_active: true
+          });
 
-      // Create profile
-      const { error: profileError } = await this.sb.from('profiles').insert({
-        id: authData.user.id,
-        full_name: userData.fullName,
-        role,
-        username: userData.username,
-        auth_email: email,
-        is_active: true
-      });
-      if (profileError) throw profileError;
-
-      // Create membership
-      const { error: memberError } = await this.sb.from('establishment_members').insert({
-        establishment_id: establishmentId,
-        profile_id: authData.user.id,
-        role
-      });
-      if (memberError) throw memberError;
-
-      // If instructor, assign to a sensei
-      if (role === 'instructor') {
-        const sensei = this.profiles.find(p => p.role === 'sensei' && p.establishmentId === establishmentId);
-        if (sensei) {
-          // Store sensei-instructor link in local file store would happen on main server
-          // For simulator we just track it
+          // If profile fails due to duplicate username, regenerate and retry
+          if (!profileError) {
+            const { error: memberError } = await this.sb.from('establishment_members').insert({
+              establishment_id: establishmentId,
+              profile_id: authData.user.id,
+              role
+            });
+            if (!memberError) {
+              return { id: authData.user.id, username: userData.username };
+            }
+            // membership failed; cleanup profile
+            await this.sb.from('profiles').delete().eq('id', authData.user.id);
+          } else {
+            // profile failed (e.g., duplicate username); delete auth user to avoid orphan
+            await this.sb.auth.admin.deleteUser(authData.user.id);
+          }
         }
-      }
 
-      return { id: authData.user.id, username: userData.username };
+        // Regenerate credentials for retry
+        attempt++;
+        userData = dg.generateUserForRole(role, index + attempt);
+        email = dg.generateUniqueEmail(userData.username);
+      }
+      throw new Error(`Could not create user after ${3} attempts (${role})`);
     });
 
     if (result?.id) {
       const profile = {
         id: result.id,
         role,
-        username: userData.username,
+        username: result.username || userData.username,
         fullName: userData.fullName,
         establishmentId,
         password: userData.password
@@ -525,6 +566,14 @@ class WorkflowEngine {
       classes: this.classes.length,
       endpointRanking: this.tracker.getEndpointRanking(),
       anomalies: this.tracker.getAnomalies()
+    };
+  }
+
+  // Datos para el reporte PDF: perfiles (con contraseñas) y establecimientos
+  getReportData() {
+    return {
+      profiles: [...this.profiles],
+      establishments: [...this.establishments]
     };
   }
 

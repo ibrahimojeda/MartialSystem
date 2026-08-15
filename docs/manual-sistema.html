@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MartialSystem — Manual de Usuario</title>
+<style>
+  :root{--accent:#b2572f;--text:#1a1a2e;--muted:#5a6a7e;--line:#d0d7e2;--panel:#f5f7fb;--white:#fff;--dark:#0f1923;--dark2:#162231;--green:#2d8a4e;--red:#c0392b;--amber:#d18a2e;--blue:#2563eb}
+  *{box-sizing:border-box;margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:#e8ecf1;line-height:1.6;font-size:14px}
+  .page{max-width:1100px;margin:0 auto;background:var(--white);box-shadow:0 2px 24px rgba(0,0,0,.10);padding:48mm 30mm 40mm;min-height:297mm}
+  .cover{text-align:center;padding:80px 0 60px;page-break-after:always}
+  .cover .logo{font-size:52px;font-weight:800;letter-spacing:-1px;color:var(--accent);margin-bottom:8px}
+  .cover .subtitle{font-size:20px;font-weight:600;color:var(--dark);margin-bottom:40px}
+  .cover .meta{font-size:13px;color:var(--muted);margin-top:60px;line-height:2}
+  .cover .decoration{width:80px;height:4px;background:var(--accent);margin:24px auto;border-radius:2px}
+  h1{font-size:28px;margin:36px 0 16px;padding-bottom:8px;border-bottom:2px solid var(--accent);color:var(--dark);page-break-after:avoid}
+  h2{font-size:20px;margin:28px 0 12px;color:var(--dark2);page-break-after:avoid}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--accent);page-break-after:avoid}
+  h4{font-size:14px;margin:16px 0 6px;color:var(--dark)}
+  table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:12.5px;page-break-inside:avoid}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--dark);color:#fff;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.5px}
+  tr:nth-child(even) td{background:var(--panel)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+  .badge-g{background:#d4edda;color:#155724}.badge-a{background:#fff3cd;color:#856404}.badge-r{background:#f8d7da;color:#721c24}.badge-b{background:#d1ecf1;color:#0c5460}.badge-p{background:#e2d9f3;color:#5a3d99}.badge-d{background:#d6d8db;color:#383d41}
+  .steps{counter-reset:step;list-style:none;padding:0;margin:12px 0 18px}
+  .steps li{counter-increment:step;position:relative;padding:8px 0 8px 38px;margin-bottom:4px}
+  .steps li::before{content:counter(step);position:absolute;left:0;top:6px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;text-align:center;line-height:24px;font-size:12px;font-weight:700}
+  .info{background:var(--panel);border-left:4px solid var(--accent);padding:12px 16px;margin:12px 0 18px;font-size:13px;border-radius:0 6px 6px 0}
+  .warn{background:#fff9e6;border-left:4px solid var(--amber);padding:12px 16px;margin:12px 0 18px;font-size:13px;border-radius:0 6px 6px 0}
+  code{background:#eef1f5;padding:2px 5px;border-radius:3px;font-family:'SF Mono','Cascadia Code','Fira Code',monospace;font-size:12.5px}
+  .endpoint{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;margin-right:6px}
+  .ep-get{background:#d4edda;color:#155724}.ep-post{background:#cce5ff;color:#004085}.ep-put{background:#fff3cd;color:#856404}.ep-patch{background:#e2d9f3;color:#5a3d99}.ep-del{background:#f8d7da;color:#721c24}
+  .toc{margin:20px 0 30px}.toc a{color:var(--accent);text-decoration:none}.toc ul{list-style:none;padding:0}.toc li{padding:4px 0;font-size:13px}.toc .l2{padding-left:24px}
+  @media print{body{background:#fff}.page{box-shadow:none;padding:15mm 20mm 20mm;max-width:100%}h1,h2,h3{page-break-after:avoid}.cover{page-break-after:always}table{page-break-inside:avoid}.steps li{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ═══════════════ PORTADA ═══════════════ -->
+<div class="cover">
+  <div class="logo">🥋 MartialSystem</div>
+  <div class="subtitle">Manual de Usuario</div>
+  <div class="decoration"></div>
+  <div class="meta">
+    Sistema integral de gestión para escuelas de artes marciales<br>
+    Múltiples disciplinas · Roles y permisos · Automatización de procesos<br><br>
+    <strong>Versión 1.0</strong> &nbsp;|&nbsp; Agosto 2026
+  </div>
+</div>
+
+<!-- ═══════════════ ÍNDICE ═══════════════ -->
+<h1>Índice</h1>
+<div class="toc">
+<ol>
+  <li><a href="#s1">Roles y Jerarquía</a>
+    <ul>
+      <li class="l2"><a href="#s1a">1.1 Descripción de Roles</a></li>
+      <li class="l2"><a href="#s1b">1.2 Jerarquía</a></li>
+      <li class="l2"><a href="#s1c">1.3 Quién Puede Crear Usuarios</a></li>
+      <li class="l2"><a href="#s1d">1.4 Módulos por Rol (Pantallas Visibles)</a></li>
+      <li class="l2"><a href="#s1e">1.5 Matriz Completa de Pantallas y Acceso Especial</a></li>
+    </ul>
+  </li>
+  <li><a href="#s2">Workflows del Sistema</a>
+    <ul>
+      <li class="l2"><a href="#w1">2.1 Registro Trial (30 días)</a></li>
+      <li class="l2"><a href="#w2">2.2 Onboarding de Establecimiento</a></li>
+      <li class="l2"><a href="#w3">2.3 Login / Autenticación</a></li>
+      <li class="l2"><a href="#w4">2.4 CRM de Prospectos</a></li>
+      <li class="l2"><a href="#w5">2.5 Alta de Alumnos + QR de Identificación</a></li>
+      <li class="l2"><a href="#w6">2.6 Asistencia por QR</a></li>
+      <li class="l2"><a href="#w7">2.7 Clases y Asistencia Manual</a></li>
+      <li class="l2"><a href="#w8">2.8 Evaluaciones / Exámenes</a></li>
+      <li class="l2"><a href="#w9">2.9 Churn Rate (Detección de Abandono)</a></li>
+      <li class="l2"><a href="#w10">2.10 Notificaciones + WhatsApp (Twilio)</a></li>
+      <li class="l2"><a href="#w11">2.11 Finanzas: Pagos, Metas y Tendencias</a></li>
+      <li class="l2"><a href="#w12">2.12 Pasarela de Pago (Stripe / PagueloFacil / PayPal)</a></li>
+      <li class="l2"><a href="#w13">2.13 Facturación Electrónica DGI Panamá</a></li>
+      <li class="l2"><a href="#w14">2.14 Sistema Billing (Pagos del Sistema)</a></li>
+      <li class="l2"><a href="#w15">2.15 Portal Estudiante / Guardián</a></li>
+      <li class="l2"><a href="#w16">2.16 Marketplace + Inventario</a></li>
+      <li class="l2"><a href="#w17">2.17 Torneos</a></li>
+      <li class="l2"><a href="#w18">2.18 Comisiones</a></li>
+      <li class="l2"><a href="#w19">2.19 Teoría / Banco de Preguntas</a></li>
+      <li class="l2"><a href="#w20">2.20 Organizaciones Multi-Establecimiento</a></li>
+      <li class="l2"><a href="#w21">2.21 Configuración de Permisos por Módulo</a></li>
+    </ul>
+  </li>
+  <li><a href="#s3">Anexo Técnico — Endpoints por Módulo</a></li>
+</ol>
+</div>
+
+<!-- ═══════════════ 1. ROLES ═══════════════ -->
+<h1 id="s1">1. Roles y Jerarquía</h1>
+
+<h2 id="s1a">1.1 Descripción de Roles</h2>
+
+<table>
+<thead><tr><th>Rol</th><th>Clave</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><strong>Superadmin</strong></td><td><code>superadmin</code></td><td>Administrador global de la plataforma. Ve todos los establecimientos, gestiona trials, facturación del sistema, comisiones y permisos de módulos. Acceso ilimitado a todos los módulos.</td></tr>
+<tr><td><strong>Owner</strong></td><td><code>owner</code></td><td>Dueño del establecimiento. Máxima autoridad dentro de su dojo: crea instructores/tutores/alumnos, gestiona finanzas, pagos, facturación DGI, WhatsApp y configura el sistema. Accede al panel administrativo.</td></tr>
+<tr><td><strong>Sensei</strong></td><td><code>sensei</code></td><td>Maestro principal. Mismo nivel jerárquico que Owner pero enfocado en la operación académica: crea instructores, gestiona clases, evaluaciones, torneos y finanzas. Los instructores creados por un Sensei quedan vinculados a él.</td></tr>
+<tr><td><strong>Admin</strong></td><td><code>admin</code></td><td>Administrador operativo. Gestiona alumnos, pagos, marketplace y comunidad. No puede crear usuarios ni acceder al panel administrativo. No puede cambiar roles ni gestionar miembros.</td></tr>
+<tr><td><strong>Instructor</strong></td><td><code>instructor</code></td><td>Profesor de disciplinas específicas. Solo ve los alumnos y clases de las disciplinas que tiene asignadas. Puede tomar asistencia, evaluar alumnos y enviar notificaciones. Está vinculado a un Sensei.</td></tr>
+<tr><td><strong>Guardián / Tutor</strong></td><td><code>guardian</code></td><td>Padre, madre o tutor legal vinculado a uno o más alumnos. Solo ve la información académica y financiera de los alumnos a su cargo. No puede modificar datos.</td></tr>
+<tr><td><strong>Estudiante</strong></td><td><code>student</code></td><td>Alumno. Accede únicamente a su propio expediente académico (asistencia, evaluaciones, teoría, currículum de cintas) y a la comunidad. Ve solo sus propias disciplinas inscritas.</td></tr>
+</tbody>
+</table>
+
+<h2 id="s1b">1.2 Jerarquía de Roles</h2>
+
+<table>
+<thead><tr><th>Rol</th><th>Nivel</th><th>Puede gestionar a...</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-p">Superadmin</span></td><td>5</td><td>Todos los roles (crea, edita, desactiva y cambia el rol de cualquier usuario)</td></tr>
+<tr><td><span class="badge badge-r">Owner</span></td><td>4</td><td>Instructor, Guardian, Student (NO puede crear Owners ni Admins)</td></tr>
+<tr><td><span class="badge badge-r">Sensei</span></td><td>4</td><td>Instructor, Guardian, Student (mismos permisos que Owner en jerarquía)</td></tr>
+<tr><td><span class="badge badge-a">Admin</span></td><td>3</td><td>No puede crear ni gestionar usuarios</td></tr>
+<tr><td><span class="badge badge-g">Instructor</span></td><td>2</td><td>No puede crear ni gestionar usuarios</td></tr>
+<tr><td><span class="badge badge-b">Guardian</span></td><td>1</td><td>No puede crear ni gestionar usuarios</td></tr>
+<tr><td><span class="badge badge-d">Student</span></td><td>1</td><td>No puede crear ni gestionar usuarios</td></tr>
+</tbody>
+</table>
+
+<div class="info">
+<strong>Regla de jerarquía para cambio de roles:</strong> Un usuario solo puede cambiar el rol de otro si su nivel (según <code>ROLE_HIERARCHY</code>) es <strong>estrictamente superior</strong> al nivel actual del usuario objetivo <strong>y</strong> al nuevo rol asignado. Nadie puede cambiarse su propio rol. Ejemplo: un Owner (nivel 4) puede cambiar a un Instructor (nivel 2) a Guardian (nivel 1), pero no puede cambiar a otro Owner (nivel 4).
+</div>
+
+<h2 id="s1c">1.3 Quién Puede Crear Usuarios</h2>
+
+<table>
+<thead><tr><th>Rol del creador</th><th>Roles que puede crear</th><th>Condiciones</th></tr></thead>
+<tbody>
+<tr><td>Superadmin</td><td>Owner, Sensei, Admin, Instructor, Guardian, Student</td><td>Sin restricciones</td></tr>
+<tr><td>Owner</td><td>Instructor, Guardian, Student</td><td>Al crear Instructor debe asignar disciplineCodes y senseiProfileId</td></tr>
+<tr><td>Sensei</td><td>Instructor, Guardian, Student</td><td>Al crear Instructor, este queda automáticamente vinculado al Sensei</td></tr>
+<tr><td>Admin</td><td>— (no puede)</td><td>No tiene acceso al panel administrativo</td></tr>
+<tr><td>Instructor</td><td>— (no puede)</td><td>No tiene acceso al panel administrativo</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<strong>Importante sobre Instructores:</strong> Cuando se crea un Instructor es obligatorio asignarle al menos un <code>disciplineCode</code>. Si lo crea un Sensei, el Instructor queda vinculado automáticamente a ese Sensei. Si lo crea un Owner o Superadmin, debe especificar el <code>senseiProfileId</code> al que se asigna.
+</div>
+
+<h2 id="s1d">1.4 Módulos por Rol (Pantallas Visibles por Defecto)</h2>
+<p>Estos son los módulos asignados <strong>por defecto</strong>. El Superadmin puede personalizarlos desde <em>Configuración → Roles y Permisos</em> por cada establecimiento.</p>
+
+<table>
+<thead><tr><th>Módulo</th><th>Superadmin</th><th>Owner</th><th>Sensei</th><th>Admin</th><th>Instructor</th><th>Guardian</th><th>Student</th></tr></thead>
+<tbody>
+<tr><td>Dashboard (Operación)</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><td>Prospectos (CRM)</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><td>Calendario</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><td>Académico</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Administración</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Torneos</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Comunidad</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Marketplace</td><td>✅</td><td>✅</td><td>—</td><td>✅</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Finanzas</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>—</td><td>✅</td><td>—</td></tr>
+<tr><td>Configuración</td><td>✅</td><td>✅</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Debug</td><td>✅</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h2 id="s1e">1.5 Matriz Completa de Pantallas y Acceso Especial</h2>
+
+<table>
+<thead><tr><th>Pantalla / Función</th><th>Roles con Acceso</th><th>Restricción Específica</th></tr></thead>
+<tbody>
+<tr><td>Onboarding</td><td>Superadmin, Owner</td><td>Solo durante configuración inicial del establecimiento</td></tr>
+<tr><td>Dashboard Operacional</td><td>Superadmin, Owner, Sensei, Admin, Instructor</td><td>El contenido del dashboard varía según el rol</td></tr>
+<tr><td>Panel Admin (Roles y Permisos)</td><td>Superadmin, Owner, Sensei</td><td><code>canAccessAdminPanel()</code> — Solo estos 3 roles</td></tr>
+<tr><td>Gestión de Miembros</td><td>Superadmin, Owner, Sensei</td><td>Sensei solo ve sus instructores asignados; Owner/Sensei ven los suyos</td></tr>
+<tr><td>Crear Usuarios</td><td>Superadmin, Owner, Sensei</td><td>Owner/Sensei solo pueden crear Instructor, Guardian, Student</td></tr>
+<tr><td>Facturación Electrónica DGI</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Configurar WhatsApp</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Enviar Notificaciones / WhatsApp</td><td>Superadmin, Owner, Sensei, Admin, Instructor</td><td><code>canCreateNotifications()</code></td></tr>
+<tr><td>Sistema Billing — Pagar factura</td><td>Owner</td><td>Solo el Owner del establecimiento puede pagar facturas del sistema</td></tr>
+<tr><td>Sistema Billing — Gestionar</td><td>Superadmin</td><td>Generar facturas mensuales, confirmar pagos, ver pendientes globales</td></tr>
+<tr><td>Comisiones</td><td>Superadmin</td><td>Exclusivo del superadmin</td></tr>
+<tr><td>Configurar Pasarela de Pago</td><td>Superadmin, Owner, Sensei</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Metas Financieras</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Marketplace (crear/editar)</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Marketplace (ver)</td><td>Superadmin, Owner, Sensei, Admin, Instructor</td><td>Sin restricción para lectura</td></tr>
+<tr><td>Torneos (crear/editar/eliminar)</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Inventario (gestionar)</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido</td></tr>
+<tr><td>Portal Estudiante</td><td>Student</td><td>Ve solo su propia información</td></tr>
+<tr><td>Portal Guardián</td><td>Guardian</td><td>Ve solo los alumnos vinculados a él</td></tr>
+<tr><td>Trial — Gestionar usuarios</td><td>Superadmin</td><td>Listar, dar acceso ilimitado, ver estado de trials</td></tr>
+<tr><td>Configuración de Disciplinas</td><td>Superadmin, Owner, Sensei, Admin</td><td><code>isManagerRole()</code> requerido para modificar tree config</td></tr>
+<tr><td>Importar Datos</td><td>Superadmin</td><td>Endpoint <code>/api/import/*</code> solo superadmin</td></tr>
+</tbody>
+</table>
+
+<!-- ═══════════════ 2. WORKFLOWS ═══════════════ -->
+<h1 id="s2">2. Workflows del Sistema</h1>
+
+<!-- ─── W1: Trial ─── -->
+<h2 id="w1">2.1 Registro Trial (30 días)</h2>
+<p><strong>Roles:</strong> Público (no requiere autenticación previa) &nbsp;|&nbsp; <strong>Endpoint:</strong> <code>POST /api/trial/signup</code></p>
+
+<ol class="steps">
+  <li>El usuario accede a la pantalla de login y presiona <strong>"Crear cuenta de prueba"</strong>.</li>
+  <li>Completa el formulario: nombre completo, nombre de usuario (username), contraseña, nombre del establecimiento y selecciona las disciplinas.</li>
+  <li>El sistema crea en Supabase: un usuario auth (email interno <code>username@users.martialsystem.local</code>), un perfil con rol <code>owner</code>, un establecimiento, la membresía owner↔establecimiento, y las disciplinas seleccionadas con su configuración por defecto.</li>
+  <li>Se registra el trial en <code>data/trial-users.json</code> con fecha de creación y <code>unlimited: false</code>.</li>
+  <li>El usuario recibe acceso inmediato por 30 días. En cada login se verifica <code>GET /api/trial/status</code>.</li>
+  <li>Si el trial expira (30 días sin que el Superadmin marque <code>unlimited: true</code>), el usuario ve un aviso de vencimiento.</li>
+  <li>El Superadmin puede desde Configuración listar todos los trials (<code>GET /api/trial/users</code>) y marcarlos como ilimitados (<code>PUT /api/trial/users/:profileId</code>).</li>
+</ol>
+
+<div class="info"><strong>Datos requeridos:</strong> <code>fullName</code>, <code>username</code>, <code>password</code>, <code>establishmentName</code>, <code>disciplineCodes</code> (array, mínimo 1).<br><strong>Rollback:</strong> Si algo falla a medio proceso, se elimina el establecimiento y el usuario auth creados.</div>
+
+<!-- ─── W2: Onboarding ─── -->
+<h2 id="w2">2.2 Onboarding de Establecimiento</h2>
+<p><strong>Roles:</strong> Superadmin, Owner &nbsp;|&nbsp; <strong>Endpoint:</strong> <code>POST /api/onboarding</code></p>
+
+<ol class="steps">
+  <li>Desde la pantalla de Onboarding (accesible vía Configuración o al primer inicio), se completa el formulario con: nombre del establecimiento, ciudad, país, logo (URL), datos del Owner (nombre, username, contraseña) y disciplinas.</li>
+  <li>El sistema valida que el username del Owner no esté en uso.</li>
+  <li>Crea el usuario auth de Supabase con email interno, el perfil con rol <code>owner</code>, el establecimiento con los datos proporcionados, y la membresía.</li>
+  <li>Vincula las disciplinas seleccionadas al establecimiento (<code>establishment_disciplines</code>) y crea la configuración por defecto (<code>discipline_configs</code>).</li>
+  <li>Retorna <code>establishmentId</code>, <code>ownerUserId</code> y la lista de disciplinas creadas.</li>
+  <li>Con estos datos, el Owner ya puede hacer login y empezar a operar.</li>
+</ol>
+
+<!-- ─── W3: Login ─── -->
+<h2 id="w3">2.3 Login / Autenticación</h2>
+<p><strong>Roles:</strong> Todos &nbsp;|&nbsp; <strong>Endpoint:</strong> <code>POST /api/login</code></p>
+
+<ol class="steps">
+  <li>El usuario ingresa <strong>username</strong> y <strong>password</strong> en la pantalla de login.</li>
+  <li>El sistema verifica primero si coincide con el Superadmin (credenciales configuradas en <code>.env</code>: <code>SUPERADMIN_USERNAME</code> / <code>SUPERADMIN_PASSWORD</code>). Si coincide, genera un token especial <code>sa_...</code> y lo guarda en memoria.</li>
+  <li>Para usuarios normales, busca el perfil por <code>username</code> en Supabase, obtiene el <code>auth_email</code> interno y autentica con <code>supabase.auth.signInWithPassword()</code>.</li>
+  <li>Retorna <code>access_token</code> (JWT de Supabase), <code>refresh_token</code>, y datos del usuario: <code>id</code>, <code>username</code>, <code>role</code>, <code>full_name</code>.</li>
+  <li>El frontend almacena el token en <code>sessionStorage</code> y lo envía en cada request como header <code>Authorization: Bearer <token></code>.</li>
+  <li>Al cargar la app, <code>GET /api/me</code> devuelve el perfil completo, membresías por establecimiento y permisos de módulos (<code>modulePermissions</code>).</li>
+  <li>El frontend usa <code>modulePermissions</code> para mostrar/ocultar los tabs según el rol y el establecimiento seleccionado.</li>
+</ol>
+
+<div class="info"><strong>Superadmin:</strong> Usuario único hardcodeado. No existe en Supabase. Su sesión se mantiene en memoria del servidor (<code>superadminSessions</code>). Si el servidor se reinicia, debe volver a loguearse.</div>
+
+<!-- ─── W4: CRM Prospectos ─── -->
+<h2 id="w4">2.4 CRM de Prospectos</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin, Instructor &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/prospects</code></p>
+
+<ol class="steps">
+  <li>Desde la pestaña <strong>Prospectos</strong>, el usuario ve la lista de leads del establecimiento.</li>
+  <li><strong>Crear prospecto</strong> (<code>POST /api/prospects</code>): nombre, teléfono, email, disciplina de interés, fuente (instagram, whatsapp, facebook, referral, walk-in, otro), notas y estado inicial (<code>new</code>).</li>
+  <li><strong>Filtrar</strong> (<code>GET /api/prospects?status=&source=&daysOld=</code>): por estado (<code>new</code>, <code>contacted</code>, <code>follow-up</code>, <code>enrolled</code>, <code>lost</code>), fuente, o prospectos sin seguimiento hace N días.</li>
+  <li><strong>Actualizar</strong> (<code>PATCH /api/prospects/:id</code>): cambiar estado, agregar notas, marcar como contactado (actualiza <code>lastContactedAt</code> e incrementa <code>contactedCount</code>).</li>
+  <li><strong>Recordatorios</strong> (<code>GET /api/prospects/reminders</code>): muestra prospectos que necesitan seguimiento (no están <code>enrolled</code> ni <code>lost</code> y no han sido contactados en 7+ días).</li>
+  <li><strong>Convertir a alumno</strong> (<code>POST /api/prospects/:id/convert</code>): cambia el estado a <code>enrolled</code>, registra <code>convertedToStudentId</code> y <code>enrolledAt</code>. Requiere el <code>studentId</code> del alumno ya creado.</li>
+</ol>
+
+<div class="info"><strong>Almacenamiento:</strong> Los prospectos se guardan en <code>data/prospects.json</code> por establecimiento. Ordenados por fecha de creación (más recientes primero).</div>
+
+<!-- ─── W5: Alumnos + QR ─── -->
+<h2 id="w5">2.5 Alta de Alumnos + QR de Identificación</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin, Instructor &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/students</code>, <code>/api/students/:id/qr</code></p>
+
+<ol class="steps">
+  <li>Desde la pestaña <strong>Académico</strong>, el usuario registra un nuevo alumno: nombre completo, fecha de nacimiento, disciplina, cinta actual, fecha de ingreso, instructor asignado, foto (opcional).</li>
+  <li>El sistema crea el registro en <code>students</code> y vincula al estudiante con la disciplina e instructor(es) en <code>student_disciplines</code>.</li>
+  <li>Para generar el <strong>QR de identificación</strong>: en la ficha del alumno, presionar <em>"Ver QR alumno"</em>. El endpoint <code>GET /api/students/:id/qr</code> genera un código QR (data URL en PNG) que contiene el ID del alumno y el establecimiento.</li>
+  <li>El QR se muestra en un modal con opción de <strong>Imprimir</strong>, que abre una ventana nueva con el QR y el nombre del alumno listo para impresión.</li>
+  <li>Este QR se usa posteriormente para tomar asistencia por escaneo (ver Workflow 2.6).</li>
+</ol>
+
+<div class="info"><strong>Foto del alumno:</strong> Se almacena en <code>data/student-photos.json</code> y se sube a Supabase Storage (bucket <code>martial-media</code>) o localmente como fallback.</div>
+
+<!-- ─── W6: Asistencia QR ─── -->
+<h2 id="w6">2.6 Asistencia por QR</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin, Instructor &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>POST /api/attendance/qr-scan</code></p>
+
+<ol class="steps">
+  <li>Desde la pestaña <strong>Operación</strong>, el botón <em>"📷 Escanear QR"</em> abre el panel de escaneo.</li>
+  <li>Seleccionar el <strong>establecimiento</strong> y la <strong>clase</strong> (class session) donde se tomará asistencia.</li>
+  <li>Presionar <em>"Iniciar Scanner"</em> — activa la cámara del dispositivo.</li>
+  <li>Apuntar la cámara al QR del alumno. El sistema usa la librería <code>jsQR</code> para decodificar el QR en tiempo real desde un elemento <code><video></code>.</li>
+  <li>Al detectar un QR válido, envía <code>POST /api/qr/scan</code> con <code>{ qrData, establishmentId, classId }</code>.</li>
+  <li>El servidor decodifica el QR, busca al alumno, verifica que pertenezca al establecimiento y la clase, y registra la asistencia.</li>
+  <li>Muestra el resultado en pantalla: nombre del alumno, estado (presente), hora del registro.</li>
+  <li>El escáner sigue activo para el siguiente alumno. Presionar <em>"Detener"</em> para apagar la cámara.</li>
+</ol>
+
+<!-- ─── W7: Clases y Asistencia ─── -->
+<h2 id="w7">2.7 Clases y Asistencia Manual</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin, Instructor &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/classes</code>, <code>/api/classes/:id/attendance</code></p>
+
+<ol class="steps">
+  <li>Desde <strong>Calendario</strong>, crear una clase (<code>POST /api/classes</code>): disciplina, instructor, fecha/hora, duración, nivel, cupo máximo.</li>
+  <li>La clase aparece en el calendario del establecimiento. Los instructores solo ven clases de sus disciplinas asignadas.</li>
+  <li>Para tomar <strong>asistencia manual</strong> (<code>POST /api/classes/:classId/attendance</code>): seleccionar la clase, marcar alumnos presentes/ausentes uno por uno o en lote.</li>
+  <li>Consultar asistencia (<code>GET /api/classes/:classId/attendance</code>): lista de alumnos con su estado (presente/ausente/tarde) y hora de registro.</li>
+  <li>Los estudiantes y guardianes pueden ver el historial de asistencia desde sus respectivos portales.</li>
+</ol>
+
+<!-- ─── W8: Evaluaciones ─── -->
+<h2 id="w8">2.8 Evaluaciones / Exámenes</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin, Instructor &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/evaluations</code>, <code>/api/academics</code></p>
+
+<ol class="steps">
+  <li>Desde <strong>Académico → Examen</strong>, el instructor selecciona un alumno y la disciplina.</li>
+  <li>El examen se divide en <strong>6 pestañas</strong>: Kihon (técnica básica), Kata (formas), Kumite (combate), Etiqueta (comportamiento/dojo), Teórico (preguntas del banco de teoría), Resultado (resumen final).</li>
+  <li>En cada pestaña se califica al alumno en una escala de 0-10. Las calificaciones se guardan con <code>POST /api/evaluations</code>.</li>
+  <li>El sistema también soporta <strong>solicitudes de examen de grado</strong> (<code>POST /api/academics/request</code>) y <strong>resultados de examen</strong> (<code>POST /api/academics/result</code>) para un flujo más formal con aprobación.</li>
+  <li>El alumno y su guardián pueden ver el resultado desde sus portales.</li>
+  <li>El <strong>currículum del alumno</strong> (<code>GET /api/students/curriculum</code>) muestra el historial completo de cintas y evaluaciones.</li>
+</ol>
+
+<!-- ─── W9: Churn Rate ─── -->
+<h2 id="w9">2.9 Churn Rate (Detección de Abandono)</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin &nbsp;|&nbsp; <strong>Endpoint:</strong> <code>GET /api/reports/churn</code></p>
+
+<ol class="steps">
+  <li>Desde <strong>Dashboard (Operación)</strong>, presionar el botón <em>"Churn Rate (abandono)"</em>.</li>
+  <li>El sistema calcula automáticamente los alumnos en riesgo de abandono basándose en: días desde la última clase, pagos atrasados, inasistencias consecutivas (umbral configurable vía query params <code>daysThreshold</code> y <code>absencesThreshold</code>).</li>
+  <li>Muestra KPIs: <strong>Tasa de abandono</strong> (porcentaje), <strong>Alumnos en riesgo</strong> (cantidad), <strong>Total activos</strong>.</li>
+  <li>Lista detallada de alumnos en riesgo con: nombre, disciplina, última clase, días sin asistir, estado de pago.</li>
+  <li>El Owner/Sensei puede tomar acción contactando al alumno o guardián desde el CRM o WhatsApp.</li>
+</ol>
+
+<!-- ─── W10: Notificaciones + WhatsApp ─── -->
+<h2 id="w10">2.10 Notificaciones + WhatsApp (Twilio)</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin (configurar) | Todos los anteriores + Instructor (enviar) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/whatsapp/*</code>, <code>/api/notifications/*</code></p>
+
+<ol class="steps">
+  <li><strong>Configurar WhatsApp</strong> (<code>PUT /api/whatsapp/config</code>): desde Dashboard, el admin ingresa las credenciales de Twilio: <code>accountSid</code>, <code>authToken</code>, <code>fromNumber</code> (número de WhatsApp Business API). Se guarda por establecimiento en <code>data/whatsapp-config.json</code>.</li>
+  <li><strong>Enviar mensaje individual</strong> (<code>POST /api/whatsapp/send</code>): seleccionar destinatario (alumno, guardián, instructor), escribir mensaje y enviar. Twilio entrega el mensaje por WhatsApp.</li>
+  <li><strong>Envío en lote</strong> (<code>POST /api/whatsapp/send-batch</code>): enviar a múltiples destinatarios filtrados por disciplina, nivel de cinta, estado de pago, etc.</li>
+  <li><strong>Notificaciones internas</strong> (<code>POST /api/notifications</code>): crear avisos que aparecen en el dashboard del destinatario. Se puede dirigir a un perfil específico (<code>recipient_profile_id</code>) o a toda una audiencia por rol (<code>audience_role: all | owner | admin | instructor | student | guardian</code>).</li>
+  <li>Los usuarios ven sus notificaciones en el dashboard (<code>GET /api/notifications</code>) y pueden marcarlas como leídas (<code>PUT /api/notifications/:id/read</code>).</li>
+</ol>
+
+<div class="info"><strong>Dashboards role-based:</strong> Estudiantes/Guardianes ven notificaciones de audiencia <code>student</code> o <code>all</code>. Instructores/Senseis ven las de <code>instructor</code>, <code>sensei</code> o <code>all</code>. Owners ven las de <code>owner</code> o <code>all</code>.</div>
+
+<!-- ─── W11: Finanzas ─── -->
+<h2 id="w11">2.11 Finanzas: Pagos, Metas y Tendencias</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/payments</code>, <code>/api/finance/*</code>, <code>/api/reports/*</code></p>
+
+<ol class="steps">
+  <li><strong>Registrar pago</strong> (<code>POST /api/payments</code>): monto, alumno, disciplina, mes correspondiente, método de pago, notas. El pago se asocia al establecimiento.</li>
+  <li><strong>Consultar pagos</strong> (<code>GET /api/payments?discipline=&month=&studentId=</code>): filtrar por disciplina, mes, alumno. Los instructores solo ven pagos de alumnos en sus disciplinas.</li>
+  <li><strong>Metas financieras</strong> (<code>PUT /api/finance/targets</code>): el Owner/Admin configura la cuota mensual esperada por disciplina (<code>expectedFee</code>). Por defecto: $50.</li>
+  <li><strong>Tendencias</strong> (<code>GET /api/finance/trends</code>): gráfica de ingresos mensuales, comparativa vs meta, proyección.</li>
+  <li><strong>Reporte operativo</strong> (<code>GET /api/reports/operational</code>): resumen de alumnos activos, ingresos del mes, asistencia promedio, nuevos ingresos, bajas. Exportable a CSV.</li>
+  <li><strong>Resumen</strong> (<code>GET /api/reports/summary</code>): KPIs financieros agrupados por disciplina.</li>
+</ol>
+
+<!-- ─── W12: Pasarela ─── -->
+<h2 id="w12">2.12 Pasarela de Pago (Stripe / PagueloFacil / PayPal)</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/payments/stripe/*</code>, <code>/api/payments/paguelofacil/*</code>, <code>/api/payments/paypal/*</code></p>
+
+<ol class="steps">
+  <li><strong>Stripe:</strong> El Owner configura las credenciales en <code>.env</code> (<code>STRIPE_SECRET_KEY</code>). Soportado: <code>create-payment-intent</code> (pago único), <code>create-setup-intent</code> (guardar tarjeta), <code>create-subscription</code> (suscripción recurrente). Webhook en <code>/api/payments/stripe/webhook</code>.</li>
+  <li><strong>PagueloFacil (Panamá):</strong> Configuración por establecimiento (<code>PUT /api/payments/paguelofacil/config</code>): <code>apiKey</code>, <code>storeId</code>, <code>currency</code>, <code>enabled</code>. Crear link de pago (<code>POST /api/payments/paguelofacil/create-link</code>). Webhook para confirmación automática.</li>
+  <li><strong>PayPal:</strong> Crear orden (<code>POST /api/payments/paypal/create-order</code>), capturar pago (<code>POST /api/payments/paypal/capture-order</code>). Webhook para eventos de PayPal.</li>
+  <li>Páginas de retorno: <code>/payment/success</code> y <code>/payment/cancel</code> muestran el resultado al usuario.</li>
+</ol>
+
+<!-- ─── W13: Facturación DGI ─── -->
+<h2 id="w13">2.13 Facturación Electrónica DGI Panamá</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin &nbsp;|&nbsp; <strong>Pantalla:</strong> <code>/invoicing.html</code></p>
+
+<ol class="steps">
+  <li>Acceder al módulo desde <strong>Finanzas → Facturación</strong> o directamente en <code>/invoicing.html</code>.</li>
+  <li><strong>Numeración:</strong> configurar tipo de documento (Factura, Nota de Crédito, Nota de Débito), prefijo (ej. <code>FA</code>), y numeración inicial. El sistema auto-incrementa.</li>
+  <li><strong>Clientes:</strong> registrar datos fiscales del cliente (nombre, RUC, dirección, teléfono, email).</li>
+  <li><strong>Crear factura:</strong> seleccionar cliente, fecha, items (descripción, cantidad, precio unitario, impuesto), método de pago. El sistema calcula subtotal, ITBMS (7%) y total automáticamente.</li>
+  <li><strong>Enviar a DGI</strong> (<code>sendToDGI</code>): el sistema genera el XML con formato DGI Panamá, lo envía para autorización y recibe el CUFE/DV de vuelta. La factura queda marcada como <code>autorizada</code> o <code>rechazada</code>.</li>
+  <li><strong>Anular factura</strong>: solo facturas autorizadas, requiere motivo de anulación. Genera nota de crédito asociada.</li>
+  <li><strong>Reportes:</strong> filtrar por período (mensual/anual), ver total facturado, impuestos, estado de cada factura. Panel con KPIs en <code>/invoicing.html</code>.</li>
+</ol>
+
+<div class="warn"><strong>Importante:</strong> La facturación electrónica requiere configurar el schema SQL <code>supabase/010_electronic_invoicing.sql</code> que crea las tablas <code>invoice_clients</code>, <code>invoice_numbering</code>, <code>invoices</code> e <code>invoice_items</code>.</div>
+
+<!-- ─── W14: Sistema Billing ─── -->
+<h2 id="w14">2.14 Sistema Billing (Pagos del Sistema)</h2>
+<p><strong>Roles:</strong> Superadmin (gestiona), Owner (paga) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/system-billing/*</code>, <code>/api/system-plans</code></p>
+
+<ol class="steps">
+  <li><strong>Planes del sistema</strong> (<code>GET /api/system-plans</code>): el Owner consulta los planes disponibles configurados en <code>system_plans</code> (tabla de Supabase, schema <code>012_system_billing.sql</code>).</li>
+  <li><strong>Plan del establecimiento</strong> (<code>GET /api/establishment-plan</code>): muestra el plan actual, estado de pagos, próxima fecha de facturación.</li>
+  <li><strong>Configurar días de facturación</strong> (<code>PUT /api/establishment-plan/billing-days</code>): el Owner elige cada cuántos días se le factura (30, 60, 90).</li>
+  <li><strong>Generar facturas mensuales</strong> (<code>POST /api/system-billing/generate-monthly-bills</code>): solo el Superadmin. Genera facturas para todos los establecimientos activos según su ciclo.</li>
+  <li><strong>Ver facturas</strong> (<code>GET /api/system-billing/bills</code>): el Owner ve sus facturas pendientes y pagadas.</li>
+  <li><strong>Pagar factura</strong> (<code>POST /api/system-billing/pay</code>): el Owner marca una factura como pagada (con comprobante).</li>
+  <li><strong>Confirmar pago</strong> (<code>PATCH /api/system-billing/confirm-payment/:billId</code>): el Superadmin verifica y confirma el pago.</li>
+  <li><strong>Estado de morosidad</strong> (<code>GET /api/system-billing/overdue-status</code>): si un Owner tiene facturas vencidas 15+ días, el sistema muestra un overlay bloqueante.</li>
+  <li><strong>Recordatorios</strong> (<code>POST /api/system-billing/send-parent-reminders</code>): el Owner envía recordatorios de pago a los padres/tutores.</li>
+  <li><strong>Solicitar upgrade de plan</strong> (<code>POST /api/system-billing/upgrade-request</code>): el Owner pide cambiar a un plan superior. El Superadmin aprueba o rechaza (<code>PATCH /api/system-billing/approve-upgrade/:requestId</code>).</li>
+</ol>
+
+<!-- ─── W15: Portales ─── -->
+<h2 id="w15">2.15 Portal Estudiante / Guardián</h2>
+<p><strong>Roles:</strong> Student, Guardian &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/portal/student</code>, <code>/api/portal/guardian</code>, <code>/api/dashboard/student</code>, <code>/api/dashboard/sensei</code></p>
+
+<ol class="steps">
+  <li><strong>Portal del Estudiante</strong> (<code>GET /api/portal/student?establishmentId=&studentId=</code>): el alumno ve su información personal, disciplinas inscritas, historial de asistencia, evaluaciones, currículum de cintas, notificaciones dirigidas a él.</li>
+  <li><strong>Dashboard del Estudiante</strong> (<code>GET /api/dashboard/student</code>): KPIs personales — clases asistidas este mes, promedio de evaluaciones, próximas clases, notificaciones sin leer.</li>
+  <li><strong>Portal del Guardián</strong> (<code>GET /api/portal/guardian</code>): el tutor ve la información de todos los alumnos vinculados a él: asistencia, calificaciones, pagos pendientes.</li>
+  <li><strong>Vincular Guardián a Alumno</strong> (<code>POST /api/portal/guardian/link</code>): un Owner/Sensei vincula un perfil guardian a uno o más estudiantes. El guardián debe existir primero como miembro del establecimiento con rol <code>guardian</code>.</li>
+  <li><strong>Dashboard Sensei/Instructor</strong> (<code>GET /api/dashboard/sensei</code>): KPIs del cuerpo docente — total de alumnos asignados, asistencia promedio de sus clases, evaluaciones pendientes, notificaciones.</li>
+</ol>
+
+<!-- ─── W16: Marketplace ─── -->
+<h2 id="w16">2.16 Marketplace + Inventario</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin (gestión) | Todos (lectura) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/marketplace</code>, <code>/api/inventory</code></p>
+
+<ol class="steps">
+  <li><strong>Publicar producto</strong> (<code>POST /api/marketplace</code>): nombre, descripción, precio, categoría (equipo, uniformes, suplementos, accesorios, libros), imágenes (upload a Supabase Storage), cantidad disponible, estado (activo/inactivo).</li>
+  <li><strong>Explorar marketplace</strong> (<code>GET /api/marketplace?discipline=&category=&search=</code>): los usuarios ven productos activos filtrables por disciplina y categoría.</li>
+  <li><strong>Gestionar inventario</strong> (<code>GET /api/inventory</code>): vista de administración con stock actual, valor total, entradas/salidas.</li>
+  <li><strong>Movimientos de stock</strong> (<code>POST /api/inventory/:id/movement</code>): entrada (compra), salida (venta), ajuste, devolución. Cada movimiento registra cantidad, tipo, motivo y fecha.</li>
+  <li><strong>Historial de movimientos</strong> (<code>GET /api/inventory/:id/movements</code>): trazabilidad completa por producto.</li>
+</ol>
+
+<!-- ─── W17: Torneos ─── -->
+<h2 id="w17">2.17 Torneos</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei, Admin (gestión) | Todos (lectura) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/tournaments</code></p>
+
+<ol class="steps">
+  <li><strong>Crear torneo</strong> (<code>POST /api/tournaments</code>): nombre, fecha, lugar, disciplinas, categorías (por edad, peso, cinta), costo de inscripción, fecha límite de registro.</li>
+  <li><strong>Registrar participante</strong> (<code>POST /api/tournaments/register</code>): seleccionar torneo, alumno, categoría, peso. El sistema valida que el alumno cumpla los requisitos de la categoría.</li>
+  <li><strong>Registrar resultados</strong> (<code>POST /api/tournaments/result</code>): para cada categoría, registrar 1er, 2do, 3er lugar. Se actualiza el historial del alumno.</li>
+  <li><strong>Dashboard de torneos</strong>: vista de próximos torneos, participantes inscritos, resultados históricos por establecimiento.</li>
+</ol>
+
+<!-- ─── W18: Comisiones ─── -->
+<h2 id="w18">2.18 Comisiones</h2>
+<p><strong>Roles:</strong> Superadmin (exclusivo) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/commissions</code></p>
+
+<ol class="steps">
+  <li>El Superadmin accede a <strong>Finanzas → Comisiones</strong> para ver todas las comisiones del sistema.</li>
+  <li>Cada vez que un establecimiento paga su factura del sistema, se registra una comisión (porcentaje configurable).</li>
+  <li><strong>Cambiar estado</strong> (<code>PATCH /api/commissions/:id/status</code>): el Superadmin marca comisiones como <code>pending</code>, <code>paid</code> o <code>cancelled</code>.</li>
+  <li>Vista de totales por establecimiento, período, y estado de pago.</li>
+</ol>
+
+<div class="info"><strong>Restricción:</strong> El endpoint verifica explícitamente <code>req.authUser.role !== 'superadmin'</code>. Ningún otro rol puede acceder a este módulo.</div>
+
+<!-- ─── W19: Teoría ─── -->
+<h2 id="w19">2.19 Teoría / Banco de Preguntas</h2>
+<p><strong>Roles:</strong> Todos (el banco es público por disciplina) | Owner, Sensei, Admin (gestión) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/theory</code>, <code>/api/theory/bank</code></p>
+
+<ol class="steps">
+  <li><strong>Cargar preguntas</strong> (<code>PUT /api/theory/bank</code>): el Owner/Sensei/Admin sube preguntas de opción múltiple para una disciplina y estilo. Las preguntas se almacenan en Supabase (<code>theory_questions</code>).</li>
+  <li><strong>Consultar banco</strong> (<code>GET /api/theory?discipline=&style=&level=</code>): obtener preguntas filtradas por disciplina, estilo y nivel de dificultad.</li>
+  <li>Alternativamente, las preguntas se cargan desde archivos JSON en <code>theory-data/<disciplina>/<estilo>.json</code> (karate, judo, bjj, taekwondo, kickboxing, muay_thai, boxing, mma, aikido, kendo).</li>
+  <li><strong>Examen teórico</strong>: desde la pestaña <strong>Académico → Examen → Teórico</strong>, el instructor selecciona preguntas del banco y las asigna al alumno. El sistema califica automáticamente las respuestas.</li>
+  <li>El resultado del examen teórico se integra en la evaluación completa del alumno (junto con Kihon, Kata, Kumite y Etiqueta).</li>
+</ol>
+
+<!-- ─── W20: Organizaciones ─── -->
+<h2 id="w20">2.20 Organizaciones Multi-Establecimiento</h2>
+<p><strong>Roles:</strong> Superadmin, Owner, Sensei &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/organizations</code></p>
+
+<ol class="steps">
+  <li><strong>Crear organización</strong> (<code>POST /api/organizations</code>): el Superadmin crea una entidad que agrupa múltiples establecimientos (ej. una franquicia de dojos).</li>
+  <li><strong>Vincular establecimientos</strong> (<code>PUT /api/organizations/:id/establishments</code>): agregar o remover establecimientos de la organización. Solo el Superadmin puede vincular establecimientos externos.</li>
+  <li><strong>Consultar organizaciones</strong> (<code>GET /api/organizations</code>): lista de organizaciones con sus establecimientos asociados.</li>
+  <li>Útil para Owners con múltiples sucursales: pueden ver reportes consolidados de todos sus dojos.</li>
+</ol>
+
+<!-- ─── W21: Permisos Módulos ─── -->
+<h2 id="w21">2.21 Configuración de Permisos por Módulo</h2>
+<p><strong>Roles:</strong> Superadmin (exclusivo) &nbsp;|&nbsp; <strong>Endpoints:</strong> <code>/api/module-permissions</code></p>
+
+<ol class="steps">
+  <li>Desde <strong>Configuración → Roles y Permisos</strong>, el Superadmin ve la matriz de módulos por rol para el establecimiento seleccionado.</li>
+  <li><strong>Consultar permisos actuales</strong> (<code>GET /api/module-permissions?establishmentId=</code>): devuelve los módulos asignados a cada rol. Si no hay configuración personalizada, muestra los <code>DEFAULT_ROLE_MODULES</code>.</li>
+  <li><strong>Modificar permisos</strong> (<code>PUT /api/module-permissions</code>): el Superadmin envía <code>{ establishmentId, role, modules[] }</code> para personalizar qué módulos ve un rol específico.</li>
+  <li>Los cambios se guardan en <code>data/module-permissions.json</code> y tienen efecto inmediato en el siguiente <code>GET /api/me</code> del usuario.</li>
+  <li>Si se borra la configuración personalizada, el sistema vuelve a los valores por defecto.</li>
+</ol>
+
+<div class="warn"><strong>Solo Superadmin:</strong> Este endpoint verifica explícitamente que <code>membership.role === 'superadmin'</code>. Ni Owner ni Sensei pueden modificar permisos de módulos.</div>
+
+<!-- ═══════════════ 3. ANEXO TÉCNICO ═══════════════ -->
+<h1 id="s3">3. Anexo Técnico — Endpoints por Módulo</h1>
+
+<h2>Autenticación y Sesión</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Auth</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/health</code></td><td>No</td><td>Health check del servidor</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/login</code></td><td>No</td><td>Login por username + password</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/me</code></td><td>Sí</td><td>Perfil, membresías y permisos de módulos</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/tree</code></td><td>Sí</td><td>Árbol de navegación del usuario</td></tr>
+</tbody>
+</table>
+
+<h2>Trial</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/trial/signup</code></td><td>Público</td><td>Crear cuenta trial de 30 días</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/trial/status</code></td><td>Auth</td><td>Verificar estado del trial</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/trial/users</code></td><td>Superadmin</td><td>Listar todos los trials</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/trial/users/:profileId</code></td><td>Superadmin</td><td>Marcar trial como ilimitado</td></tr>
+</tbody>
+</table>
+
+<h2>Onboarding y Establecimientos</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/onboarding</code></td><td>Público</td><td>Crear establecimiento + Owner</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/establishments</code></td><td>Público</td><td>Listar establecimientos</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/disciplines</code></td><td>Público</td><td>Listar disciplinas del sistema</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/establishment-disciplines</code></td><td>Auth</td><td>Disciplinas del establecimiento</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/my-disciplines</code></td><td>Auth</td><td>Disciplinas del usuario actual</td></tr>
+</tbody>
+</table>
+
+<h2>Dashboard Operacional</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/dashboard/stats</code></td><td>Superadmin</td><td>Estadísticas globales</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/dashboard/student</code></td><td>Student, Guardian</td><td>Dashboard del alumno</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/dashboard/sensei</code></td><td>Sensei, Instructor</td><td>Dashboard del instructor</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/dashboard/owner</code></td><td>Owner, Sensei</td><td>Dashboard del dueño</td></tr>
+</tbody>
+</table>
+
+<h2>Alumnos y Académico</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/students</code></td><td>Manager+</td><td>Listar alumnos</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/students</code></td><td>Manager+</td><td>Crear alumno</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/students/curriculum</code></td><td>Auth</td><td>Currículum de cintas del alumno</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/students/:id/qr</code></td><td>Manager+</td><td>Generar QR de identificación</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/evaluations</code></td><td>Auth</td><td>Consultar evaluaciones</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/evaluations</code></td><td>Manager+</td><td>Registrar evaluación</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/academics</code></td><td>Auth</td><td>Ver solicitudes/resultados de examen</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/academics/request</code></td><td>Manager+</td><td>Solicitar examen de grado</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/academics/result</code></td><td>Manager+</td><td>Registrar resultado de examen</td></tr>
+</tbody>
+</table>
+
+<h2>Clases y Asistencia</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/classes</code></td><td>Auth</td><td>Listar clases</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/classes</code></td><td>Manager+</td><td>Crear clase</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/classes/:id/attendance</code></td><td>Auth</td><td>Ver asistencia de una clase</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/classes/:id/attendance</code></td><td>Manager+</td><td>Registrar asistencia</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/attendance/qr-scan</code></td><td>Manager+</td><td>Asistencia por escaneo QR</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/absences</code></td><td>Auth</td><td>Consultar inasistencias</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/absences</code></td><td>Manager+</td><td>Registrar inasistencia justificada</td></tr>
+</tbody>
+</table>
+
+<h2>CRM Prospectos</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/prospects</code></td><td>Auth</td><td>Listar prospectos con filtros</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/prospects</code></td><td>Auth</td><td>Crear prospecto</td></tr>
+<tr><td><span class="endpoint ep-patch">PATCH</span></td><td><code>/api/prospects/:id</code></td><td>Auth</td><td>Actualizar prospecto</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/prospects/reminders</code></td><td>Auth</td><td>Prospectos que necesitan seguimiento</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/prospects/:id/convert</code></td><td>Auth</td><td>Convertir prospecto a alumno</td></tr>
+</tbody>
+</table>
+
+<h2>Reportes</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/reports/summary</code></td><td>Manager+</td><td>Resumen financiero</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/reports/operational</code></td><td>Manager+</td><td>Reporte operativo (exportable CSV)</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/reports/churn</code></td><td>Manager+</td><td>Churn rate (abandono)</td></tr>
+</tbody>
+</table>
+
+<h2>Usuarios y Administración</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/instructors</code></td><td>Superadmin, Owner, Sensei</td><td>Crear instructor</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/instructors</code></td><td>Auth</td><td>Listar instructores</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/guardians</code></td><td>Auth</td><td>Listar tutores con alumnos vinculados</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/admin/members</code></td><td>Superadmin, Owner, Sensei</td><td>Listar miembros del establecimiento</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/admin/users</code></td><td>Superadmin, Owner, Sensei</td><td>Crear usuario (cualquier rol permitido)</td></tr>
+<tr><td><span class="endpoint ep-patch">PATCH</span></td><td><code>/api/admin/members/:id</code></td><td>Superadmin, Owner, Sensei</td><td>Editar rol/estado de un miembro</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/module-permissions</code></td><td>Auth</td><td>Ver permisos de módulos</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/module-permissions</code></td><td>Superadmin</td><td>Modificar permisos de módulos por rol</td></tr>
+</tbody>
+</table>
+
+<h2>Finanzas y Pagos</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/payments</code></td><td>Auth</td><td>Listar pagos</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments</code></td><td>Manager+</td><td>Registrar pago</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/finance/targets</code></td><td>Manager+</td><td>Ver metas financieras</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/finance/targets</code></td><td>Manager+</td><td>Configurar metas financieras</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/finance/trends</code></td><td>Manager+</td><td>Tendencias de ingresos</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/commissions</code></td><td>Superadmin</td><td>Listar comisiones</td></tr>
+<tr><td><span class="endpoint ep-patch">PATCH</span></td><td><code>/api/commissions/:id/status</code></td><td>Superadmin</td><td>Cambiar estado de comisión</td></tr>
+</tbody>
+</table>
+
+<h2>Pasarela de Pago</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/stripe/create-payment-intent</code></td><td>Crear intención de pago Stripe</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/stripe/create-setup-intent</code></td><td>Guardar tarjeta en Stripe</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/stripe/create-subscription</code></td><td>Crear suscripción Stripe</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/stripe/webhook</code></td><td>Webhook de Stripe</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/payments/paguelofacil/config</code></td><td>Ver config PagueloFacil</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/payments/paguelofacil/config</code></td><td>Guardar config PagueloFacil</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/paguelofacil/create-link</code></td><td>Crear link de pago PagueloFacil</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/paguelofacil/webhook</code></td><td>Webhook PagueloFacil</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/paypal/create-order</code></td><td>Crear orden PayPal</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/paypal/capture-order</code></td><td>Capturar pago PayPal</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/payments/paypal/webhook</code></td><td>Webhook PayPal</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/payment-gateway/:establishmentId</code></td><td>Ver config de pasarela</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/payment-gateway/:establishmentId</code></td><td>Configurar pasarela</td></tr>
+</tbody>
+</table>
+
+<h2>Sistema Billing</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/system-plans</code></td><td>Auth</td><td>Listar planes del sistema</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/establishment-plan</code></td><td>Owner</td><td>Ver plan actual del establecimiento</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/establishment-plan/billing-days</code></td><td>Owner</td><td>Configurar ciclo de facturación</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/system-billing/generate-monthly-bills</code></td><td>Superadmin</td><td>Generar facturas mensuales</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/system-billing/bills</code></td><td>Owner</td><td>Ver facturas del establecimiento</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/system-billing/account-statement</code></td><td>Owner</td><td>Estado de cuenta</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/system-billing/pay</code></td><td>Owner</td><td>Pagar factura</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/system-billing/pending-payments</code></td><td>Superadmin</td><td>Ver pagos pendientes globales</td></tr>
+<tr><td><span class="endpoint ep-patch">PATCH</span></td><td><code>/api/system-billing/confirm-payment/:billId</code></td><td>Superadmin</td><td>Confirmar pago</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/system-billing/overdue-status</code></td><td>Owner</td><td>Verificar morosidad</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/system-billing/send-parent-reminders</code></td><td>Owner</td><td>Enviar recordatorios a padres</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/system-billing/upgrade-request</code></td><td>Owner</td><td>Solicitar upgrade de plan</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/system-billing/upgrade-requests</code></td><td>Superadmin</td><td>Ver solicitudes de upgrade</td></tr>
+<tr><td><span class="endpoint ep-patch">PATCH</span></td><td><code>/api/system-billing/approve-upgrade/:id</code></td><td>Superadmin</td><td>Aprobar/rechazar upgrade</td></tr>
+</tbody>
+</table>
+
+<h2>WhatsApp y Notificaciones</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/whatsapp/config</code></td><td>Manager+</td><td>Ver config de WhatsApp</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/whatsapp/config</code></td><td>Manager+</td><td>Guardar config de WhatsApp</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/whatsapp/send</code></td><td>Notif+</td><td>Enviar mensaje WhatsApp individual</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/whatsapp/send-batch</code></td><td>Notif+</td><td>Enviar WhatsApp en lote</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/notifications</code></td><td>Auth</td><td>Listar notificaciones</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/notifications</code></td><td>Notif+</td><td>Crear notificación</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/notifications/:id/read</code></td><td>Auth</td><td>Marcar notificación como leída</td></tr>
+</tbody>
+</table>
+
+<h2>Marketplace e Inventario</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/marketplace</code></td><td>Auth</td><td>Listar productos</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/marketplace</code></td><td>Manager+</td><td>Publicar producto</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/inventory</code></td><td>Auth</td><td>Ver inventario</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/inventory</code></td><td>Manager+</td><td>Agregar item al inventario</td></tr>
+<tr><td><span class="endpoint ep-patch">PATCH</span></td><td><code>/api/inventory/:id/stock</code></td><td>Manager+</td><td>Ajustar stock</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/inventory/:id/movement</code></td><td>Manager+</td><td>Registrar movimiento</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/inventory/:id/movements</code></td><td>Auth</td><td>Historial de movimientos</td></tr>
+</tbody>
+</table>
+
+<h2>Torneos</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/tournaments</code></td><td>Auth</td><td>Listar torneos</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/tournaments/register</code></td><td>Manager+</td><td>Registrar participante</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/tournaments/result</code></td><td>Manager+</td><td>Registrar resultado</td></tr>
+</tbody>
+</table>
+
+<h2>Teoría</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/theory</code></td><td>Auth</td><td>Consultar preguntas de teoría</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/theory/bank</code></td><td>Manager+</td><td>Ver banco de preguntas</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/theory/bank</code></td><td>Manager+</td><td>Gestionar banco de preguntas</td></tr>
+</tbody>
+</table>
+
+<h2>Portales</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/portal/student</code></td><td>Student</td><td>Portal del alumno</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/portal/guardian</code></td><td>Guardian</td><td>Portal del guardián</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/portal/guardian/link</code></td><td>Manager+</td><td>Vincular guardián a alumno</td></tr>
+</tbody>
+</table>
+
+<h2>Organizaciones</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/organizations</code></td><td>Auth</td><td>Listar organizaciones</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/organizations</code></td><td>Superadmin, Owner, Sensei</td><td>Crear organización</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/organizations/:id/establishments</code></td><td>Superadmin, Owner, Sensei</td><td>Vincular establecimientos</td></tr>
+</tbody>
+</table>
+
+<h2>Uploads e Importación</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/upload/public</code></td><td>Público</td><td>Subir imagen pública</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/upload</code></td><td>Auth</td><td>Subir imagen autenticada</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/import/global-context</code></td><td>Superadmin</td><td>Contexto para importación</td></tr>
+<tr><td><span class="endpoint ep-post">POST</span></td><td><code>/api/import/resolve-students-establishments</code></td><td>Superadmin</td><td>Resolver alumnos en importación</td></tr>
+</tbody>
+</table>
+
+<h2>Configuración</h2>
+<table>
+<thead><tr><th>Método</th><th>Ruta</th><th>Roles</th><th>Descripción</th></tr></thead>
+<tbody>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/settings</code></td><td>Manager+</td><td>Ver configuración del sistema</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/settings</code></td><td>Manager+</td><td>Actualizar configuración</td></tr>
+<tr><td><span class="endpoint ep-get">GET</span></td><td><code>/api/discipline-config</code></td><td>Auth</td><td>Ver configuración de disciplina</td></tr>
+<tr><td><span class="endpoint ep-put">PUT</span></td><td><code>/api/discipline-config</code></td><td>Manager+</td><td>Actualizar tree config de disciplina</td></tr>
+</tbody>
+</table>
+
+<p style="text-align:center;margin-top:40px;color:var(--muted);font-size:12px;">
+  — Fin del Manual de Usuario —<br>
+  MartialSystem v1.0 · Agosto 2026
+</p>
+
+</div><!-- .page -->
+</body>
+</html>

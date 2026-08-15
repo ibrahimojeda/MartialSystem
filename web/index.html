@@ -8,28 +8,28 @@
     @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
 
     :root {
-      --bg: #0f1318;
-      --panel: #171d24;
-      --panel-2: #1d2530;
-      --line: #2b3645;
-      --brand: #c23b2a;
+      --bg: #0b0b0b;
+      --panel: #1a1a1a;
+      --panel-2: #262626;
+      --line: #3a3a3a;
+      --brand: #b03030;
       --brand-2: #c9a227;
-      --accent: #2f6fa3;
-      --text: #eaf0f7;
-      --muted: #aab7c8;
+      --accent: #4a4a4a;
+      --text: #f0f0f0;
+      --muted: #9a9a9a;
       --ok: #2e8b57;
       --warn: #d18a2e;
       --danger: #c94a4a;
-      --shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+      --shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "Manrope", "Segoe UI", sans-serif;
       background:
-        radial-gradient(1200px 600px at -15% -25%, #2c3f64 0%, transparent 56%),
-        radial-gradient(900px 400px at 120% 8%, #4e2f38 0%, transparent 45%),
-        linear-gradient(180deg, #10161d 0%, #0f1318 100%),
+        radial-gradient(1200px 600px at -15% -25%, #3a3030 0%, transparent 56%),
+        radial-gradient(900px 400px at 120% 8%, #4a2020 0%, transparent 45%),
+        linear-gradient(180deg, #131313 0%, #0b0b0b 100%),
         var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -953,9 +953,9 @@
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
   <main class="wrap">
     <section class="hero">
-      <div class="hero-left">
-        <h1>MartialSystem</h1>
-        <p class="muted" style="margin:0;">Panel tactico para dojos multi-disciplina: dashboard, academia, torneos y finanzas.</p>
+      <div class="hero-left" style="display:flex;flex-direction:row;align-items:center;gap:12px;">
+        <img id="system-logo-img" src="/icons/Icon DRK.png" alt="Logo" style="display:block;height:clamp(52px, 9vh, 84px);width:auto;max-width:280px;object-fit:contain;flex-shrink:0;">
+        <span id="system-version" style="font-size:0.8em;font-weight:600;color:var(--brand-2);background:rgba(201,162,39,0.12);border:1px solid rgba(201,162,39,0.35);padding:3px 9px;border-radius:999px;letter-spacing:0.3px;cursor:help;white-space:nowrap;" title="Versión del sistema">v1.1.0</span>
       </div>
       <button class="hamburger-btn" id="hamburger-btn" type="button" aria-label="Menu">☰</button>
       <div class="hero-right">
@@ -1090,7 +1090,12 @@
 
     <!-- â•â•â•â•â•â•â•â•â•â• DASHBOARD OPERACIONAL (ROLE-BASED) â•â•â•â•â•â•â•â•â•â• -->
     <section id="tab-operacion" class="grid hidden">
-      
+
+      <!-- Botón de diagnóstico de carga del Dashboard -->
+      <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-bottom: 2px;">
+        <button class="btn alt" id="btn-dash-trace" type="button" style="padding:6px 12px;font-size:12px;">📊 Ver carga del Dashboard</button>
+      </div>
+
       <!-- 1ï¸âƒ£ DASHBOARD STUDENT/GUARDIAN -->
       <div id="dashboard-student-guardian" class="hidden" style="width: 100%;">
         
@@ -2125,6 +2130,20 @@
         </div>
       </article>
 
+      <article class="card full" id="logo-management-card">
+        <h3>🏷️ Logo del Sistema</h3>
+        <p class="muted">Sube el logo global del sistema. Se mostrará en el encabezado de todas las pantallas. (Solo superadmin)</p>
+        <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;">
+          <input id="logo-file" type="file" accept="image/*" style="max-width:320px;">
+          <button class="btn" id="logo-upload-btn" type="button">Subir logo</button>
+          <button class="btn alt" id="logo-remove-btn" type="button">Quitar logo</button>
+        </div>
+        <div class="muted" id="logo-status" style="font-size:11px;margin-top:6px;">Sin acciones</div>
+        <div style="margin-top:8px;">
+          <img id="logo-preview" src="" alt="Vista previa" style="display:none;max-width:120px;max-height:70px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,0.08);padding:4px;border:1px solid var(--line);">
+        </div>
+      </article>
+
       <article class="card full" id="cfg-data-views-card">
         <h3>Vista Maestra de Datos</h3>
         <div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap;">
@@ -2607,6 +2626,22 @@
       </article>
     </section>
   </main>
+
+  <!-- Panel flotante de diagnóstico de carga del Dashboard -->
+  <div id="dash-trace-panel" style="display:none;position:fixed;top:70px;right:14px;z-index:2000;width:min(480px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+      <strong style="font-size:13px;">📊 Carga del Dashboard (diagnóstico)</strong>
+      <button class="btn alt" id="btn-dash-trace-close" type="button" style="padding:3px 8px;font-size:11px;">✕</button>
+    </div>
+    <div id="dash-trace-log" style="max-height:280px;overflow:auto;">
+      <pre style="margin:0;font-size:11px;white-space:pre-wrap;line-height:1.5;">Presiona "▶ Re-ejecutar dashboard" o recarga (F5). Los fetch a /api/dashboard se registrarán aquí...</pre>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn" id="btn-dash-trace-rerun" type="button" style="padding:5px 10px;font-size:11px;flex:1;">▶ Re-ejecutar dashboard</button>
+      <button class="btn alt" id="btn-dash-trace-clear" type="button" style="padding:5px 10px;font-size:11px;flex:1;">🗑 Limpiar</button>
+    </div>
+  </div>
+
   <div class="drawer-overlay" id="drawer-overlay"></div>
   <script>
     const ids = id => document.getElementById(id);
@@ -2641,12 +2676,25 @@
       }
     })();
 
+    // Logo claro (Ultra Clean) / Logo oscuro (Dojo Competitiva)
+    const LOGO_LIGHT = '/icons/ICON BL.png';
+    const LOGO_DARK = '/icons/Icon DRK.png';
+
+    function applyLogoForTheme() {
+      const img = ids('system-logo-img');
+      if (!img) return;
+      const isClean = document.body.classList.contains('theme-clean');
+      img.src = isClean ? LOGO_LIGHT : LOGO_DARK;
+      img.style.display = 'block';
+    }
+
     function setUiTheme(mode) {
       const isClean = mode === 'clean';
       document.body.classList.toggle('theme-clean', isClean);
       ids('ui-clean-btn')?.classList.toggle('active', isClean);
       ids('ui-dojo-btn')?.classList.toggle('active', !isClean);
       applyDashboardCopy(isClean ? 'clean' : 'dojo');
+      applyLogoForTheme();
       try { localStorage.setItem('martialsystem-ui-theme', isClean ? 'clean' : 'dojo'); } catch (_) {}
     }
 
@@ -2750,16 +2798,203 @@
       marketplacePanelMode: 'catalog'
     };
 
+    // ─── DIAGNÓSTICO DE CARGA DEL DASHBOARD ─────────────────────────────
+    // Registra en una caja flotante cada fetch a /api/dashboard con su
+    // token, status HTTP, ok, datos devueltos o error. Solo aplica al tab Dashboard.
+    window.__dashTrace = [];
+    function summarizeData(d) {
+      if (d === null || d === undefined) return 'null';
+      if (Array.isArray(d)) return 'Array[' + d.length + ']';
+      if (typeof d === 'object') {
+        const out = {};
+        Object.keys(d).forEach(k => {
+          const v = d[k];
+          if (v && typeof v === 'object') out[k] = Array.isArray(v) ? '[...' + v.length + ']' : '{...}';
+          else out[k] = v;
+        });
+        return JSON.stringify(out);
+      }
+      return String(d);
+    }
+    // Escanear las tarjetas visibles del Dashboard (según rol) y su estado de carga
+    function scanVisibleDashboardCards() {
+      const containers = ['dashboard-superadmin', 'dashboard-student-guardian', 'dashboard-sensei', 'dashboard-admin-controls'];
+      const cards = [];
+      containers.forEach(cid => {
+        const cont = ids(cid);
+        if (!cont || cont.classList.contains('hidden')) return;
+        cont.querySelectorAll('article.card').forEach(card => {
+          // En owner, ignorar la cáscara genérica que se sustituye por "Dashboard del Dojo"
+          if (cid === 'dashboard-admin-controls' && !card.querySelector('#owner-kpi-students') && !card.querySelector('#owner-disc-list')) return;
+          const titleEl = card.querySelector('h3, h4');
+          const label = titleEl ? titleEl.textContent.trim() : '(tarjeta sin título)';
+          const txt = (card.textContent || '').replace(/\s+/g, ' ').trim();
+          const loading = txt.includes('Cargando...') || txt.includes('…');
+          const hasDash = /—/.test(txt);
+          let status = '✅ OK';
+          if (loading) status = '⏳ CARGANDO';
+          else if (hasDash || txt.length < 3) status = '⚠️ VACÍO';
+          cards.push({ label, status, preview: txt.slice(0, 48) });
+        });
+      });
+      return cards;
+    }
+
+    function renderDashTrace() {
+      const box = ids('dash-trace-log');
+      if (!box) return;
+      const cards = scanVisibleDashboardCards();
+      let html = '';
+      if (cards.length) {
+        html += '<div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--line);">';
+        html += '<div style="font-size:11px;font-weight:700;margin-bottom:4px;">🎴 Tarjetas visibles según tu rol (' + cards.length + ')</div>';
+        cards.forEach(c => {
+          const color = c.status.indexOf('CARGANDO') !== -1 ? '#ffd39f' : (c.status.indexOf('VACÍO') !== -1 ? '#ff8a8a' : '#84f0be');
+          html += '<div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;padding:2px 0;">';
+          html += '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + c.label + '</span>';
+          html += '<span style="color:' + color + ';font-weight:700;white-space:nowrap;">' + c.status + '</span>';
+          html += '</div>';
+          // Mostrar preview del contenido de la tarjeta
+          if (c.preview) {
+            html += '<div style="font-size:10px;color:var(--muted);padding:0 0 2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + c.preview + '</div>';
+          }
+        });
+        html += '</div>';
+      }
+      const lines = window.__dashTrace.length
+        ? window.__dashTrace.join('\n\n')
+        : 'Sin actividad todavía. Haz clic en "▶ Re-ejecutar dashboard" para cargar.';
+      html += '<pre style="margin:0;font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;line-height:1.5;">' + lines.replace(/&/g,'&').replace(/</g,'<') + '</pre>';
+      box.innerHTML = html;
+    }
+    // Refresca el reporte de tarjetas del panel de diagnóstico
+    function refreshDashCardsReport() {
+      renderDashTrace();
+    }
+    function dashTracePush(line) {
+      window.__dashTrace.push(line);
+      if (window.__dashTrace.length > 60) window.__dashTrace.shift();
+      renderDashTrace();
+    }
+    function openDashTracePanel() {
+      const panel = ids('dash-trace-panel');
+      if (!panel) return;
+      panel.style.display = 'block';
+      renderDashTrace();
+    }
+    function closeDashTracePanel() {
+      const panel = ids('dash-trace-panel');
+      if (panel) panel.style.display = 'none';
+    }
+
+    // Interceptar fetch para registrar las llamadas al dashboard
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = async function (input, init) {
+      const url = typeof input === 'string' ? input
+        : (input && input.url ? input.url : String(input));
+      if (url.indexOf('/api/dashboard/') !== -1) {
+        const h = (init && init.headers) || {};
+        const auth = (h && h.Authorization) || (h && h.authorization) || '';
+        const tokenSlice = String(state.accessToken || '').slice(0, 10);
+        const tokenInfo = state.accessToken
+          ? ('token: OK (' + tokenSlice + '…)')
+          : 'token: ⚠️ VACÍO';
+        dashTracePush('▶ SOLICITANDO\n   ' + url + '\n   ' + tokenInfo + '\n   ' + new Date().toLocaleTimeString());
+        try {
+          const res = await _origFetch(input, init);
+          let body = null, parseError = null, summary = '';
+          try { body = await res.clone().json(); } catch (e) { parseError = e.message; }
+          if (body && body.ok && body.data) summary = summarizeData(body.data);
+          else if (body) summary = JSON.stringify(body).slice(0, 220);
+          const okText = body ? String(body.ok) : '(no ok field)';
+          dashTracePush('✓ RESPUESTA\n   HTTP ' + res.status + ' | ok: ' + okText +
+            (body && body.error ? '\n   error: ' + body.error : '') +
+            (parseError ? '\n   parse: ' + parseError : '') +
+            (summary ? '\n   data: ' + summary : ''));
+          return res;
+        } catch (err) {
+          dashTracePush('✖ FALLO DE RED\n   ' + url + '\n   ' + err.message + '\n   ' + new Date().toLocaleTimeString());
+          throw err;
+        }
+      }
+      return _origFetch(input, init);
+    };
+
+    // Botones del panel de diagnóstico
+    ids('btn-dash-trace')?.addEventListener('click', openDashTracePanel);
+    ids('btn-dash-trace-close')?.addEventListener('click', closeDashTracePanel);
+    ids('btn-dash-trace-clear')?.addEventListener('click', () => {
+      window.__dashTrace = [];
+      renderDashTrace();
+    });
+    ids('btn-dash-trace-rerun')?.addEventListener('click', () => {
+      dashTracePush('▶ Re-ejecutando dashboard (' + new Date().toLocaleTimeString() + ')');
+      showOperacionDashboard();
+    });
+
     // ─── Session persistence: restore token from localStorage ───────────
     try {
       const savedToken = localStorage.getItem('ms_token');
-      if (savedToken) {
-        state.accessToken = savedToken;
-        // Auto-restore session: refresh profile, memberships, and show dashboard
-        (async () => {
+      const savedRefreshToken = localStorage.getItem('ms_refresh_token');
+      // Auto-restore session using the Supabase client session (which persists + auto-refreshes)
+      (async () => {
+        let ok = false;
+        try {
+          const sb = window.MartialSupabase;
+          // 1) Usar la sesión del cliente Supabase (restáurala y deja que auto-refresque)
+          const restored = sb ? await sb.auth.refreshSession({ refresh_token: savedRefreshToken }).catch(() => ({ data: { session: null } })) : { data: { session: null } };
+          const activeSession = restored?.data?.session;
+          if (activeSession?.access_token) {
+            state.accessToken = activeSession.access_token;
+            if (activeSession.refresh_token) {
+              try { localStorage.setItem('ms_refresh_token', activeSession.refresh_token); } catch (_) {}
+            }
+            try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
+            try { await refreshMe(); ok = true; } catch (_) {}
+          }
+        } catch (_) { /* sin sesión supabase */ }
+
+        if (!ok && savedToken) {
+          state.accessToken = savedToken;
           try {
             await refreshMe();
-            setAuthenticated(true);
+            ok = true;
+          } catch (e) {
+            const msg = String(e && e.message || e || '').toLowerCase();
+            const isAuthError = /401|unauthorized|invalid|expired/i.test(msg);
+
+            // Si el access_token expiró y tenemos refresh_token, renovar realmente vía Supabase
+            if (isAuthError && savedRefreshToken) {
+              try {
+                const sb = window.MartialSupabase;
+                if (sb) {
+                  const { data: sessionData } = await sb.auth.refreshSession({ refresh_token: savedRefreshToken });
+                  const newAccessToken = sessionData?.session?.access_token;
+                  const newRefreshToken = sessionData?.session?.refresh_token;
+                  if (newAccessToken) {
+                    state.accessToken = newAccessToken;
+                    try { localStorage.setItem('ms_token', newAccessToken); } catch (_) {}
+                    if (newRefreshToken) {
+                      try { localStorage.setItem('ms_refresh_token', newRefreshToken); } catch (_) {}
+                    }
+                    await refreshMe();
+                    ok = true;
+                  }
+                }
+              } catch (_) { /* no se pudo renovar */ }
+            }
+
+            // Último recurso: consultar Supabase directo (solo si aún no se validó)
+            if (!ok) {
+              try { await refreshMeDirect(); ok = true; } catch (_) { /* fallthrough */ }
+            }
+          }
+        }
+        if (ok) {
+          setAuthenticated(true);
+          try {
+            updateUserInfo();
+            loadTheoryDisciplines();
             const allowed = allowedModulesForCurrentEstablishment();
             showTab(allowed[0] || 'operacion');
             const treeSelect = ids('tree-establishment');
@@ -2767,13 +3002,16 @@
               treeSelect.dispatchEvent(new Event('change'));
             }
           } catch (_) {
-            // Token expired or invalid → clear it
-            try { localStorage.removeItem('ms_token'); } catch (_) {}
-            state.accessToken = '';
-            setAuthenticated(false);
+            // Aunque un render del dashboard falle, la sesión se mantiene
           }
-        })();
-      }
+        } else {
+          // Solo cerrar sesión si el token realmente no es válido
+          try { localStorage.removeItem('ms_token'); } catch (_) {}
+          try { localStorage.removeItem('ms_refresh_token'); } catch (_) {}
+          state.accessToken = '';
+          setAuthenticated(false);
+        }
+      })();
     } catch (_) {}
 
     try {
@@ -2902,6 +3140,32 @@
         const et = ids('kpi-estabs-total'); const es = ids('kpi-estabs-sub');
         if (et) et.textContent = d.establishments.total;
         if (es) es.textContent = 'Activos: ' + d.establishments.active + ' | Inactivos: ' + d.establishments.inactive;
+        // KPI: Usuarios totales
+        const ut = ids('kpi-users-total'); const us = ids('kpi-users-sub');
+        if (ut) ut.textContent = d.users?.total ?? 0;
+        if (us) {
+          const byRole = d.users?.byRole || {};
+          const roleLabels = { owner: 'Owners', sensei: 'Senseis', admin: 'Admins', instructor: 'Instructores', guardian: 'Tutores', student: 'Alumnos' };
+          const parts = Object.entries(byRole).slice(0, 3).map(([r, c]) => (roleLabels[r] || r) + ': ' + c).join(' | ');
+          us.textContent = parts || 'Sin datos';
+        }
+        // KPI: Alumnos totales
+        const atK = ids('kpi-students-total'); const ats = ids('kpi-students-sub');
+        if (atK) atK.textContent = d.students?.total ?? 0;
+        if (ats) ats.textContent = 'Alumnos registrados';
+        // KPI: Disciplinas activas
+        const dt = ids('kpi-disciplines-total'); const ds = ids('kpi-disciplines-sub');
+        if (dt) dt.textContent = d.disciplines?.total ?? 0;
+        if (ds) ds.textContent = 'Disciplinas activas en el sistema';
+        // KPI: Miembros por rol (resumen)
+        const mt = ids('kpi-memberships-total'); const ms = ids('kpi-memberships-sub');
+        if (mt) mt.textContent = d.users?.total ?? 0;
+        if (ms) {
+          const byRole = d.users?.byRole || {};
+          const roleLabels = { owner: 'Owners', sensei: 'Senseis', admin: 'Admins', instructor: 'Instructores', guardian: 'Tutores', student: 'Alumnos' };
+          const parts = Object.entries(byRole).slice(0, 3).map(([r, c]) => (roleLabels[r] || r) + ': ' + c).join(' | ');
+          ms.textContent = parts || 'Sin datos';
+        }
         // KPI: Ingresos semana - hide if no payment data
         const it = ids('kpi-ingresos-total');
         if (it) {
@@ -2936,6 +3200,7 @@
           } else { txEl.innerHTML = '<span class="muted" style="font-size:12px;">No hay transacciones registradas</span>'; }
         }
       } catch (err) { console.warn('Dashboard stats error:', err.message); }
+      setTimeout(refreshDashCardsReport, 50);
     }
 
     async function loadStudentDashboard() {
@@ -3061,6 +3326,7 @@
       } catch (err) {
         console.warn('Student dashboard error:', err.message);
       }
+      setTimeout(refreshDashCardsReport, 50);
     }
 
     async function loadSenseiDashboard() {
@@ -3183,6 +3449,7 @@
       } catch (err) {
         console.warn('Sensei dashboard error:', err.message);
       }
+      setTimeout(refreshDashCardsReport, 50);
     }
 
     async function loadOwnerDashboard() {
@@ -3367,6 +3634,7 @@
       try {
         await loadComisionesOwner(establishmentId, adminCard);
       } catch (err) { console.warn('Owner comisiones error:', err.message); }
+      setTimeout(refreshDashCardsReport, 80);
     }
 
     // Load comisiones/plan info for owner - shows plan card on owner dashboard
@@ -5406,8 +5674,8 @@
       syncTopTabsVisibility();
       setMarketplaceMode(state.marketplacePanelMode);
       renderAllDisciplineSelects();
-      await renderAcademicScopeFilters();
-      await loadPeopleSelectorsForStudents();
+      // Paralelizar las llamadas de red para acelerar el login/dashboard
+      await Promise.allSettled([renderAcademicScopeFilters(), loadPeopleSelectorsForStudents()]);
       const role = currentMembershipRole();
       const hint = ids('academic-scope-hint');
       if (hint) {
@@ -5425,8 +5693,19 @@
       if (!sb) throw new Error('Supabase no inicializado');
 
       const { data: sessionData } = await sb.auth.getSession();
-      const user = sessionData?.session?.user;
+      const session = sessionData?.session;
+      const user = session?.user;
       if (!user) throw new Error('No hay sesión activa');
+
+      // Sincronizar el access_token fresco que supabase-js auto-renovó en su storage,
+      // para que los fetch al servidor usen un token válido (evita 401 → "Cargando...").
+      if (session?.access_token) {
+        state.accessToken = session.access_token;
+        if (session.refresh_token) {
+          try { localStorage.setItem('ms_refresh_token', session.refresh_token); } catch (_) {}
+        }
+        try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
+      }
 
       // Obtener perfil
       const { data: profile, error: profileError } = await sb
@@ -5674,11 +5953,21 @@
       try {
         let result;
 
-        // Si NO hay servidor configurado, usar Supabase directo
-        if (!serverUrl && window.MartialSupabaseAPI) {
+        // Modo definitivo: en web (sin Capacitor) siempre usar el servidor Express.
+        // Solo usar Supabase directo en APK (Capacitor).
+        const isCapacitor = !!(window.Capacitor && window.Capacitor.Plugins);
+        if (!isCapacitor) {
+          // Modo web: usar servidor Express (siempre disponible en localhost:8010)
+          result = await api('/api/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+          });
+          result = result.data;
+        } else if (window.MartialSupabaseAPI) {
+          // Modo APK: usar Supabase directo
           result = await window.MartialSupabaseAPI.login(username, password);
         } else {
-          // Modo servidor (híbrido o web)
+          // Fallback: usar servidor
           result = await api('/api/login', {
             method: 'POST',
             body: JSON.stringify({ username, password })
@@ -5688,16 +5977,28 @@
 
         state.accessToken = result.access_token;
         try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
+        // Guardar refresh_token para poder renovar la sesión si expira
+        if (result.refresh_token) {
+          try { localStorage.setItem('ms_refresh_token', result.refresh_token); } catch (_) {}
+        }
+        // También registrar la sesión en el cliente Supabase del navegador para auto-refresh
+        try {
+          const sb = window.MartialSupabase;
+          if (sb && result.refresh_token) {
+            sb.auth.setSession({ access_token: state.accessToken, refresh_token: result.refresh_token }).catch(() => {});
+          }
+        } catch (_) {}
         ids('login-output').textContent = JSON.stringify({ ok: true, user: result.user }, null, 2);
 
         // Cargar perfil y membresías
-        if (!serverUrl && window.MartialSupabaseAPI) {
+        if (isCapacitor && window.MartialSupabaseAPI) {
           await refreshMeDirect();
         } else {
           await refreshMe();
         }
 
-        await loadTheoryDisciplines();
+        // No bloquear el login esperando el banco teórico; se carga en segundo plano
+        loadTheoryDisciplines();
         setAuthenticated(true);
         updateUserInfo();
         const allowed = allowedModulesForCurrentEstablishment();
@@ -10260,6 +10561,129 @@
         ids('organigram-output').textContent = err.message;
       }
     });
+
+    // ─── SYSTEM VERSION (carga la versión y muestra el changelog) ─────
+    // Verificador de versión: carga version.json y permite ver el changelog.
+    async function loadSystemVersion() {
+      const verEl = ids('system-version');
+      try {
+        const res = await fetch('/version.json', { cache: 'no-store' });
+        const json = await res.json();
+        const v = json?.version || '1.0.0';
+        const changelog = Array.isArray(json?.changelog) ? json.changelog : [];
+        if (verEl) {
+          verEl.textContent = 'v' + v;
+          verEl.title = 'Versión del sistema\n\n' + changelog.map(c => '• ' + c).join('\n');
+        }
+        // Guardar changelog para el modal
+        window.__systemChangelog = changelog;
+        window.__systemVersion = v;
+      } catch (_) {
+        // Si falla, mantener el valor por defecto del HTML
+        if (verEl) verEl.textContent = verEl.textContent || 'v1.1.0';
+      }
+    }
+
+    // Click en la versión → muestra ventana con el changelog (lo que llevamos)
+    ids('system-version')?.addEventListener('click', () => {
+      const changelog = window.__systemChangelog || [];
+      const version = window.__systemVersion || (ids('system-version')?.textContent || 'v1.1.0');
+      const existing = ids('version-modal');
+      if (existing) existing.remove();
+      const modal = document.createElement('div');
+      modal.id = 'version-modal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:16px;';
+      modal.innerHTML = `
+        <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="margin:0;">📦 Versión del Sistema</h3>
+            <button class="btn alt" onclick="this.closest('#version-modal').remove()" type="button" style="padding:4px 10px;font-size:12px;">Cerrar</button>
+          </div>
+          <div style="font-size:1.2rem;font-weight:800;color:var(--brand-2);margin-bottom:12px;">Versión ${version}</div>
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">📋 Lo que llevamos (changelog)</h4>
+          ${changelog.length ? '<ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">' + changelog.map(c => '<li>' + c + '</li>').join('') + '</ul>' : '<p class="muted" style="font-size:13px;">Sin registros de cambios para esta versión.</p>'}
+        </div>
+      `;
+      document.body.appendChild(modal);
+    });
+
+    // ─── SYSTEM LOGO (carga y muestra el logo del sistema) ────────────
+    // Si hay logo personalizado usarlo; si no, usar el logo claro/oscuro según el tema.
+    async function loadSystemLogo() {
+      const img = ids('system-logo-img');
+      try {
+        const res = await fetch('/api/logo');
+        const json = await res.json();
+        const logoUrl = json?.data?.logoUrl || '';
+        if (img) {
+          if (logoUrl) {
+            img.src = logoUrl;
+            img.style.display = 'block';
+          } else {
+            applyLogoForTheme();
+          }
+        }
+      } catch (_) {
+        if (img) applyLogoForTheme();
+      }
+    }
+
+    // ─── Upload system logo (superadmin) ───────────────────────────────
+    async function uploadSystemLogo(file) {
+      if (!file) throw new Error('Selecciona un archivo de imagen primero');
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/logo', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + state.accessToken },
+        body: fd
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `Error HTTP ${res.status}`);
+      return data.data;
+    }
+
+    async function removeSystemLogo() {
+      const res = await fetch('/api/logo', {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + state.accessToken }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `Error HTTP ${res.status}`);
+      return data.data;
+    }
+
+    // Bind logo upload UI (if exists)
+    ids('logo-upload-btn')?.addEventListener('click', async () => {
+      const input = ids('logo-file');
+      if (!input || !input.files || !input.files[0]) {
+        ids('logo-status').textContent = 'Selecciona un archivo de imagen primero';
+        return;
+      }
+      try {
+        ids('logo-status').textContent = 'Subiendo...';
+        await uploadSystemLogo(input.files[0]);
+        ids('logo-status').textContent = 'Logo actualizado';
+        await loadSystemLogo();
+        input.value = '';
+      } catch (err) {
+        ids('logo-status').textContent = err.message;
+      }
+    });
+    ids('logo-remove-btn')?.addEventListener('click', async () => {
+      try {
+        ids('logo-status').textContent = 'Eliminando...';
+        await removeSystemLogo();
+        ids('logo-status').textContent = 'Logo eliminado';
+        await loadSystemLogo();
+      } catch (err) {
+        ids('logo-status').textContent = err.message;
+      }
+    });
+
+    // Load system logo and version on startup
+    loadSystemLogo();
+    loadSystemVersion();
 
     loadDebug();
   </script>

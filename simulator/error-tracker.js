@@ -139,6 +139,7 @@ class ErrorTracker {
       endpointStats: { ...this.endpointStats },
       errorsByType: { ...this.errorsByType },
       errors: [...this.errors],
+      operations: [...this.operations],
       lastErrors: this.errors.slice(-20),
       healthStatus: this._getHealthStatus()
     };

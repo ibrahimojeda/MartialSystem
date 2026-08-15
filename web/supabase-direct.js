@@ -44,14 +44,31 @@
     const sb = window.MartialSupabase || await initSupabase();
     const normalizedUsername = String(username || '').trim().toLowerCase();
 
-    // Usar RPC (función SQL con SECURITY DEFINER) para obtener el email interno
+    // Estrategia 1: Usar RPC (función SQL con SECURITY DEFINER) para obtener el email interno
     // Esto bypassea RLS durante el login
     const { data: authEmail, error: rpcError } = await sb
       .rpc('get_auth_email_for_login', { username_param: normalizedUsername });
 
     if (rpcError || !authEmail) {
-      console.error('[SupabaseDirect] RPC error:', rpcError);
-      throw new Error('Usuario no encontrado');
+      console.warn('[SupabaseDirect] RPC no disponible, intentando fallback al servidor...', rpcError?.message || '');
+      
+      // Estrategia 2 (fallback): Usar el servidor Express si está disponible
+      // Esto permite login en modo web sin depender de la función RPC
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: normalizedUsername, password })
+        });
+        const json = await res.json();
+        if (json.ok && json.data?.access_token) {
+          return json.data;
+        }
+        throw new Error(json.error || 'Credenciales inválidas');
+      } catch (serverErr) {
+        console.warn('[SupabaseDirect] Fallback al servidor falló:', serverErr.message);
+        throw new Error('Usuario no encontrado');
+      }
     }
 
     // Login con Supabase Auth usando el email interno

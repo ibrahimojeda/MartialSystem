@@ -32,6 +32,7 @@
   <button class="tab-btn" data-tab="maintenance">🔄 Mantenimiento</button>
   <button class="tab-btn" data-tab="cleanup">🗑️ Limpieza</button>
   <button class="tab-btn" data-tab="history">📊 Historial & Reportes</button>
+  <button class="tab-btn" data-tab="roleaudit">🔍 Auditor de Roles</button>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -296,6 +297,79 @@
       <button class="btn btn-brand" id="btn-history-export-pdf">📑 Exportar Reporte General PDF</button>
       <button class="btn btn-accent" id="btn-history-export-csv">📄 Exportar CSV</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     TAB 5: AUDITOR DE ROLES
+     ══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-roleaudit">
+  <!-- KPIs -->
+  <div class="grid grid-4" style="margin-bottom:14px;" id="role-audit-kpis">
+    <div class="kpi-tile"><div class="kpi-label">Score de Salud</div><div class="kpi-value ok" id="ra-health">--</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Checks Totales</div><div class="kpi-value" id="ra-total">--</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Pasados</div><div class="kpi-value ok" id="ra-passed">--</div></div>
+    <div class="kpi-tile"><div class="kpi-label">Fallos / Críticos</div><div class="kpi-value danger" id="ra-failed">--</div></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card" style="margin-bottom:14px;">
+    <h3>🔍 Parámetros de Auditoría</h3>
+    <div class="grid grid-3">
+      <div class="form-group">
+        <label>Establecimiento (dejar vacío = todos)</label>
+        <input type="text" id="ra-estId" placeholder="UUID del establecimiento">
+      </div>
+      <div class="form-group">
+        <label>Modo</label>
+        <select id="ra-mode">
+          <option value="full" selected>Completo (Cobertura + Endpoints + Scope)</option>
+          <option value="endpoints">Solo Acceso a Endpoints</option>
+          <option value="scope">Solo Scope de Datos</option>
+          <option value="coverage">Solo Cobertura de Roles</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button class="btn btn-brand" id="btn-ra-run">▶️ Ejecutar Auditoría</button>
+      </div>
+    </div>
+    <div id="ra-status" style="font-size:13px;color:var(--muted);margin-top:8px;">Listo para auditar</div>
+  </div>
+
+  <!-- Summary -->
+  <div class="card" style="margin-bottom:14px;" id="ra-summary-card" style="display:none;">
+    <h3>📊 Resumen de Auditoría de Roles</h3>
+    <div id="ra-summary"></div>
+  </div>
+
+  <!-- Findings by category -->
+  <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="card">
+      <h3>👥 Cobertura de Roles por Establecimiento</h3>
+      <div id="ra-coverage" style="font-size:13px;color:var(--muted);">Ejecuta una auditoría para ver resultados</div>
+    </div>
+    <div class="card">
+      <h3>🌐 Acceso a Endpoints por Rol</h3>
+      <div id="ra-endpoints" style="font-size:13px;color:var(--muted);">Ejecuta una auditoría para ver resultados</div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-bottom:14px;">
+    <div class="card">
+      <h3>🎯 Scope de Datos</h3>
+      <div id="ra-scope" style="font-size:13px;color:var(--muted);">Ejecuta una auditoría para ver resultados</div>
+    </div>
+    <div class="card">
+      <h3>🖥️ Frontend vs Backend</h3>
+      <div id="ra-fe-be" style="font-size:13px;color:var(--muted);">Ejecuta una auditoría para ver resultados</div>
+    </div>
+  </div>
+
+  <!-- All Findings Table -->
+  <div class="card">
+    <h3>📋 Todos los Hallazgos</h3>
+    <div id="ra-all-findings" style="font-size:13px;color:var(--muted);">Ejecuta una auditoría para ver hallazgos</div>
   </div>
 </div>
 

@@ -27,6 +27,20 @@ const loadTheoryFromFile = (discipline, style) => {
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+
+// Headers de no-cache para HTML y SW (forzar versión nueva en navegador)
+app.use((req, res, next) => {
+  const ext = require('path').extname(req.path).toLowerCase();
+  if (req.path === '/' || req.path.endsWith('.html') || req.path.endsWith('sw.js')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  } else if (['.js', '.css', '.json'].includes(ext)) {
+    res.setHeader('Cache-Control', 'no-cache');
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, '..', 'web')));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'data', 'uploads')));
 
@@ -127,6 +141,16 @@ const sanitizeModuleList = (modules) => {
   return unique.filter(key => MODULE_KEYS.includes(key));
 };
 
+const SUPABASE_STORE_ENABLED = true;
+
+// Helper: async write to Supabase table with JSON fallback
+const supabaseUpsert = async (table, rows, onConflict) => {
+  if (!SUPABASE_STORE_ENABLED) return;
+  try {
+    await supabaseAdmin.from(table).upsert(rows, { onConflict });
+  } catch (_) { /* fallback to JSON */ }
+};
+
 const getRoleModulesByEstablishment = (establishmentId, role) => {
   const store = readJsonStore(modulePermissionsPath, {});
   const est = store[String(establishmentId)] || {};
@@ -135,21 +159,32 @@ const getRoleModulesByEstablishment = (establishmentId, role) => {
   return [...(DEFAULT_ROLE_MODULES[role] || DEFAULT_ROLE_MODULES[ROLE_STUDENT])];
 };
 
-const updateRoleModulesByEstablishment = (establishmentId, role, modules) => {
+const updateRoleModulesByEstablishment = async (establishmentId, role, modules) => {
   const store = readJsonStore(modulePermissionsPath, {});
   const estKey = String(establishmentId);
   store[estKey] = store[estKey] || {};
   store[estKey][String(role || '').toLowerCase()] = sanitizeModuleList(modules);
   writeJsonStore(modulePermissionsPath, store);
+  // Sync to Supabase
+  await supabaseUpsert('module_permissions', {
+    establishment_id: establishmentId,
+    role: String(role || '').toLowerCase(),
+    modules: sanitizeModuleList(modules)
+  }, 'establishment_id,role').catch(() => {});
   return store[estKey][String(role || '').toLowerCase()];
 };
 
-const setSenseiForInstructor = (establishmentId, instructorProfileId, senseiProfileId) => {
+const setSenseiForInstructor = async (establishmentId, instructorProfileId, senseiProfileId) => {
   const store = readJsonStore(senseiInstructorPath, {});
   const estKey = String(establishmentId);
   store[estKey] = store[estKey] || {};
   store[estKey][String(instructorProfileId)] = String(senseiProfileId || '');
   writeJsonStore(senseiInstructorPath, store);
+  await supabaseUpsert('sensei_instructors', {
+    establishment_id: establishmentId,
+    instructor_profile_id: instructorProfileId,
+    sensei_profile_id: senseiProfileId || null
+  }, 'establishment_id,instructor_profile_id').catch(() => {});
 };
 
 const getSenseiForInstructor = (establishmentId, instructorProfileId) => {
@@ -158,12 +193,23 @@ const getSenseiForInstructor = (establishmentId, instructorProfileId) => {
   return est[String(instructorProfileId)] || null;
 };
 
-const upsertStudentInstructorLinks = (establishmentId, studentId, instructorIds) => {
+const upsertStudentInstructorLinks = async (establishmentId, studentId, instructorIds) => {
   const store = readJsonStore(studentInstructorPath, {});
   const estKey = String(establishmentId);
   store[estKey] = store[estKey] || {};
   store[estKey][String(studentId)] = [...new Set((instructorIds || []).map(String).filter(Boolean))];
   writeJsonStore(studentInstructorPath, store);
+  // Sync to Supabase
+  try {
+    await supabaseAdmin.from('student_instructors').delete().eq('establishment_id', establishmentId).eq('student_id', studentId);
+    for (const instId of (instructorIds || [])) {
+      await supabaseUpsert('student_instructors', {
+        establishment_id: establishmentId,
+        student_id: studentId,
+        instructor_profile_id: instId
+      }, 'establishment_id,student_id,instructor_profile_id').catch(() => {});
+    }
+  } catch (_) {}
 };
 
 const getStudentInstructorLinks = (establishmentId, studentId) => {
@@ -173,12 +219,17 @@ const getStudentInstructorLinks = (establishmentId, studentId) => {
   return Array.isArray(links) ? links.map(String) : [];
 };
 
-const setStudentPhoto = (establishmentId, studentId, photoUrl) => {
+const setStudentPhoto = async (establishmentId, studentId, photoUrl) => {
   const store = readJsonStore(studentPhotosPath, {});
   const estKey = String(establishmentId);
   store[estKey] = store[estKey] || {};
   store[estKey][String(studentId)] = String(photoUrl || '').trim();
   writeJsonStore(studentPhotosPath, store);
+  await supabaseUpsert('student_photos', {
+    establishment_id: establishmentId,
+    student_id: studentId,
+    photo_url: photoUrl ? String(photoUrl).trim() : null
+  }, 'establishment_id,student_id').catch(() => {});
 };
 
 const getStudentPhoto = (establishmentId, studentId) => {
@@ -196,12 +247,17 @@ const getExpectedFeeForDiscipline = (establishmentId, disciplineCode) => {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_EXPECTED_FEE;
 };
 
-const setExpectedFeeForDiscipline = (establishmentId, disciplineCode, expectedFee) => {
+const setExpectedFeeForDiscipline = async (establishmentId, disciplineCode, expectedFee) => {
   const store = readJsonStore(financeTargetsPath, {});
   const estKey = String(establishmentId);
   store[estKey] = store[estKey] || {};
   store[estKey][String(disciplineCode || '').toLowerCase()] = Number(expectedFee);
   writeJsonStore(financeTargetsPath, store);
+  await supabaseUpsert('finance_targets', {
+    establishment_id: establishmentId,
+    discipline_code: String(disciplineCode || '').toLowerCase(),
+    expected_fee: Number(expectedFee)
+  }, 'establishment_id,discipline_code').catch(() => {});
   return store[estKey][String(disciplineCode || '').toLowerCase()];
 };
 
@@ -225,8 +281,30 @@ const getAppSettings = () => {
   return data && typeof data === 'object' ? data : {};
 };
 
-const saveAppSettings = (store) => {
+const saveAppSettings = async (store) => {
   writeJsonStore(appSettingsPath, store || {});
+  // Sync to Supabase app_settings table (best-effort, non-blocking)
+  try {
+    // Sync __system__ (logo) if present
+    if (store && store[SYSTEM_SETTINGS_KEY] !== undefined) {
+      await supabaseAdmin.from('app_settings').upsert({
+        establishment_id: null,
+        settings_key: SYSTEM_SETTINGS_KEY,
+        settings_value: store[SYSTEM_SETTINGS_KEY] || {}
+      }, { onConflict: 'establishment_id,settings_key' });
+    }
+    // Sync per-establishment settings (beltColors, monthlyFees)
+    Object.entries(store || {}).forEach(([estId, estSettings]) => {
+      if (estId === SYSTEM_SETTINGS_KEY || !estSettings || typeof estSettings !== 'object') return;
+      if (estSettings.beltColors || estSettings.monthlyFees) {
+        supabaseAdmin.from('app_settings').upsert({
+          establishment_id: estId,
+          settings_key: 'settings',
+          settings_value: estSettings
+        }, { onConflict: 'establishment_id,settings_key' }).catch(() => {});
+      }
+    });
+  } catch (_) { /* fallback to JSON */ }
 };
 
 const getAbsenceStore = () => {
@@ -234,8 +312,24 @@ const getAbsenceStore = () => {
   return data && typeof data === 'object' ? data : {};
 };
 
-const saveAbsenceStore = (store) => {
+const saveAbsenceStore = async (store) => {
   writeJsonStore(absencesPath, store || {});
+  // Sync to Supabase absences table (best-effort)
+  try {
+    for (const [estId, rows] of Object.entries(store || {})) {
+      if (!Array.isArray(rows)) continue;
+      for (const row of rows) {
+        await supabaseUpsert('absences', {
+          establishment_id: estId,
+          student_id: row.studentId || null,
+          absence_date: row.date || null,
+          reason: row.reason || null,
+          document_url: row.documentUrl || null,
+          created_by: row.createdBy || null
+        }, 'establishment_id,student_id,absence_date,reason').catch(() => {});
+      }
+    }
+  } catch (_) { /* fallback to JSON */ }
 };
 
 const getMarketplaceImageStore = () => {
@@ -247,10 +341,17 @@ const saveMarketplaceImageStore = (store) => {
   writeJsonStore(marketplaceImagesPath, store || {});
 };
 
-const setMarketplaceImage = (itemId, imageUrl) => {
+const setMarketplaceImage = async (itemId, imageUrl) => {
   const store = getMarketplaceImageStore();
   store[String(itemId)] = String(imageUrl || '').trim();
   saveMarketplaceImageStore(store);
+  // Sync to Supabase marketplace_images table (best-effort)
+  try {
+    await supabaseUpsert('marketplace_images', {
+      marketplace_item_id: itemId,
+      image_url: imageUrl ? String(imageUrl).trim() : ''
+    }, 'marketplace_item_id').catch(() => {});
+  } catch (_) { /* fallback to JSON */ }
 };
 
 const getMarketplaceImage = (itemId) => {
@@ -533,8 +634,20 @@ const getTrialUsersStore = () => {
   return data && typeof data === 'object' ? data : {};
 };
 
-const saveTrialUsersStore = (store) => {
+const saveTrialUsersStore = async (store) => {
   writeJsonStore(trialUsersPath, store || {});
+  // Sync to Supabase trial_users table (best-effort)
+  try {
+    for (const [profileId, trial] of Object.entries(store || {})) {
+      await supabaseUpsert('trial_users', {
+        profile_id: profileId,
+        establishment_id: trial.establishmentId || null,
+        username: trial.username || null,
+        full_name: trial.fullName || null,
+        unlimited: trial.unlimited === true
+      }, 'profile_id').catch(() => {});
+    }
+  } catch (_) { /* fallback to JSON */ }
 };
 
 const TRIAL_DAYS = 30;
@@ -783,6 +896,72 @@ app.post('/api/upload', requireAuth, imageUpload.single('image'), (req, res) => 
       return res.status(500).json({ ok: false, error: err.message || 'Could not upload image' });
     }
   })();
+});
+
+// ══════════════════════════════════════════════════════════════
+// LOGO DEL SISTEMA (global, visible en todas las pantallas)
+// Se guarda en app-settings.json bajo la clave __system__
+// ══════════════════════════════════════════════════════════════
+const SYSTEM_SETTINGS_KEY = '__system__';
+
+// GET /api/logo — Devuelve el logo del sistema (público, sin auth)
+app.get('/api/logo', (req, res) => {
+  try {
+    const all = getAppSettings();
+    const system = all[SYSTEM_SETTINGS_KEY] || {};
+    return res.json({ ok: true, data: { logoUrl: system.logoUrl || '', logoPath: system.logoPath || null } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load logo' });
+  }
+});
+
+// POST /api/logo — Sube el logo del sistema (solo superadmin)
+app.post('/api/logo', requireAuth, imageUpload.single('image'), (req, res) => {
+  (async () => {
+    try {
+      if (req.authUser.role !== ROLE_SUPERADMIN) {
+        return res.status(403).json({ ok: false, error: 'Superadmin only' });
+      }
+      if (!req.file) return res.status(400).json({ ok: false, error: 'image file is required' });
+
+      let uploaded;
+      try {
+        uploaded = await uploadImageToStorage(req.file, 'system-logo');
+      } catch (_) {
+        uploaded = saveImageLocally(req.file);
+      }
+
+      const all = getAppSettings();
+      const system = all[SYSTEM_SETTINGS_KEY] || {};
+      all[SYSTEM_SETTINGS_KEY] = {
+        ...system,
+        logoUrl: uploaded.url,
+        logoPath: uploaded.path,
+        logoUpdatedAt: new Date().toISOString()
+      };
+      saveAppSettings(all);
+
+      return res.json({ ok: true, data: { logoUrl: uploaded.url, logoPath: uploaded.path } });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message || 'Could not upload logo' });
+    }
+  })();
+});
+
+// DELETE /api/logo — Elimina el logo del sistema (solo superadmin)
+app.delete('/api/logo', requireAuth, async (req, res) => {
+  try {
+    if (req.authUser.role !== ROLE_SUPERADMIN) {
+      return res.status(403).json({ ok: false, error: 'Superadmin only' });
+    }
+    const all = getAppSettings();
+    const system = all[SYSTEM_SETTINGS_KEY] || {};
+    all[SYSTEM_SETTINGS_KEY] = { ...system, logoUrl: '', logoPath: null, logoUpdatedAt: null };
+    saveAppSettings(all);
+    return res.json({ ok: true, data: { logoUrl: '', logoPath: null } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not remove logo' });
+  }
 });
 
 app.post('/api/onboarding', async (req, res) => {
@@ -6104,8 +6283,19 @@ const getWhatsappConfig = () => {
   return data && typeof data === 'object' ? data : {};
 };
 
-const saveWhatsappConfig = (store) => {
+const saveWhatsappConfig = async (store) => {
   writeJsonStore(whatsappConfigPath, store || {});
+  // Sync to Supabase whatsapp_configs table (best-effort)
+  try {
+    for (const [estId, config] of Object.entries(store || {})) {
+      await supabaseUpsert('whatsapp_configs', {
+        establishment_id: estId,
+        enabled: Boolean(config.enabled),
+        phone_number: config.phoneNumber || null,
+        message_template: config.messageTemplate || null
+      }, 'establishment_id').catch(() => {});
+    }
+  } catch (_) { /* fallback to JSON */ }
 };
 
 // GET /api/whatsapp/config — Get WhatsApp config for an establishment

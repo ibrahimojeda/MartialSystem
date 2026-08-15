@@ -1,14 +1,14 @@
 {
-  "version": "1.0.0",
-  "buildNumber": 1,
-  "message": "Panel de diagnóstico con semáforo de conexión y logs en tiempo real. Diseño responsive mejorado.",
+  "version": "1.1.1",
+  "buildNumber": 3,
+  "message": "Correcciones: sesión persistente en refresco (F5), dashboard superadmin completo y login más rápido.",
   "forceUpdate": false,
   "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk",
-  "releaseDate": "2026-08-08",
+  "releaseDate": "2026-08-14",
   "changelog": [
-    "Conexión directa a Supabase (sin depender de localhost)",
-    "Sistema de auto-actualización al abrir la app",
-    "Banner de notificación cuando hay nueva versión disponible",
-    "Modo híbrido opcional (servidor + Supabase)"
+    "Sesión persistente al recargar (F5): se renueva el token con refresh_token de Supabase en vez de cerrar sesión",
+    "Dashboard superadmin completo: se llenan los KPI de Usuarios, Alumnos, Disciplinas y Miembros por Rol",
+    "Login más rápido: el banco teórico (Examen) ahora carga en segundo plano sin bloquear la entrada",
+    "Corrección de sintaxis en la restauración de sesión (IIFE async correctamente cerrada)"
   ]
 }

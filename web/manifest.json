@@ -2,12 +2,13 @@
   "name": "MartialSystem",
   "short_name": "MartialSys",
   "description": "Panel táctico para dojos multi-disciplina: dashboard, academia, torneos y finanzas.",
-  "start_url": "/",
+  "start_url": "/?standalone=true",
   "display": "standalone",
   "background_color": "#0f1318",
   "theme_color": "#c23b2a",
   "orientation": "any",
   "scope": "/",
+  "display_override": ["standalone", "minimal-ui"],
   "icons": [
     {
       "src": "/icons/icon-192.png",

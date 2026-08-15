@@ -1,4 +1,4 @@
-const CACHE_NAME = 'martialsystem-v3';
+const CACHE_NAME = 'martialsystem-v4';
 const VERSION_URL = '/version.json';
 
 const STATIC_ASSETS = [
@@ -58,7 +58,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API calls: network-first with cache fallback
+  // Only handle GET requests for caching. Let POST/PUT/DELETE pass through.
+  if (request.method !== 'GET') return;
+
+  // API calls: network-first with cache fallback (solo GET)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)

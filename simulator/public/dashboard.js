@@ -4,10 +4,31 @@
 (function() {
   'use strict';
 
-  const API = '';
+  const API = window.location.protocol === 'file:' ? 'http://localhost:8011' : '';
   let pollInterval = null;
   let maintDays = [];
   let maintDayIndex = 0;
+  let eventSource = null;
+  let wasRunning = false;
+
+  // ─── SSE: real-time detailed progress ───
+  function connectSSE() {
+    if (eventSource) { try { eventSource.close(); } catch(_){} eventSource = null; }
+    try {
+      eventSource = new EventSource((API || 'http://localhost:8011') + '/api/simulation/stream');
+      eventSource.onmessage = (e) => {
+        let payload;
+        try { payload = JSON.parse(e.data); } catch(_) { return; }
+        if (payload.events && payload.events.length > 0) {
+          payload.events.forEach(ev => renderSimEvent(ev));
+        }
+      };
+      eventSource.onerror = () => {
+        // Connection errors are expected when simulation not running; keep SSE open.
+      };
+    } catch(_) {}
+  }
+  connectSSE();
 
   // ─── Utility ───
   const $ = id => document.getElementById(id);
@@ -100,6 +121,58 @@
     el.scrollTop = el.scrollHeight;
   }
 
+  // Format a payload value into a readable string (truncated)
+  function fmtVal(v, max = 140) {
+    if (v === undefined || v === null) return '';
+    if (typeof v === 'object') {
+      try { return JSON.stringify(v).slice(0, max); } catch(_) { return String(v).slice(0, max); }
+    }
+    return String(v).slice(0, max);
+  }
+
+  // Render a detailed simulation event into the log
+  function renderSimEvent(ev) {
+    if (!ev) return;
+    const t = ev.type;
+    switch (t) {
+      case 'phase': {
+        // Show phase messages with summary info when present
+        const msg = ev.message || '';
+        addLog(msg, 'phase');
+        break;
+      }
+      case 'day': {
+        addLog(`📅 Día ${ev.dayIndex}/${ev.totalDays} — ${ev.date}`, 'info');
+        break;
+      }
+      case 'success': {
+        // Build detailed success line: what, how, result, timing
+        let detail = '';
+        if (ev.result !== undefined && ev.result !== null) {
+          const r = ev.result;
+          if (r && r.id) detail += ` ID=${r.id}`;
+          else if (r && r.data && r.data.id) detail += ` ID=${r.data.id}`;
+          else if (r && r.data && r.data[0] && r.data[0].id) detail += ` IDs=${r.data.length}`;
+          if (r && r.data && Array.isArray(r.data)) detail += ` (${r.data.length} registros)`;
+        }
+        if (ev.requestData) detail += ` | Datos: ${fmtVal(ev.requestData)}`;
+        addLog(`✅ ${ev.label} OK en ${ev.elapsed}ms${detail}`, 'success');
+        break;
+      }
+      case 'error': {
+        addLog(`❌ ${ev.label} ERROR en ${ev.elapsed}ms — ${ev.error || ''}${ev.requestData ? ` | Datos: ${fmtVal(ev.requestData)}` : ''}`, 'error');
+        break;
+      }
+      case 'fatal': {
+        addLog(`💥 ${ev.error || 'Error fatal'}`, 'error');
+        break;
+      }
+      default: {
+        addLog(fmtVal(ev.message || (ev.label || JSON.stringify(ev))), 'info');
+      }
+    }
+  }
+
   function setSimRunning(running) {
     $('btn-sim-start').disabled = running;
     $('btn-sim-pause').disabled = !running;
@@ -112,18 +185,25 @@
     if (params.disciplineCodes.length === 0) { addLog('Selecciona al menos una disciplina', 'error'); return; }
     addLog(`Iniciando simulación: ${params.establishmentCount} establecimientos, ${params.studentCount} alumnos, ${params.daysToSimulate} días`, 'info');
     setSimRunning(true);
+    startPolling();
     try {
+      // Sincrónico: el servidor espera a que termine y devuelve el resumen completo
       const res = await api('/api/simulation/start', { method: 'POST', body: params });
-      if (res.ok) {
-        addLog('Simulación lanzada en segundo plano', 'success');
-        startPolling();
+      stopPolling();
+      setSimRunning(false);
+      if (res.ok && res.data) {
+        const s = res.data.summary || {};
+        addLog(`✅ Simulación completada — ${s.totalOperations} ops, ${s.errorCount} errores, ${s.successRate}% éxito`, 'success');
+        // Guardar el resumen completo para exportar
+        window.__lastSimSummary = s;
+        loadHistory();
       } else {
         addLog('Error: ' + (res.error || 'Unknown'), 'error');
-        setSimRunning(false);
       }
     } catch(err) {
-      addLog('Error de conexión: ' + err.message, 'error');
+      stopPolling();
       setSimRunning(false);
+      addLog('Error de conexión: ' + err.message, 'error');
     }
   });
 
@@ -196,60 +276,139 @@
         ).join('');
       }
 
-      // If not running, stop polling and show completion
-      if (!d.running && !d.idle) {
+      // Detect transition from running → stopped to show completion
+      if (wasRunning && !d.running) {
         stopPolling();
         setSimRunning(false);
         addLog(`✅ Simulación completada — ${s.totalOperations} ops, ${s.errorCount} errores, ${s.successRate}% éxito`, 'success');
         loadHistory();
+        wasRunning = false;
       }
+      if (d.running) wasRunning = true;
     } catch(_) {}
   }
 
-  // ─── Export CSV ───
+  // Helper: get the last full simulation summary (with operations/errors detail)
+  function getLastSummary() {
+    if (window.__lastSimSummary) return window.__lastSimSummary;
+    return null;
+  }
+
+  // ─── Export CSV (full detail) ───
   $('btn-sim-export-csv').addEventListener('click', async () => {
-    const res = await api('/api/simulation/status');
-    if (!res.ok || !res.data?.summary) return;
-    const s = res.data.summary;
-    let csv = 'Endpoint,Llamadas,Exitos,Errores,%Exito,AvgMs\n';
+    const s = getLastSummary();
+    if (!s) { addLog('No hay datos para exportar. Ejecuta una simulación primero.', 'error'); return; }
+
+    let csv = '';
+
+    // Section 1: Resumen general
+    csv += '=== RESUMEN GENERAL ===\n';
+    csv += `Operaciones,${s.totalOperations||0}\n`;
+    csv += `Exitos,${s.successCount||0}\n`;
+    csv += `Errores,${s.errorCount||0}\n`;
+    csv += `Tasa de exito,${s.successRate||0}%\n`;
+    csv += `Establecimientos,${s.establishments||0}\n`;
+    csv += `Perfiles,${s.profiles||0}\n`;
+    csv += `Alumnos,${s.students||0}\n`;
+    csv += `Inscripciones,${s.enrollments||0}\n`;
+    csv += `Clases,${s.classes||0}\n`;
+    csv += `Tiempo,${s.elapsedFormatted||'--'}\n\n`;
+
+    // Section 2: Ranking de endpoints
+    csv += '=== RANKING DE ENDPOINTS ===\n';
+    csv += 'Endpoint,Llamadas,Exitos,Errores,%Exito,AvgMs\n';
     (s.endpointRanking||[]).forEach(ep => {
       csv += `"${ep.endpoint}",${ep.calls},${ep.successes},${ep.errors},${ep.successRate},${ep.avgResponseTime}\n`;
     });
-    downloadFile(csv, 'simulacion_reporte.csv', 'text/csv');
+    csv += '\n';
+
+    // Section 3: Detalle de TODAS las operaciones
+    csv += '=== DETALLE DE OPERACIONES ===\n';
+    csv += 'ID,Endpoint,Status,Tiempo(ms),Exito,Fecha,Datos\n';
+    (s.operations||[]).forEach(op => {
+      const datos = op.requestData ? JSON.stringify(op.requestData) : (op.response ? String(op.response).slice(0,200) : '');
+      csv += `${op.id},"${op.endpoint}",${op.statusCode},${op.responseTime},${op.success?'SI':'NO'},"${op.timestamp}",${datos ? '"'+String(datos).replace(/"/g,'""')+'"' : ''}\n`;
+    });
+    csv += '\n';
+
+    // Section 4: Errores detallados
+    if (s.errors && s.errors.length > 0) {
+      csv += '=== ERRORES DETALLADOS ===\n';
+      csv += 'ID,Endpoint,Status,Tipo,Mensaje,Fecha\n';
+      s.errors.forEach(e => {
+        csv += `${e.id},"${e.endpoint}",${e.statusCode},"${e.errorType||''}","${String(e.message||'').replace(/"/g,'""')}","${e.timestamp}"\n`;
+      });
+    }
+
+    downloadFile(csv, 'simulacion_reporte_detallado.csv', 'text/csv');
+    addLog('CSV detallado exportado', 'success');
   });
 
-  // ─── Export PDF simulation ───
+  // ─── Export PDF simulation (full detail) ───
   $('btn-sim-export-pdf').addEventListener('click', async () => {
-    const res = await api('/api/simulation/status');
-    if (!res.ok || !res.data?.summary) { addLog('No hay datos para exportar', 'error'); return; }
-    const s = res.data.summary;
+    const s = getLastSummary();
+    if (!s) { addLog('No hay datos para exportar. Ejecuta una simulación primero.', 'error'); return; }
     generateSimPDF(s);
   });
 
   function generateSimPDF(s) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    let y = 20;
+
     doc.setFontSize(20);
-    doc.text('MartialSystem — Reporte de Simulación', 14, 22);
+    doc.text('MartialSystem — Reporte de Simulación', 14, y); y += 10;
     doc.setFontSize(10);
-    doc.text(`Fecha: ${new Date().toLocaleString('es-PA')}`, 14, 30);
-    doc.text(`Operaciones: ${s.totalOperations} | Éxitos: ${s.successCount} | Errores: ${s.errorCount} | Tasa: ${s.successRate}%`, 14, 38);
+    doc.text(`Fecha: ${new Date().toLocaleString('es-PA')}`, 14, y); y += 6;
+    doc.text(`Operaciones: ${s.totalOperations} | Éxitos: ${s.successCount} | Errores: ${s.errorCount} | Tasa: ${s.successRate}%`, 14, y); y += 6;
+    doc.text(`Establecimientos: ${s.establishments||0} | Perfiles: ${s.profiles||0} | Alumnos: ${s.students||0} | Clases: ${s.classes||0}`, 14, y); y += 6;
+    doc.text(`Tiempo: ${s.elapsedFormatted||'--'}`, 14, y); y += 10;
 
+    // Ranking de endpoints
     doc.setFontSize(14);
-    doc.text('Ranking de Endpoints', 14, 50);
+    doc.text('Ranking de Endpoints', 14, y); y += 4;
     const epData = (s.endpointRanking||[]).map(ep => [ep.endpoint, ep.calls, ep.successes, ep.errors, ep.successRate+'%', ep.avgResponseTime+'ms']);
-    doc.autoTable({ startY: 54, head: [['Endpoint','Llamadas','Éxitos','Errores','% Éxito','Avg ms']], body: epData, styles: { fontSize: 8 } });
+    doc.autoTable({ startY: y, head: [['Endpoint','Llamadas','Éxitos','Errores','% Éxito','Avg ms']], body: epData, styles: { fontSize: 8 } });
+    y = doc.lastAutoTable.finalY + 10;
 
+    // Anomalías
     if (s.anomalies && s.anomalies.length > 0) {
-      const y = doc.lastAutoTable.finalY + 10;
       doc.setFontSize(14);
-      doc.text('Anomalías Detectadas', 14, y);
+      doc.text('Anomalías Detectadas', 14, y); y += 4;
       const anomData = s.anomalies.map(a => [a.severity, a.message]);
-      doc.autoTable({ startY: y+4, head: [['Severidad','Mensaje']], body: anomData, styles: { fontSize: 8 } });
+      doc.autoTable({ startY: y, head: [['Severidad','Mensaje']], body: anomData, styles: { fontSize: 8 } });
+      y = doc.lastAutoTable.finalY + 10;
     }
 
-    doc.save('simulacion_martialsystem.pdf');
-    addLog('PDF exportado exitosamente', 'success');
+    // Detalle de TODAS las operaciones
+    const ops = s.operations || [];
+    if (ops.length > 0) {
+      doc.addPage();
+      doc.setFontSize(14);
+      doc.text('Detalle de Operaciones', 14, 20);
+      const opData = ops.map(op => [
+        op.id,
+        op.endpoint,
+        op.statusCode,
+        op.responseTime+'ms',
+        op.success?'SI':'NO',
+        op.requestData ? JSON.stringify(op.requestData).slice(0,60) : (op.response ? String(op.response).slice(0,60) : '')
+      ]);
+      doc.autoTable({ startY: 26, head: [['ID','Endpoint','Status','Tiempo','Exito','Datos']], body: opData, styles: { fontSize: 7 } });
+    }
+
+    // Errores detallados
+    const errs = s.errors || [];
+    if (errs.length > 0) {
+      doc.addPage();
+      doc.setFontSize(14);
+      doc.text('Errores Detallados', 14, 20);
+      const errData = errs.map(e => [e.id, e.endpoint, e.statusCode, e.errorType||'', e.message||'']);
+      doc.autoTable({ startY: 26, head: [['ID','Endpoint','Status','Tipo','Mensaje']], body: errData, styles: { fontSize: 7 } });
+    }
+
+    doc.save('simulacion_martialsystem_detallado.pdf');
+    addLog('PDF detallado exportado', 'success');
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -622,4 +781,170 @@
 
   // ─── Init cleanup data on load ───
   loadCleanupData();
+
+  // ══════════════════════════════════════════════════════════════
+  // TAB 5: AUDITOR DE ROLES
+  // ══════════════════════════════════════════════════════════════
+
+  const SEV_COLORS = { critical: '#c0392b', warning: '#d18a2e', info: '#2563eb' };
+  const SEV_ICONS = { critical: '🔴', warning: '🟡', info: '🔵' };
+
+  function roleAuditLog(msg, type) {
+    const statusEl = $('ra-status');
+    if (statusEl) {
+      const color = type === 'error' ? 'var(--danger,#c0392b)' : type === 'success' ? 'var(--ok,#2d8a4e)' : 'var(--muted)';
+      statusEl.innerHTML = `<span style="color:${color}">${escHtml(msg)}</span>`;
+    }
+  }
+
+  $('btn-ra-run').addEventListener('click', async () => {
+    const estId = $('ra-estId').value.trim() || null;
+    const mode = $('ra-mode').value;
+
+    roleAuditLog('⏳ Ejecutando auditoría de roles...', 'info');
+    $('btn-ra-run').disabled = true;
+
+    try {
+      let res;
+      if (mode === 'full') {
+        res = await api('/api/audit/roles/run', {
+          method: 'POST',
+          body: { establishmentId: estId, includeEndpointTests: true, includeScopeTests: true }
+        });
+      } else if (mode === 'endpoints') {
+        res = await api('/api/audit/roles/endpoints', {
+          method: 'POST',
+          body: { establishmentId: estId }
+        });
+      } else if (mode === 'scope') {
+        res = await api('/api/audit/roles/scope', {
+          method: 'POST',
+          body: { establishmentId: estId }
+        });
+      } else if (mode === 'coverage') {
+        res = await api('/api/audit/roles/coverage', {
+          method: 'POST',
+          body: {}
+        });
+      }
+
+      if (res && res.ok && res.data) {
+        renderRoleAuditResults(res.data);
+        roleAuditLog('✅ Auditoría completada', 'success');
+      } else {
+        roleAuditLog('❌ Error: ' + (res?.error || 'Sin respuesta'), 'error');
+      }
+    } catch (err) {
+      roleAuditLog('❌ Error de conexión: ' + err.message, 'error');
+    } finally {
+      $('btn-ra-run').disabled = false;
+    }
+  });
+
+  function renderRoleAuditResults(data) {
+    const { findings, summary, endpointStats, scopeStats } = data;
+
+    // KPIs
+    const epTotal = endpointStats?.totalChecks || 0;
+    const epPassed = endpointStats?.passed || 0;
+    const epFailed = (endpointStats?.failed || 0) + (summary?.critical || 0);
+
+    $('ra-health').textContent = (summary?.healthScore ?? '--') + '%';
+    $('ra-health').className = 'kpi-value ' + ((summary?.healthScore || 0) >= 80 ? 'ok' : 'danger');
+    $('ra-total').textContent = summary?.total || '--';
+    $('ra-passed').textContent = epPassed;
+    $('ra-failed').textContent = epFailed;
+
+    // Summary
+    const sumHtml = `
+      <div class="grid grid-3" style="margin-top:8px;">
+        <div><span style="color:${SEV_COLORS.critical}">🔴 Críticos: ${summary?.critical || 0}</span></div>
+        <div><span style="color:${SEV_COLORS.warning}">🟡 Warnings: ${summary?.warnings || 0}</span></div>
+        <div><span style="color:${SEV_COLORS.info}">🔵 Info: ${summary?.info || 0}</span></div>
+      </div>
+      ${endpointStats ? `<div style="margin-top:6px;font-size:12px;">Endpoints: ${epPassed}/${epTotal} pasados, ${epFailed} fallos</div>` : ''}
+      ${scopeStats ? `<div style="font-size:12px;">Scope: ${scopeStats.passed || 0}/${scopeStats.checks || 0} pasados</div>` : ''}
+    `;
+    $('ra-summary').innerHTML = sumHtml;
+    $('ra-summary-card').style.display = '';
+
+    // Coverage
+    const coverageF = findings.filter(f => f.category === 'Cobertura de Roles');
+    if (coverageF.length > 0) {
+      $('ra-coverage').innerHTML = coverageF.map(f => {
+        const rc = f.roleCounts ? Object.entries(f.roleCounts).map(([r, c]) => `${r}: ${c}`).join(', ') : '';
+        return `<div style="margin-bottom:6px;padding:6px;border-left:3px solid ${SEV_COLORS[f.severity]};background:var(--panel);">
+          <strong>${SEV_ICONS[f.severity]} ${f.establishment || ''}</strong><br>
+          <span style="font-size:12px;">${escHtml(f.message)}</span>
+          ${rc ? `<br><span style="font-size:11px;color:var(--muted);">${escHtml(rc)}</span>` : ''}
+        </div>`;
+      }).join('');
+    } else {
+      $('ra-coverage').innerHTML = '<span style="color:var(--muted);">Sin hallazgos de cobertura</span>';
+    }
+
+    // Endpoints
+    const epF = findings.filter(f => f.category === 'Acceso a Endpoints');
+    if (epF.length > 0) {
+      $('ra-endpoints').innerHTML = '<div style="max-height:300px;overflow-y:auto;">' + epF.slice(0, 30).map(f => {
+        return `<div style="margin-bottom:4px;padding:4px 8px;border-left:3px solid ${SEV_COLORS[f.severity]};font-size:12px;">
+          <strong>${f.role}</strong> → ${f.endpoint}: esperado ${f.expectedStatus}, recibido <span style="color:${f.expectedStatus === 403 && f.actualStatus === 200 ? 'var(--danger,#c0392b)' : 'var(--muted)'}">${f.actualStatus}</span>
+          ${f.user ? ` <span style="color:var(--muted);">(${f.user})</span>` : ''}
+        </div>`;
+      }).join('') + (epF.length > 30 ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">...y ${epF.length - 30} más</div>` : '') + '</div>';
+    } else {
+      $('ra-endpoints').innerHTML = '<span style="color:var(--muted);">Sin fallos de acceso</span>';
+    }
+
+    // Scope
+    const scopeF = findings.filter(f => f.category === 'Scope');
+    if (scopeF.length > 0) {
+      $('ra-scope').innerHTML = scopeF.map(f => {
+        return `<div style="margin-bottom:6px;padding:6px;border-left:3px solid ${SEV_COLORS[f.severity]};background:var(--panel);font-size:12px;">
+          <strong>${SEV_ICONS[f.severity]} ${f.role || ''}</strong> ${escHtml(f.message)}
+          ${f.studentCount !== undefined ? `<br><span style="color:var(--muted);">Alumnos visibles: ${f.studentCount}</span>` : ''}
+          ${f.linkedCount !== undefined ? `<br><span style="color:var(--muted);">Vinculados: ${f.linkedCount}</span>` : ''}
+        </div>`;
+      }).join('');
+    } else {
+      $('ra-scope').innerHTML = '<span style="color:var(--muted);">Sin hallazgos de scope</span>';
+    }
+
+    // Frontend vs Backend
+    const fbF = findings.filter(f => f.category === 'Frontend vs Backend');
+    if (fbF.length > 0) {
+      $('ra-fe-be').innerHTML = fbF.map(f => {
+        return `<div style="margin-bottom:4px;padding:4px 8px;border-left:3px solid ${SEV_COLORS[f.severity]};font-size:12px;">
+          ${escHtml(f.message)}
+          ${f.role ? ` <span style="color:var(--muted);">(${f.role}: ${f.moduleCount} módulos)</span>` : ''}
+        </div>`;
+      }).join('');
+    } else {
+      $('ra-fe-be').innerHTML = '<span style="color:var(--muted);">Sin hallazgos</span>';
+    }
+
+    // All findings table
+    if (findings.length > 0) {
+      $('ra-all-findings').innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Sev</th><th>Categoría</th><th>Mensaje</th><th>Rol</th></tr></thead>
+            <tbody>
+              ${findings.map(f => `
+                <tr>
+                  <td style="color:${SEV_COLORS[f.severity]};font-weight:700;">${f.severity.toUpperCase()}</td>
+                  <td>${escHtml(f.category || '')}</td>
+                  <td style="font-size:12px;">${escHtml(f.message)}</td>
+                  <td>${escHtml(f.role || f.establishment || '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      $('ra-all-findings').innerHTML = '<span style="color:var(--muted);">No se encontraron hallazgos</span>';
+    }
+  }
+
 })();

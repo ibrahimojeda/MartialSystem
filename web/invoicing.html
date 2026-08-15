@@ -95,10 +95,71 @@
     .search-box { min-width: 220px; }
     .hide { display: none !important; }
     .w-100 { width: 100%; }
-    @media(max-width:640px){
-      .flex { flex-direction: column; }
-      .item-row { grid-template-columns: 1fr; }
-      .search-box { width: 100%; }
+    /* ─── RESPONSIVE: Tablet (≤1024px) ─── */
+    @media (max-width: 1024px) {
+      body { padding: 12px; }
+      .wrap { max-width: 100%; }
+      .card { padding: 14px; }
+      .card h2 { font-size: 1.3rem; }
+      .flex { flex-direction: column; align-items: stretch; }
+      .flex-between { flex-direction: column; align-items: stretch; }
+      .item-row { grid-template-columns: 1fr 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
+      .tab-btn { padding: 8px 12px; font-size: 11px; }
+      .modal { width: 98%; padding: 16px; }
+      .search-box { width: 100%; min-width: 0; }
+      input, select, textarea { font-size: 14px; padding: 10px 12px; }
+      .btn { min-height: 40px; padding: 10px 14px; }
+      table { font-size: 11px; }
+      th, td { padding: 6px 8px; }
+    }
+
+    /* ─── RESPONSIVE: Phone (≤768px) ─── */
+    @media (max-width: 768px) {
+      body { padding: 8px; }
+      .card { padding: 10px; border-radius: 8px; }
+      .card h2 { font-size: 1.15rem; }
+      .card h3 { font-size: 1rem; }
+      h1 { font-size: 1.3rem !important; }
+      .item-row { grid-template-columns: 1fr; gap: 6px; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .kpi { padding: 10px; }
+      .kpi .value { font-size: 18px; }
+      .tab-bar { gap: 2px; }
+      .tab-btn { padding: 6px 10px; font-size: 10px; border-radius: 6px 6px 0 0; }
+      .modal { width: 100%; max-height: 95vh; padding: 12px; border-radius: 8px; }
+      .modal h2 { font-size: 1.1rem; }
+      .btn { min-height: 44px; padding: 10px 12px; font-size: 12px; }
+      .btn-sm { min-height: 36px; padding: 6px 10px; font-size: 11px; }
+      input, select, textarea { font-size: 16px; min-height: 44px; }
+      label { font-size: 13px; }
+      table { font-size: 10px; }
+      th, td { padding: 5px 6px; }
+      .tag { font-size: 9px; padding: 2px 6px; }
+      .small { font-size: 10px; }
+    }
+
+    /* ─── RESPONSIVE: Small phone (≤480px) ─── */
+    @media (max-width: 480px) {
+      body { padding: 4px; }
+      .card { padding: 8px; border-radius: 6px; margin-bottom: 10px; }
+      .card h2 { font-size: 1.05rem; }
+      h1 { font-size: 1.15rem !important; }
+      .tab-btn { padding: 5px 8px; font-size: 9px; }
+      .btn { min-height: 44px; padding: 10px 10px; font-size: 11px; border-radius: 6px; }
+      .btn-sm { min-height: 36px; padding: 5px 8px; font-size: 10px; }
+      .modal { padding: 10px; }
+      .modal h2 { font-size: 1rem; }
+      .kpi .value { font-size: 16px; }
+      .kpi .label { font-size: 10px; }
+      input, select, textarea { font-size: 16px; padding: 10px; min-height: 44px; }
+      label { font-size: 12px; }
+      table { font-size: 9px; }
+      th, td { padding: 4px 5px; }
+      .tag { font-size: 8px; padding: 1px 5px; }
+      .small { font-size: 9px; }
+      .back-link { font-size: 12px; }
     }
     .back-link {
       display: inline-block; margin-bottom: 16px; color: var(--accent);

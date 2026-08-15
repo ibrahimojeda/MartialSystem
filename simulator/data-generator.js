@@ -95,6 +95,37 @@ const PAYMENT_METHODS = ['cash', 'transfer', 'card', 'yappy', 'nequi', 'paypal']
 
 const TOURNAMENT_MODES = ['Kata', 'Kumite', 'Ambos'];
 
+// ─── Uniqueness tracking to avoid collisions in auth (email/username unique) ───
+const usedUsernames = new Set();
+const usedEmails = new Set();
+let usernameCounter = 0;
+
+// Generate a guaranteed-unique username within this process
+function generateUniqueUsername(fullName) {
+  const parts = fullName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ');
+  const base = (parts[0].slice(0, 4) + (parts[1]?.slice(0, 4) || 'xx')).replace(/[^a-z]/g, '');
+  let candidate;
+  let attempts = 0;
+  do {
+    // Include a monotonically increasing counter to guarantee uniqueness
+    candidate = `${base}${100 + (usernameCounter++ * 7)}${Math.floor(Math.random() * 1000)}`;
+    attempts++;
+    if (attempts > 1000) candidate = `${base}${Date.now()}${usernameCounter++}`; // ultimate fallback
+  } while (usedUsernames.has(candidate));
+  usedUsernames.add(candidate);
+  return candidate;
+}
+
+// Generate a guaranteed-unique email within this process
+function generateUniqueEmail(username) {
+  let candidate;
+  do {
+    candidate = `${username}@users.martialsystem.local`;
+  } while (usedEmails.has(candidate));
+  usedEmails.add(candidate);
+  return candidate;
+}
+
 function rand(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -149,7 +180,7 @@ function generateUsername(fullName) {
 }
 
 function generatePassword() {
-  return `Test${rand(1000, 9999)}@!`;
+  return `Sim12345!`;
 }
 
 function generateBirthDate(minAge = 5, maxAge = 55) {
@@ -184,7 +215,7 @@ function generateEstablishmentData(count) {
 function generateUserForRole(role, index = 0) {
   const gender = Math.random() > 0.4 ? 'm' : 'f';
   const fullName = generateFullName(gender);
-  const username = generateUsername(fullName) + (index > 0 ? index : '');
+  const username = generateUniqueUsername(fullName);
   const password = generatePassword();
   return { fullName, username, password, role };
 }
@@ -241,6 +272,7 @@ module.exports = {
   generateBirthDate, generateEstablishmentData, generateUserForRole,
   generateStudents, getRanksForDiscipline, getRandomRank,
   generateAttendanceStatus, generateEvaluationResult,
+  generateUniqueUsername, generateUniqueEmail,
   FIRST_NAMES_M, FIRST_NAMES_F, LAST_NAMES, DOJO_NAMES,
   CITY_COUNTRY_PAIRS, RANKS_BY_DISCIPLINE, DISCIPLINE_CODES,
   PAYMENT_METHODS, TOURNAMENT_MODES

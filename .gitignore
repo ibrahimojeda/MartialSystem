@@ -4,3 +4,8 @@
 "temp_upload_search.txt"  
 "server_output.log"  
 "simulator/reports/"  
+"# Entorno"  
+".env"  
+"# Dependencias"  
+"node_modules/"  
+"data/"  

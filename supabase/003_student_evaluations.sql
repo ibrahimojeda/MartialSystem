@@ -23,10 +23,12 @@ create index if not exists idx_student_eval_evaluator on student_evaluations(eva
 
 alter table student_evaluations enable row level security;
 
+drop policy if exists student_evaluations_member_read on student_evaluations;
 create policy student_evaluations_member_read
 on student_evaluations for select
 using (is_member_of_establishment(establishment_id));
 
+drop policy if exists student_evaluations_member_insert on student_evaluations;
 create policy student_evaluations_member_insert
 on student_evaluations for insert
 with check (is_member_of_establishment(establishment_id));

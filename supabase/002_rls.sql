@@ -31,23 +31,28 @@ as $$
 $$;
 
 -- Public read for active disciplines
+drop policy if exists disciplines_read_active on disciplines;
 create policy disciplines_read_active
 on disciplines for select
 using (is_active = true);
 
 -- Establishment-scoped policies
+drop policy if exists establishments_member_read on establishments;
 create policy establishments_member_read
 on establishments for select
 using (is_member_of_establishment(id));
 
+drop policy if exists establishment_disciplines_member_read on establishment_disciplines;
 create policy establishment_disciplines_member_read
 on establishment_disciplines for select
 using (is_member_of_establishment(establishment_id));
 
+drop policy if exists students_member_read on students;
 create policy students_member_read
 on students for select
 using (is_member_of_establishment(establishment_id));
 
+drop policy if exists enrollments_member_read on student_enrollments;
 create policy enrollments_member_read
 on student_enrollments for select
 using (
@@ -59,11 +64,13 @@ using (
   )
 );
 
+drop policy if exists payments_member_read on payments;
 create policy payments_member_read
 on payments for select
 using (is_member_of_establishment(establishment_id));
 
 -- Profile read own
+drop policy if exists profiles_read_own on profiles;
 create policy profiles_read_own
 on profiles for select
 using (id = auth.uid());

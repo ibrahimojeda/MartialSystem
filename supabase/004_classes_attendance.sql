@@ -36,18 +36,22 @@ create index if not exists idx_attendance_student on class_attendance_records(st
 alter table class_sessions enable row level security;
 alter table class_attendance_records enable row level security;
 
+drop policy if exists class_sessions_member_read on class_sessions;
 create policy class_sessions_member_read
 on class_sessions for select
 using (is_member_of_establishment(establishment_id));
 
+drop policy if exists class_sessions_member_insert on class_sessions;
 create policy class_sessions_member_insert
 on class_sessions for insert
 with check (is_member_of_establishment(establishment_id));
 
+drop policy if exists class_sessions_member_update on class_sessions;
 create policy class_sessions_member_update
 on class_sessions for update
 using (is_member_of_establishment(establishment_id));
 
+drop policy if exists class_attendance_member_read on class_attendance_records;
 create policy class_attendance_member_read
 on class_attendance_records for select
 using (
@@ -59,6 +63,7 @@ using (
   )
 );
 
+drop policy if exists class_attendance_member_upsert on class_attendance_records;
 create policy class_attendance_member_upsert
 on class_attendance_records for insert
 with check (
@@ -70,6 +75,7 @@ with check (
   )
 );
 
+drop policy if exists class_attendance_member_update on class_attendance_records;
 create policy class_attendance_member_update
 on class_attendance_records for update
 using (

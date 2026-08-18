@@ -136,26 +136,34 @@ alter table payment_gateway_configs   enable row level security;
 -- Políticas: service_role siempre puede; usuarios autenticados solo a su establecimiento
 -- (el backend usa supabaseAdmin con service_role key, por lo que RLS se bypasea en el server)
 
+drop policy if exists "service_role full access tournaments_reg" on tournament_registrations;
 create policy "service_role full access tournaments_reg"
   on tournament_registrations for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access tournaments_res" on tournament_results;
 create policy "service_role full access tournaments_res"
   on tournament_results for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access inventory" on inventory_items;
 create policy "service_role full access inventory"
   on inventory_items for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access inventory_movements" on inventory_movements;
 create policy "service_role full access inventory_movements"
   on inventory_movements for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access exam_requests" on exam_grade_requests;
 create policy "service_role full access exam_requests"
   on exam_grade_requests for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access exam_results" on exam_grade_results;
 create policy "service_role full access exam_results"
   on exam_grade_results for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access commissions" on system_commissions;
 create policy "service_role full access commissions"
   on system_commissions for all to service_role using (true) with check (true);
 
+drop policy if exists "service_role full access gateway_config" on payment_gateway_configs;
 create policy "service_role full access gateway_config"
   on payment_gateway_configs for all to service_role using (true) with check (true);

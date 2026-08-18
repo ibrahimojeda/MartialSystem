@@ -1,14 +1,14 @@
 {
-  "version": "1.1.1",
-  "buildNumber": 3,
-  "message": "Correcciones: sesión persistente en refresco (F5), dashboard superadmin completo y login más rápido.",
+  "version": "1.2.0",
+  "buildNumber": 4,
+  "message": "Corrección del error 401 en Supabase (login directo APK) y nuevo ícono de la app con el logo oficial.",
   "forceUpdate": false,
   "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk",
-  "releaseDate": "2026-08-14",
+  "releaseDate": "2026-08-15",
   "changelog": [
-    "Sesión persistente al recargar (F5): se renueva el token con refresh_token de Supabase en vez de cerrar sesión",
-    "Dashboard superadmin completo: se llenan los KPI de Usuarios, Alumnos, Disciplinas y Miembros por Rol",
-    "Login más rápido: el banco teórico (Examen) ahora carga en segundo plano sin bloquear la entrada",
-    "Corrección de sintaxis en la restauración de sesión (IIFE async correctamente cerrada)"
+    "Corregido el error 401 de Supabase en la APK: login directo ahora consulta profiles por username (usa la política pública) en vez de depender del servidor Express",
+    "Nuevo ícono de la app y pantalla de carga (splash) con el logo oficial de MartialSystem",
+    "Login más robusto en modo APK: múltiples estrategias para obtener el email y autenticarse con Supabase",
+    "Se aplicaron los SQL 013/014/015 de Supabase para login directo y RLS"
   ]
 }

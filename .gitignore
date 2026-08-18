@@ -7,6 +7,9 @@ node_modules/
 # Datos locales
 data/
 
+# Assets de generación de íconos (no es código fuente)
+assets/
+
 # Archivos temporales y logs
 temp_upload_search.txt
 server_output.log

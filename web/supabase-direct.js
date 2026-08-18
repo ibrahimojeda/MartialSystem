@@ -44,40 +44,55 @@
     const sb = window.MartialSupabase || await initSupabase();
     const normalizedUsername = String(username || '').trim().toLowerCase();
 
+    let authEmail = null;
+    let lastRpcError = null;
+
     // Estrategia 1: Usar RPC (función SQL con SECURITY DEFINER) para obtener el email interno
     // Esto bypassea RLS durante el login
-    const { data: authEmail, error: rpcError } = await sb
-      .rpc('get_auth_email_for_login', { username_param: normalizedUsername });
+    try {
+      const { data, error } = await sb
+        .rpc('get_auth_email_for_login', { username_param: normalizedUsername });
+      if (!error && data) {
+        authEmail = data;
+      } else if (error) {
+        lastRpcError = error.message;
+      }
+    } catch (e) {
+      lastRpcError = e && e.message ? e.message : String(e);
+    }
 
-    if (rpcError || !authEmail) {
-      console.warn('[SupabaseDirect] RPC no disponible, intentando fallback al servidor...', rpcError?.message || '');
-      
-      // Estrategia 2 (fallback): Usar el servidor Express si está disponible
-      // Esto permite login en modo web sin depender de la función RPC
+    // Estrategia 2: Consultar profiles directamente por username
+    // (usa la política pública creada en 013_login_fix.sql)
+    if (!authEmail) {
       try {
-        const res = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: normalizedUsername, password })
-        });
-        const json = await res.json();
-        if (json.ok && json.data?.access_token) {
-          return json.data;
+        const { data, error } = await sb
+          .from('profiles')
+          .select('auth_email')
+          .eq('username', normalizedUsername)
+          .maybeSingle();
+        if (!error && data && data.auth_email) {
+          authEmail = data.auth_email;
         }
-        throw new Error(json.error || 'Credenciales inválidas');
-      } catch (serverErr) {
-        console.warn('[SupabaseDirect] Fallback al servidor falló:', serverErr.message);
-        throw new Error('Usuario no encontrado');
+      } catch (e) {
+        /* ignorar */
       }
     }
 
-    // Login con Supabase Auth usando el email interno
+    // Estrategia 3: Intentar con el username como email (algunos setups lo usan como auth email)
+    if (!authEmail) {
+      authEmail = normalizedUsername;
+    }
+
+    console.log('[SupabaseDirect] Resolviendo login para usuario:', normalizedUsername, '| email:', authEmail, lastRpcError ? '| RPC: ' + lastRpcError : '');
+
+    // Login con Supabase Auth usando el email
     const { data, error } = await sb.auth.signInWithPassword({
       email: authEmail,
       password: password
     });
 
     if (error || !data?.session?.access_token) {
+      // Si la estrategia 3 falló y llegamos aquí, lanzar el error real de Supabase
       throw new Error(error?.message || 'Credenciales inválidas');
     }
 

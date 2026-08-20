@@ -9,11 +9,26 @@
   const STORAGE_KEY = 'ms_server_url';
   const VERSION_URL = 'https://raw.githubusercontent.com/ibrahimojeda/MartialSystem/main/web/version.json';
   const APK_DOWNLOAD_URL = 'https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk';
-  const CURRENT_VERSION = '1.0.0';
   const VERSION_CHECK_KEY = 'ms_last_version_check';
   const UPDATE_DISMISSED_KEY = 'ms_update_dismissed';
 
   let serverUrl = '';
+  let CURRENT_VERSION = '1.0.0'; // se actualiza dinámicamente desde version.json local
+
+  // ─── Load current version from local version.json (embebido en la APK) ──
+  async function loadCurrentVersion() {
+    try {
+      const res = await originalFetch('/version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.version) {
+          CURRENT_VERSION = data.version;
+        }
+      }
+    } catch (_) { /* mantener fallback */ }
+    console.log('[UpdateChecker] Versión instalada:', CURRENT_VERSION);
+    return CURRENT_VERSION;
+  }
 
   // ─── Load saved server URL (opcional, para modo híbrido) ────────────
   async function loadServerUrl() {
@@ -139,6 +154,43 @@
     return false;
   }
 
+  // ─── Native APK install (Capacitor plugin) ──────────────────────────
+  async function nativeApkInstall(apkUrl, callbacks) {
+    if (!window.Capacitor || !window.Capacitor.Plugins) {
+      console.warn('[Updater] Capacitor no disponible, abriendo en navegador');
+      if (callbacks && callbacks.onFallback) {
+        callbacks.onFallback();
+      }
+      window.open(apkUrl, '_blank');
+      return;
+    }
+
+    const plugin = window.Capacitor.Plugins.ApkUpdater;
+    if (!plugin) {
+      console.warn('[Updater] Plugin nativo no encontrado, abriendo en navegador');
+      if (callbacks && callbacks.onFallback) {
+        callbacks.onFallback();
+      }
+      window.open(apkUrl, '_blank');
+      return;
+    }
+
+    try {
+      // Listen to download progress
+      if (callbacks && callbacks.onProgress) {
+        plugin.addListener('updateProgress', (data) => {
+          if (data && callbacks.onProgress) callbacks.onProgress(data);
+        });
+      }
+
+      const result = await plugin.downloadAndInstall({ url: apkUrl });
+      if (callbacks && callbacks.onSuccess) callbacks.onSuccess(result);
+    } catch (err) {
+      console.error('[Updater] Error instalando APK:', err);
+      if (callbacks && callbacks.onError) callbacks.onError(err);
+    }
+  }
+
   // ─── Show Update Banner ─────────────────────────────────────────────
   function showUpdateBanner(updateInfo) {
     // Remove existing banner
@@ -172,15 +224,21 @@
         <span style="font-size:24px;">🔄</span>
         <div>
           <div style="font-weight:800;font-size:15px;">¡Actualización disponible!</div>
-          <div style="font-size:12px;opacity:0.85;margin-top:2px;">
+          <div style="font-size:12px;opacity:0.85;margin-top:2px;" id="ms-update-message">
             ${updateInfo.updateMessage} (v${updateInfo.latestVersion})
+          </div>
+          <div id="ms-update-progress" style="display:none;margin-top:8px;">
+            <div style="background:#0d2818;border-radius:99px;height:6px;overflow:hidden;">
+              <div id="ms-update-progress-bar" style="width:0%;height:100%;background:#2e8b57;transition:width 0.3s ease;"></div>
+            </div>
+            <div id="ms-update-progress-text" style="font-size:11px;opacity:0.7;margin-top:4px;">Descargando: 0%</div>
           </div>
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;">
         ${updateInfo.forceUpdate ? '' : '<button id="ms-update-dismiss" style="border:1px solid #3a6b52;border-radius:8px;background:transparent;color:#a0d8b8;padding:8px 14px;cursor:pointer;font-weight:600;font-size:12px;white-space:nowrap;">Ahora no</button>'}
         <button id="ms-update-download" style="border:0;border-radius:8px;background:linear-gradient(180deg,#2e8b57,#1e6b3f);color:#fff;padding:8px 16px;cursor:pointer;font-weight:700;font-size:12px;white-space:nowrap;box-shadow:0 4px 12px rgba(46,139,87,0.3);">
-          📥 Descargar APK
+          📥 Actualizar ahora
         </button>
       </div>
     `;
@@ -200,9 +258,45 @@
     // Adjust body padding
     document.body.style.paddingTop = (banner.offsetHeight + 8) + 'px';
 
-    // Event listeners
-    document.getElementById('ms-update-download').addEventListener('click', () => {
-      window.open(updateInfo.apkUrl, '_blank');
+    // Progress bar elements
+    const progressWrap = document.getElementById('ms-update-progress');
+    const progressBar = document.getElementById('ms-update-progress-bar');
+    const progressText = document.getElementById('ms-update-progress-text');
+    const msgEl = document.getElementById('ms-update-message');
+    const downloadBtn = document.getElementById('ms-update-download');
+
+    // Event listener: download & install natively
+    downloadBtn.addEventListener('click', () => {
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = '⏳ Descargando...';
+      if (progressWrap) progressWrap.style.display = 'block';
+
+      nativeApkInstall(updateInfo.apkUrl, {
+        onProgress: (data) => {
+          if (data && typeof data.progress === 'number') {
+            if (progressBar) progressBar.style.width = data.progress + '%';
+            if (progressText) progressText.textContent = 'Descargando: ' + data.progress + '%';
+          }
+          if (data && data.event === 'downloaded') {
+            if (msgEl) msgEl.textContent = 'Descarga completa. Instalando...';
+            if (progressText) progressText.textContent = 'Instalando...';
+          }
+        },
+        onSuccess: () => {
+          if (msgEl) msgEl.textContent = 'Listo, instalando la nueva versión...';
+        },
+        onError: (err) => {
+          console.error('[Updater] Error:', err);
+          downloadBtn.disabled = false;
+          downloadBtn.textContent = '🔄 Reintentar';
+          if (progressWrap) progressWrap.style.display = 'none';
+          if (msgEl) msgEl.textContent = 'Error al actualizar: ' + (err.message || err) + '. Abriendo en navegador...';
+          window.open(updateInfo.apkUrl, '_blank');
+        },
+        onFallback: () => {
+          if (msgEl) msgEl.textContent = 'Abriendo en navegador para descargar el APK...';
+        }
+      });
     });
 
     const dismissBtn = document.getElementById('ms-update-dismiss');
@@ -324,11 +418,12 @@
     load: loadServerUrl,
     checkForUpdates,
     showUpdateBanner,
-    getCurrentVersion: () => CURRENT_VERSION
+    getCurrentVersion: () => CURRENT_VERSION,
+    loadCurrentVersion
   };
 
   // ─── Auto-load on script execution ─────────────────────────────────
-  loadServerUrl().then((url) => {
+  Promise.all([loadServerUrl(), loadCurrentVersion()]).then(([url]) => {
     console.log('[MobileConnector] Modo:', url ? 'Híbrido (' + url + ')' : 'Supabase Directo');
 
     // Verificar actualizaciones al iniciar

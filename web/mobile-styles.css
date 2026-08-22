@@ -1,0 +1,291 @@
+/* ══════════════════════════════════════════════════════════════
+   MartialSystem - Mobile Styles (overrides for APK / small screens)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── Tablet / Mobile breakpoints ─────────────────────────── */
+@media (max-width: 1024px) {
+  /* ─── Hero Header Compact ─── */
+  .hero {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+  }
+  .hero-left {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+  .hero-left h1 {
+    font-size: 1.1rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  #system-logo-img {
+    height: 32px !important;
+    max-width: 120px !important;
+  }
+  #system-version {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+  }
+  /* Hide theme toggle pills in hero on mobile, keep only hamburger & logout */
+  .hero-right .pill {
+    display: none !important;
+  }
+  #user-info {
+    font-size: 11px !important;
+  }
+  .hero-right {
+    gap: 4px !important;
+  }
+  .mode-btn {
+    font-size: 8px !important;
+    padding: 3px 5px !important;
+    min-height: 28px !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* ─── Hero minimal ─── */
+  .hero {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    border-radius: 0 0 12px 12px !important;
+    margin: 0 !important;
+  }
+  .wrap {
+    padding: 0 4px !important;
+    margin: 4px auto !important;
+  }
+  #system-logo-img {
+    height: 28px !important;
+    max-width: 80px !important;
+  }
+  .hero-left h1 {
+    font-size: 0.95rem !important;
+  }
+  #system-version {
+    display: none !important;
+  }
+  .mode-btn {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+    min-height: 26px !important;
+  }
+
+  /* ─── Dashboard Cards: Full-width compact ─── */
+  #tab-operacion .grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  #tab-operacion .card,
+  #tab-operacion .card.full {
+    grid-column: 1 / -1 !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+  }
+  #tab-operacion .card h3 {
+    font-size: 0.9rem !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* ─── Owner Dashboard compact grid ─── */
+  #dashboard-admin-controls article > div:first-child {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+  #dashboard-admin-controls article > div:first-child > div {
+    padding: 8px 10px !important;
+  }
+  #dashboard-admin-controls article > div:first-child > div > div:first-child {
+    font-size: 10px !important;
+  }
+  #dashboard-admin-controls article > div:first-child > div > div:last-child {
+    font-size: 1.2rem !important;
+  }
+
+  /* ─── Owner dashboard bottom sections ─── */
+  #owner-disc-list-wrap,
+  #owner-classes-today-wrap,
+  #owner-delinquent-wrap,
+  #owner-notifs-wrap {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* ─── Hide desktop-only elements ─── */
+  #btn-dash-trace {
+    display: none !important;
+  }
+
+  /* ─── Superadmin dashboard compact ─── */
+  #dashboard-superadmin .card {
+    padding: 8px 10px !important;
+  }
+  #dashboard-superadmin .card h3 {
+    font-size: 0.75rem !important;
+    margin-bottom: 4px !important;
+  }
+  #dashboard-superadmin .card > div[id^="kpi-"] {
+    font-size: 1.4rem !important;
+  }
+
+  /* ─── Student dashboard ─── */
+  #dashboard-student-guardian .card {
+    padding: 8px 10px !important;
+  }
+  #dashboard-student-guardian .card h3 {
+    font-size: 0.85rem !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* ─── Sensei dashboard ─── */
+  #dashboard-sensei .card {
+    padding: 8px 10px !important;
+  }
+  #dashboard-sensei .card h3 {
+    font-size: 0.85rem !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* ─── Login Screen Mobile ─── */
+  #login-gate {
+    padding-top: 10px !important;
+    min-height: 60vh !important;
+  }
+  #login-card,
+  #trial-signup-card {
+    padding: 10px !important;
+    margin-bottom: 10px !important;
+  }
+  #login-card h3 {
+    font-size: 1rem !important;
+  }
+
+  /* ─── Tree (Arbol) section ─── */
+  #tree-establishment {
+    font-size: 13px !important;
+    min-height: 40px !important;
+  }
+
+  /* ─── Quick action button bar (mobile dashboard) ─── */
+  .mobile-quick-actions {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .mobile-quick-actions .btn {
+    flex: 1;
+    min-width: 60px;
+    padding: 8px 6px !important;
+    font-size: 11px !important;
+    min-height: 40px !important;
+    border-radius: 8px !important;
+  }
+
+  /* ─── Tree / Distribution section ─── */
+  .tree-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .tree-card {
+    padding: 8px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* ─── Small phones ─── */
+@media (max-width: 540px) {
+  .hero-left h1 {
+    font-size: 0.85rem !important;
+  }
+  #system-logo-img {
+    height: 24px !important;
+    max-width: 60px !important;
+  }
+  .mode-btn {
+    font-size: 6px !important;
+    padding: 2px 3px !important;
+    min-height: 24px !important;
+  }
+
+  /* Compact cards */
+  #tab-operacion .card {
+    padding: 8px !important;
+    border-radius: 8px !important;
+  }
+  #tab-operacion .card h3 {
+    font-size: 0.8rem !important;
+  }
+
+  /* Dashboard admin controls buttons */
+  #dashboard-admin-controls article > div:first-child {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 4px !important;
+  }
+  #dashboard-admin-controls .btn {
+    padding: 6px !important;
+    font-size: 10px !important;
+    min-height: 36px !important;
+  }
+
+  /* Superadmin KPIs compact */
+  #dashboard-superadmin .card > div[id^="kpi-"] {
+    font-size: 1.2rem !important;
+  }
+  #dashboard-superadmin .card h3 {
+    font-size: 0.7rem !important;
+  }
+
+  /* Tree section */
+  .row {
+    gap: 4px !important;
+  }
+  .row .btn {
+    font-size: 10px !important;
+    padding: 6px 8px !important;
+    min-height: 36px !important;
+  }
+}
+
+/* ─── Drawer tabs on mobile ─── */
+@media (max-width: 768px) {
+  .tabs {
+    width: 100% !important;
+    max-width: 100% !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    border-radius: 0 !important;
+    padding: 12px !important;
+    padding-top: 60px !important;
+  }
+  .tab-btn {
+    min-height: 48px !important;
+    font-size: 14px !important;
+    padding: 12px 14px !important;
+    border-radius: 10px !important;
+  }
+}
+
+/* ─── Login speed boost: hide login immediately on restore ─── */
+body.auth #login-gate {
+  display: none !important;
+}
+
+/* ─── Fix for tree establishment selector on mobile ─── */
+@media (max-width: 768px) {
+  #tab-operacion .card:last-child .row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  #tab-operacion .card:last-child .row select,
+  #tab-operacion .card:last-child .row button {
+    width: 100% !important;
+  }
+}

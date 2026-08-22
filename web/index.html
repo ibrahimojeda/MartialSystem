@@ -951,11 +951,12 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+  <link rel="stylesheet" href="/mobile-styles.css">
   <main class="wrap">
     <section class="hero">
       <div class="hero-left" style="display:flex;flex-direction:row;align-items:center;gap:12px;">
         <img id="system-logo-img" src="/icons/Icon DRK.png" alt="Logo" style="display:block;height:clamp(52px, 9vh, 84px);width:auto;max-width:280px;object-fit:contain;flex-shrink:0;">
-        <span id="system-version" style="font-size:0.8em;font-weight:600;color:var(--brand-2);background:rgba(201,162,39,0.12);border:1px solid rgba(201,162,39,0.35);padding:3px 9px;border-radius:999px;letter-spacing:0.3px;cursor:help;white-space:nowrap;" title="Versión del sistema">v1.1.0</span>
+        <span id="system-version" style="font-size:0.8em;font-weight:600;color:var(--brand-2);background:rgba(201,162,39,0.12);border:1px solid rgba(201,162,39,0.35);padding:3px 9px;border-radius:999px;letter-spacing:0.3px;cursor:help;white-space:nowrap;" title="Versión del sistema">v1.4.0</span>
       </div>
       <button class="hamburger-btn" id="hamburger-btn" type="button" aria-label="Menu">☰</button>
       <div class="hero-right">
@@ -3140,6 +3141,7 @@
         const et = ids('kpi-estabs-total'); const es = ids('kpi-estabs-sub');
         if (et) et.textContent = d.establishments.total;
         if (es) es.textContent = 'Activos: ' + d.establishments.active + ' | Inactivos: ' + d.establishments.inactive;
+        if (et && d.establishments && d.establishments.total !== undefined) showCard('kpi-estabs-total');
         // KPI: Usuarios totales
         const ut = ids('kpi-users-total'); const us = ids('kpi-users-sub');
         if (ut) ut.textContent = d.users?.total ?? 0;
@@ -3149,14 +3151,17 @@
           const parts = Object.entries(byRole).slice(0, 3).map(([r, c]) => (roleLabels[r] || r) + ': ' + c).join(' | ');
           us.textContent = parts || 'Sin datos';
         }
+        if (ut && d.users) showCard('kpi-users-total');
         // KPI: Alumnos totales
         const atK = ids('kpi-students-total'); const ats = ids('kpi-students-sub');
         if (atK) atK.textContent = d.students?.total ?? 0;
         if (ats) ats.textContent = 'Alumnos registrados';
+        if (atK && d.students) showCard('kpi-students-total');
         // KPI: Disciplinas activas
         const dt = ids('kpi-disciplines-total'); const ds = ids('kpi-disciplines-sub');
         if (dt) dt.textContent = d.disciplines?.total ?? 0;
         if (ds) ds.textContent = 'Disciplinas activas en el sistema';
+        if (dt && d.disciplines) showCard('kpi-disciplines-total');
         // KPI: Miembros por rol (resumen)
         const mt = ids('kpi-memberships-total'); const ms = ids('kpi-memberships-sub');
         if (mt) mt.textContent = d.users?.total ?? 0;
@@ -3166,6 +3171,7 @@
           const parts = Object.entries(byRole).slice(0, 3).map(([r, c]) => (roleLabels[r] || r) + ': ' + c).join(' | ');
           ms.textContent = parts || 'Sin datos';
         }
+        if (mt && d.users) showCard('kpi-memberships-total');
         // KPI: Ingresos semana - hide if no payment data
         const it = ids('kpi-ingresos-total');
         if (it) {
@@ -3173,11 +3179,12 @@
           else { it.textContent = 'Sin datos'; }
         }
         // KPI: Nuevos - hide if no new members
-        const nt = ids('kpi-new-total'); if (nt) nt.textContent = d.newThisWeek;
+        const nt = ids('kpi-new-total'); if (nt) { nt.textContent = d.newThisWeek; if (d.newThisWeek !== undefined) showCard('kpi-new-total'); }
         // KPI: Asistencia
         const at = ids('kpi-attendance-rate');
         if (at) at.textContent = d.attendance.rate !== null ? d.attendance.rate + '%' : 'Sin datos';
         if (d.attendance.rate === null) hideCard('kpi-attendance-rate');
+        else if (at) showCard('kpi-attendance-rate');
         // Top Establecimientos
         const topEstabsEl = ids('kpi-top-estabs');
         if (topEstabsEl && d.topEstabs && d.topEstabs.length) {
@@ -3482,39 +3489,39 @@
       adminCard.querySelector('article').innerHTML = `
         <h3>Dashboard del Dojo</h3>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px;">
-          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div id="owner-kpi-students-wrap" style="display:none;background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
             <div style="font-size:11px;color:var(--muted);">Total Alumnos</div>
             <div id="owner-kpi-students" style="font-size:1.6rem;font-weight:800;color:var(--accent);">...</div>
           </div>
-          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div id="owner-kpi-att-wrap" style="display:none;background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
             <div style="font-size:11px;color:var(--muted);">Asistencia (30d)</div>
             <div id="owner-kpi-att" style="font-size:1.6rem;font-weight:800;color:var(--ok);">...</div>
           </div>
-          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div id="owner-kpi-income-wrap" style="display:none;background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
             <div style="font-size:11px;color:var(--muted);">Ingresos Mes</div>
             <div id="owner-kpi-income" style="font-size:1.6rem;font-weight:800;color:var(--ok);">...</div>
           </div>
-          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div id="owner-kpi-gap-wrap" style="display:none;background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
             <div style="font-size:11px;color:var(--muted);">Brecha Cobro</div>
             <div id="owner-kpi-gap" style="font-size:1.6rem;font-weight:800;color:var(--warn);">...</div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
+          <div id="owner-disc-list-wrap" style="display:none;">
             <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Alumnos por Disciplina</h4>
-            <div id="owner-disc-list"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+            <div id="owner-disc-list"><span class="muted" style="font-size:12px;"></span></div>
           </div>
-          <div>
+          <div id="owner-classes-today-wrap" style="display:none;">
             <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Clases Hoy</h4>
-            <div id="owner-classes-today"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+            <div id="owner-classes-today"><span class="muted" style="font-size:12px;"></span></div>
           </div>
-          <div>
+          <div id="owner-delinquent-wrap" style="display:none;">
             <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Alumnos Morosos</h4>
-            <div id="owner-delinquent"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+            <div id="owner-delinquent"><span class="muted" style="font-size:12px;"></span></div>
           </div>
-          <div>
+          <div id="owner-notifs-wrap" style="display:none;">
             <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);">Notificaciones</h4>
-            <div id="owner-notifs"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+            <div id="owner-notifs"><span class="muted" style="font-size:12px;"></span></div>
           </div>
         </div>
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
@@ -3541,81 +3548,92 @@
       }
 
       // Each section is independent and fault-tolerant
-      // 1. KPIs (update by element ID)
+      // 1. KPIs (update by element ID) - mostrar container solo cuando hay datos reales
       try {
+        const kpiSW = adminCard.querySelector('#owner-kpi-students-wrap');
+        const kpiAW = adminCard.querySelector('#owner-kpi-att-wrap');
+        const kpiIW = adminCard.querySelector('#owner-kpi-income-wrap');
+        const kpiGW = adminCard.querySelector('#owner-kpi-gap-wrap');
         if (d.totalStudents !== undefined) {
-          const totalStudents = d.totalStudents || 0;
-          const attRate = d.attendance?.rate;
-          const recMonth = Number(d.financials?.receivedThisMonth || 0);
-          const gap = Number(d.financials?.gap || 0);
           const kpiS = adminCard.querySelector('#owner-kpi-students');
+          if (kpiS) kpiS.textContent = d.totalStudents || 0;
+          if (kpiSW) kpiSW.style.display = '';
+        }
+        const attRate = d.attendanceStats?.rate;
+        if (attRate !== null && attRate !== undefined) {
           const kpiA = adminCard.querySelector('#owner-kpi-att');
+          if (kpiA) kpiA.textContent = attRate + '%';
+          if (kpiAW) kpiAW.style.display = '';
+        }
+        const recMonth = Number(d.totalReceived || 0);
+        if (recMonth > 0) {
           const kpiI = adminCard.querySelector('#owner-kpi-income');
-          const kpiG = adminCard.querySelector('#owner-kpi-gap');
-          if (kpiS) kpiS.textContent = totalStudents;
-          if (kpiA) kpiA.textContent = attRate !== null && attRate !== undefined ? attRate + '%' : 'Sin datos';
           if (kpiI) kpiI.textContent = '$' + recMonth.toLocaleString();
+          if (kpiIW) kpiIW.style.display = '';
+        }
+        const gap = Number(Math.max(0, (d.expectedIncome || 0) - (d.totalReceived || 0)));
+        if (gap > 0 || (d.expectedIncome || 0) > 0) {
+          const kpiG = adminCard.querySelector('#owner-kpi-gap');
           if (kpiG) kpiG.textContent = '$' + gap.toLocaleString();
+          if (kpiGW) kpiGW.style.display = '';
         }
       } catch (err) { console.warn('Owner KPI error:', err.message); }
 
-      // 2. Alumnos por Disciplina
+      // 2. Alumnos por Disciplina - mostrar solo si hay datos
       try {
         const discEl = adminCard.querySelector('#owner-disc-list');
-        if (discEl) {
-          if (d.studentsPerDiscipline && Object.keys(d.studentsPerDiscipline).length > 0) {
-            discEl.innerHTML = Object.entries(d.studentsPerDiscipline || {}).map(([name, count]) => `
-              <div style="display:flex;justify-content:space-between;padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;">
-                <span>${name}</span><span style="color:var(--accent);">${count} alumnos</span>
-              </div>`).join('');
-          } else {
-            discEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin alumnos registrados</span>';
-          }
+        const discWrap = adminCard.querySelector('#owner-disc-list-wrap');
+        if (discEl && discWrap && d.studentsPerDiscipline && Object.keys(d.studentsPerDiscipline).length > 0) {
+          discEl.innerHTML = Object.entries(d.studentsPerDiscipline || {}).map(([name, count]) => `
+            <div style="display:flex;justify-content:space-between;padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;">
+              <span>${name}</span><span style="color:var(--accent);">${count} alumnos</span>
+            </div>`).join('');
+          discWrap.style.display = '';
         }
       } catch (err) { console.warn('Owner disc error:', err.message); }
 
-      // 3. Clases Hoy
+      // 3. Clases Hoy - mostrar solo si hay datos
       try {
         const classEl = adminCard.querySelector('#owner-classes-today');
-        if (classEl) {
+        const classWrap = adminCard.querySelector('#owner-classes-today-wrap');
+        if (classEl && classWrap) {
           const classes = (d.todayClasses || []).slice(0, 5);
           if (classes.length > 0) {
             classEl.innerHTML = classes.map(c => `
               <div style="padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;">
                 <strong>${c.start_time || ''}${c.end_time ? '-' + c.end_time : ''}</strong> ${c.title || '-'} <span class="muted">${c.discipline_name || ''}</span>
               </div>`).join('');
-          } else {
-            classEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin clases hoy</span>';
+            classWrap.style.display = '';
           }
         }
       } catch (err) { console.warn('Owner classes error:', err.message); }
 
-      // 4. Alumnos Morosos
+      // 4. Alumnos Morosos - mostrar solo si hay datos
       try {
         const delinquentEl = adminCard.querySelector('#owner-delinquent');
-        if (delinquentEl) {
+        const delinquentWrap = adminCard.querySelector('#owner-delinquent-wrap');
+        if (delinquentEl && delinquentWrap) {
           const delinquents = (d.delinquentStudents || []).slice(0, 5);
           if (delinquents.length > 0) {
             delinquentEl.innerHTML = delinquents.map(s => `
               <div style="padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;border-left:3px solid var(--warn);">
                 ${s.name}
               </div>`).join('');
-          } else {
-            delinquentEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin alumnos morosos</span>';
+            delinquentWrap.style.display = '';
           }
         }
       } catch (err) { console.warn('Owner delinquent error:', err.message); }
 
-      // 5. Notificaciones
+      // 5. Notificaciones - mostrar solo si hay datos
       try {
         const notifEl = adminCard.querySelector('#owner-notifs');
-        if (notifEl) {
+        const notifWrap = adminCard.querySelector('#owner-notifs-wrap');
+        if (notifEl && notifWrap) {
           const notifs = (d.notifications || []).slice(0, 3);
           if (notifs.length > 0) {
             notifEl.innerHTML = notifs.map(n => `
               <div style="padding:6px 8px;background:#1a2230;border-radius:6px;margin-bottom:4px;font-size:12px;border-left:3px solid var(--brand);">${n.title || '-'}</div>`).join('');
-          } else {
-            notifEl.innerHTML = '<span class="muted" style="font-size:12px;">Sin notificaciones</span>';
+            notifWrap.style.display = '';
           }
         }
       } catch (err) { console.warn('Owner notifs error:', err.message); }
@@ -3801,6 +3819,69 @@
       } catch (_) { /* table may not exist */ }
     }
 
+    // Oculta todas las cards de los dashboards (student, sensei, superadmin) hasta
+    // que su función loadXxxDashboard tenga datos reales. NO toca el
+    // dashboard-admin-controls (owner/admin) porque ese se renderiza dinámicamente
+    // con loadOwnerDashboard.
+    function resetAllDashboardCards() {
+      const containers = ['dashboard-superadmin', 'dashboard-student-guardian', 'dashboard-sensei'];
+      containers.forEach(cid => {
+        const cont = ids(cid);
+        if (!cont) return;
+        cont.querySelectorAll('article.card').forEach(card => {
+          card.style.display = 'none';
+        });
+      });
+    }
+
+    function renderMobileQuickActions() {
+      const role = currentMembershipRole() || state.profileRole || '';
+      const dashboardSections = ['dashboard-student-guardian', 'dashboard-sensei', 'dashboard-superadmin', 'dashboard-admin-controls'];
+      
+      // Remove existing quick action bars
+      document.querySelectorAll('.mobile-quick-actions').forEach(el => el.remove());
+      
+      // Only add on mobile (< 768px)
+      if (window.innerWidth > 768) return;
+      
+      dashboardSections.forEach(sectionId => {
+        const section = ids(sectionId);
+        if (!section || section.classList.contains('hidden')) return;
+        
+        const bar = document.createElement('div');
+        bar.className = 'mobile-quick-actions';
+        
+        if (role === 'owner' || role === 'admin') {
+          bar.innerHTML = `
+            <button class="btn" onclick="showTab('academico')" type="button">👥 Alumnos</button>
+            <button class="btn" onclick="showTab('calendario')" type="button">📅 Clases</button>
+            <button class="btn" onclick="showTab('finanzas')" type="button">💰 Pagos</button>
+            <button class="btn alt" onclick="showTab('marketplace')" type="button">🛒 Tienda</button>
+          `;
+        } else if (role === 'sensei' || role === 'instructor') {
+          bar.innerHTML = `
+            <button class="btn" onclick="showTab('calendario')" type="button">📅 Mis clases</button>
+            <button class="btn" onclick="showTab('academico')" type="button">📝 Evaluar</button>
+            <button class="btn alt" onclick="showTab('comunidad')" type="button">💬 Mensajes</button>
+          `;
+        } else if (role === 'student' || role === 'guardian') {
+          bar.innerHTML = `
+            <button class="btn" onclick="showTab('academico')" type="button">📚 Mis cursos</button>
+            <button class="btn" onclick="showTab('finanzas')" type="button">💰 Pagos</button>
+            <button class="btn alt" onclick="showTab('comunidad')" type="button">💬 Notificaciones</button>
+          `;
+        } else if (role === 'superadmin') {
+          bar.innerHTML = `
+            <button class="btn" onclick="showTab('configuracion')" type="button">⚙️ Config</button>
+            <button class="btn" onclick="showTab('finanzas')" type="button">💰 Finanzas</button>
+            <button class="btn alt" onclick="showTab('administracion')" type="button">👥 Usuarios</button>
+          `;
+        }
+        
+        section.prepend(bar);
+      });
+    }
+
     function showOperacionDashboard() {
       applyDashboardCopy(document.body.classList.contains('theme-clean') ? 'clean' : 'dojo');
 
@@ -3809,6 +3890,9 @@
       const dashboardSensei = ids('dashboard-sensei');
       const dashboardSuperadmin = ids('dashboard-superadmin');
       const dashboardAdmin = ids('dashboard-admin-controls');
+
+      // Restaurar todas las cards antes de cambiar de rol
+      resetAllDashboardCards();
 
       // Ocultar todos
       if (dashboardStudent) dashboardStudent.classList.add('hidden');
@@ -3833,6 +3917,9 @@
       } else if (role === 'admin') {
         if (dashboardAdmin) dashboardAdmin.classList.remove('hidden');
       }
+      
+      // Add mobile quick actions bar
+      renderMobileQuickActions();
     }
 
     function setAuthenticated(auth) {
@@ -7521,6 +7608,10 @@
       ids('admin-discipline-wrap').style.display = isInstructor ? 'block' : 'none';
       const canSetSensei = isInstructor && ['superadmin', 'owner'].includes(currentMembershipRole());
       ids('admin-sensei-wrap').style.display = canSetSensei ? 'block' : 'none';
+      // Refrescar dashboard si cambia el rol del usuario activo
+      if (document.querySelector('#tab-operacion')?.style.display !== 'none') {
+        showOperacionDashboard();
+      }
     });
     ids('admin-role').dispatchEvent(new Event('change'));
 

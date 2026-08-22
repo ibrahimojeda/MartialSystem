@@ -1,14 +1,16 @@
 {
-  "version": "1.3.0",
-  "buildNumber": 5,
-  "message": "Auto-actualización: ahora la app descarga e instala el nuevo APK automáticamente desde GitHub.",
+  "version": "1.4.0",
+  "buildNumber": 6,
+  "message": "Optimización móvil: Dashboard adaptado para APK con diseño compacto, botones de acción rápida y carga inmediata del Dashboard al abrir la app.",
   "forceUpdate": false,
   "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk",
-  "releaseDate": "2026-08-19",
+  "releaseDate": "2026-08-22",
   "changelog": [
-    "Auto-actualización automática: la app detecta nueva versión, descarga el APK con barra de progreso y lo instala directamente",
-    "La versión actual se lee dinámicamente del version.json embebido en la APK (ya no está hardcodeada)",
-    "Nuevo plugin nativo ApkUpdater que maneja la descarga, permisos de instalación y lanzamiento del instalador Android",
-    "Mejor manejo de errores con fallback a descarga manual en navegador si el plugin no está disponible"
+    "Nuevo diseño responsive para móvil: hero compacto, dashboard en columna, cards con padding reducido",
+    "Barra de acciones rápidas en el Dashboard para cada rol (Owner, Sensei, Student, Superadmin)",
+    "Login desaparece instantáneamente al restaurar sesión guardada, mostrando el Dashboard directo",
+    "Sistema de actualización automática mejorado: la APK detecta nueva versión desde GitHub y la instala automáticamente con barra de progreso",
+    "Optimización de layout para pantallas de 540px y 380px (teléfonos pequeños)",
+    "Drawer de navegación a pantalla completa en dispositivos móviles"
   ]
 }

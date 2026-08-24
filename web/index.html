@@ -2967,68 +2967,70 @@
     });
 
     // ─── Session persistence: restore token from localStorage ───────────
+    // Prioridad: Supabase Direct (APK) > Express Server (Web)
     try {
       const savedToken = localStorage.getItem('ms_token');
       const savedRefreshToken = localStorage.getItem('ms_refresh_token');
-      // Auto-restore session using the Supabase client session (which persists + auto-refreshes)
       (async () => {
         let ok = false;
+        let isCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+        // Estrategia 1: Siempre intentar Supabase Direct primero (funciona en APK y Web)
         try {
           const sb = window.MartialSupabase;
-          // 1) Usar la sesión del cliente Supabase (restáurala y deja que auto-refresque)
-          const restored = sb ? await sb.auth.refreshSession({ refresh_token: savedRefreshToken }).catch(() => ({ data: { session: null } })) : { data: { session: null } };
-          const activeSession = restored?.data?.session;
-          if (activeSession?.access_token) {
-            state.accessToken = activeSession.access_token;
-            if (activeSession.refresh_token) {
-              try { localStorage.setItem('ms_refresh_token', activeSession.refresh_token); } catch (_) {}
+          if (sb && savedRefreshToken) {
+            const { data: sessionData } = await sb.auth.refreshSession({ refresh_token: savedRefreshToken });
+            const activeSession = sessionData?.session;
+            if (activeSession?.access_token) {
+              state.accessToken = activeSession.access_token;
+              if (activeSession.refresh_token) {
+                try { localStorage.setItem('ms_refresh_token', activeSession.refresh_token); } catch (_) {}
+              }
+              try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
+              try { await refreshMeDirect(); ok = true; } catch (_) {}
             }
-            try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
-            try { await refreshMe(); ok = true; } catch (_) {}
           }
-        } catch (_) { /* sin sesión supabase */ }
+        } catch (_) { /* fallback */ }
 
-        if (!ok && savedToken) {
+        // Estrategia 2: Intentar con restore desde cliente Supabase (sesión persistente en localStorage)
+        if (!ok) {
+          try {
+            const sb = window.MartialSupabase;
+            const { data: sessionData } = sb ? await sb.auth.getSession() : { data: { session: null } };
+            if (sessionData?.session?.access_token) {
+              state.accessToken = sessionData.session.access_token;
+              try { localStorage.setItem('ms_token', state.accessToken); } catch (_) {}
+              if (sessionData.session.refresh_token) {
+                try { localStorage.setItem('ms_refresh_token', sessionData.session.refresh_token); } catch (_) {}
+              }
+              try { await refreshMeDirect(); ok = true; } catch (_) {}
+            }
+          } catch (_) { /* fallback */ }
+        }
+
+        // Estrategia 3: Express Server (solo funciona en web con servidor local)
+        if (!ok && !isCapacitor && savedToken) {
           state.accessToken = savedToken;
           try {
             await refreshMe();
             ok = true;
           } catch (e) {
-            const msg = String(e && e.message || e || '').toLowerCase();
-            const isAuthError = /401|unauthorized|invalid|expired/i.test(msg);
-
-            // Si el access_token expiró y tenemos refresh_token, renovar realmente vía Supabase
-            if (isAuthError && savedRefreshToken) {
-              try {
-                const sb = window.MartialSupabase;
-                if (sb) {
-                  const { data: sessionData } = await sb.auth.refreshSession({ refresh_token: savedRefreshToken });
-                  const newAccessToken = sessionData?.session?.access_token;
-                  const newRefreshToken = sessionData?.session?.refresh_token;
-                  if (newAccessToken) {
-                    state.accessToken = newAccessToken;
-                    try { localStorage.setItem('ms_token', newAccessToken); } catch (_) {}
-                    if (newRefreshToken) {
-                      try { localStorage.setItem('ms_refresh_token', newRefreshToken); } catch (_) {}
-                    }
-                    await refreshMe();
-                    ok = true;
-                  }
-                }
-              } catch (_) { /* no se pudo renovar */ }
-            }
-
-            // Último recurso: consultar Supabase directo (solo si aún no se validó)
-            if (!ok) {
-              try { await refreshMeDirect(); ok = true; } catch (_) { /* fallthrough */ }
-            }
+            // Si falla el servidor, intentar Supabase direct como último recurso
+            try { await refreshMeDirect(); ok = true; } catch (_) {}
           }
         }
+
+        // Estrategia 4: Último recurso con token guardado antiguo
+        if (!ok && savedToken && !savedRefreshToken) {
+          state.accessToken = savedToken;
+          try { await refreshMeDirect(); ok = true; } catch (_) {}
+        }
+
         if (ok) {
           setAuthenticated(true);
           try {
             updateUserInfo();
-            loadTheoryDisciplines();
+            loadTheoryDisciplines().catch(() => {});
             const allowed = allowedModulesForCurrentEstablishment();
             showTab(allowed[0] || 'operacion');
             const treeSelect = ids('tree-establishment');
@@ -3036,10 +3038,20 @@
               treeSelect.dispatchEvent(new Event('change'));
             }
           } catch (_) {
-            // Aunque un render del dashboard falle, la sesión se mantiene
+            // Dashboard puede fallar parcialmente, pero la sesión se mantiene
           }
+          // Forzar verificación de actualización al iniciar sesión/restaurar
+          setTimeout(async () => {
+            try {
+              if (window.MartialMobile && typeof window.MartialMobile.checkForUpdates === 'function') {
+                const update = await window.MartialMobile.checkForUpdates(false);
+                if (update && typeof window.MartialMobile.showUpdateBanner === 'function') {
+                  window.MartialMobile.showUpdateBanner(update);
+                }
+              }
+            } catch (_) {}
+          }, 3000);
         } else {
-          // Solo cerrar sesión si el token realmente no es válido
           try { localStorage.removeItem('ms_token'); } catch (_) {}
           try { localStorage.removeItem('ms_refresh_token'); } catch (_) {}
           state.accessToken = '';

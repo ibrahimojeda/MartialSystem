@@ -2644,6 +2644,39 @@
   </div>
 
   <div class="drawer-overlay" id="drawer-overlay"></div>
+
+  <!-- ─── Mobile Bottom Navigation ──────────────────────────── -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" style="display:none;">
+    <button class="nav-item active" data-nav="home" type="button">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Inicio</span>
+    </button>
+    <button class="nav-item" data-nav="calendar" type="button">
+      <span class="nav-icon">📅</span>
+      <span class="nav-label">Clases</span>
+    </button>
+    <button class="nav-item" data-nav="students" type="button">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label">Alumnos</span>
+    </button>
+    <button class="nav-item" data-nav="payments" type="button">
+      <span class="nav-icon">💰</span>
+      <span class="nav-label">Pagos</span>
+    </button>
+    <button class="nav-item" data-nav="more" type="button">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Más</span>
+    </button>
+  </nav>
+
+  <!-- ─── Mobile More Menu (slide-up panel) ────────────────── -->
+  <div class="mobile-more-overlay" id="mobile-more-overlay">
+    <div class="mobile-more-panel" id="mobile-more-panel">
+      <div id="mobile-more-items"></div>
+      <button class="more-close" id="mobile-more-close" type="button">Cerrar</button>
+    </div>
+  </div>
+
   <script>
     const ids = id => document.getElementById(id);
 
@@ -3931,7 +3964,233 @@
       if (logoutBtn) logoutBtn.classList.toggle('hidden', !auth);
       if (!auth) ALL_TABS.forEach(t => { const el = ids('tab-' + t); if (el) el.style.display = 'none'; });
       if (auth) syncTopTabsVisibility();
+      
+      // Show/hide mobile bottom nav
+      const bottomNav = ids('mobile-bottom-nav');
+      if (bottomNav) {
+        bottomNav.style.display = auth ? '' : 'none';
+      }
     }
+
+    // ─── Mobile Bottom Navigation ────────────────────────────────────
+    const MOBILE_MODULES = {
+      owner: [
+        { id: 'home', icon: '🏠', label: 'Inicio', tab: 'operacion' },
+        { id: 'calendar', icon: '📅', label: 'Clases', tab: 'calendario' },
+        { id: 'students', icon: '👥', label: 'Alumnos', tab: 'academico' },
+        { id: 'payments', icon: '💰', label: 'Pagos', tab: 'finanzas' },
+        { id: 'more', icon: '⚙️', label: 'Más', tab: null }
+      ],
+      sensei: [
+        { id: 'home', icon: '🏠', label: 'Inicio', tab: 'operacion' },
+        { id: 'calendar', icon: '📅', label: 'Clases', tab: 'calendario' },
+        { id: 'students', icon: '👥', label: 'Alumnos', tab: 'academico' },
+        { id: 'payments', icon: '💰', label: 'Pagos', tab: 'finanzas' },
+        { id: 'more', icon: '⚙️', label: 'Más', tab: null }
+      ],
+      student: [
+        { id: 'home', icon: '🏠', label: 'Inicio', tab: 'operacion' },
+        { id: 'calendar', icon: '📅', label: 'Clases', tab: 'calendario' },
+        { id: 'students', icon: '👥', label: 'Cursos', tab: 'academico' },
+        { id: 'payments', icon: '💰', label: 'Pagos', tab: 'finanzas' },
+        { id: 'more', icon: '⚙️', label: 'Más', tab: null }
+      ],
+      superadmin: [
+        { id: 'home', icon: '🏠', label: 'Inicio', tab: 'operacion' },
+        { id: 'calendar', icon: '📅', label: 'Clases', tab: 'calendario' },
+        { id: 'students', icon: '👥', label: 'Alumnos', tab: 'academico' },
+        { id: 'payments', icon: '💰', label: 'Pagos', tab: 'finanzas' },
+        { id: 'more', icon: '⚙️', label: 'Más', tab: null }
+      ]
+    };
+
+    const MORE_ITEMS = {
+      owner: [
+        { icon: '📋', label: 'Prospectos', tab: 'prospectos' },
+        { icon: '🏆', label: 'Torneos', tab: 'torneos' },
+        { icon: '🛒', label: 'Marketplace', tab: 'marketplace' },
+        { icon: '💬', label: 'Comunidad', tab: 'comunidad' },
+        { icon: '📊', label: 'Reportes', tab: 'finanzas' },
+        { icon: '⚙️', label: 'Configuración', tab: 'configuracion' },
+        { icon: '🚪', label: 'Cerrar sesión', tab: 'logout' }
+      ],
+      sensei: [
+        { icon: '🏆', label: 'Torneos', tab: 'torneos' },
+        { icon: '💬', label: 'Comunidad', tab: 'comunidad' },
+        { icon: '📊', label: 'Reportes', tab: 'finanzas' },
+        { icon: '⚙️', label: 'Configuración', tab: 'configuracion' },
+        { icon: '🚪', label: 'Cerrar sesión', tab: 'logout' }
+      ],
+      student: [
+        { icon: '💬', label: 'Notificaciones', tab: 'comunidad' },
+        { icon: '📝', label: 'Exámenes', tab: 'teoria' },
+        { icon: '⚙️', label: 'Configuración', tab: 'configuracion' },
+        { icon: '🚪', label: 'Cerrar sesión', tab: 'logout' }
+      ],
+      superadmin: [
+        { icon: '📋', label: 'Prospectos', tab: 'prospectos' },
+        { icon: '🏆', label: 'Torneos', tab: 'torneos' },
+        { icon: '🛒', label: 'Marketplace', tab: 'marketplace' },
+        { icon: '💬', label: 'Comunidad', tab: 'comunidad' },
+        { icon: '👥', label: 'Usuarios', tab: 'administracion' },
+        { icon: '📊', label: 'Reportes', tab: 'finanzas' },
+        { icon: '⚙️', label: 'Configuración', tab: 'configuracion' },
+        { icon: '🚪', label: 'Cerrar sesión', tab: 'logout' }
+      ]
+    };
+
+    function getMobileRole() {
+      const role = currentMembershipRole() || state.profileRole || '';
+      if (role === 'instructor') return 'sensei';
+      if (role === 'guardian') return 'student';
+      if (role === 'admin') return 'owner';
+      return role;
+    }
+
+    function initMobileNav() {
+      const nav = ids('mobile-bottom-nav');
+      if (!nav) return;
+      const role = getMobileRole();
+      const modules = MOBILE_MODULES[role] || MOBILE_MODULES.owner;
+      
+      nav.innerHTML = modules.map(m => `
+        <button class="nav-item ${m.id === 'home' ? 'active' : ''}" data-nav="${m.id}" type="button">
+          <span class="nav-icon">${m.icon}</span>
+          <span class="nav-label">${m.label}</span>
+        </button>
+      `).join('');
+      
+      // Bind nav clicks
+      nav.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const navId = btn.dataset.nav;
+          if (navId === 'more') {
+            openMoreMenu();
+            return;
+          }
+          const mod = modules.find(m => m.id === navId);
+          if (mod && mod.tab) {
+            nav.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            showTab(mod.tab);
+          }
+        });
+      });
+    }
+
+    function openMoreMenu() {
+      const overlay = ids('mobile-more-overlay');
+      const panel = ids('mobile-more-items');
+      if (!overlay || !panel) return;
+      
+      const role = getMobileRole();
+      const items = MORE_ITEMS[role] || MORE_ITEMS.owner;
+      
+      panel.innerHTML = items.map(item => `
+        <button class="more-item" data-tab="${item.tab}" type="button">
+          <span class="more-icon">${item.icon}</span>
+          <span>${item.label}</span>
+        </button>
+      `).join('');
+      
+      panel.querySelectorAll('.more-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tab = btn.dataset.tab;
+          overlay.classList.remove('open');
+          if (tab === 'logout') {
+            ids('logout-btn')?.click();
+            return;
+          }
+          showTab(tab);
+        });
+      });
+      
+      overlay.classList.add('open');
+    }
+
+    // Close more menu
+    ids('mobile-more-close')?.addEventListener('click', () => {
+      ids('mobile-more-overlay')?.classList.remove('open');
+    });
+    ids('mobile-more-overlay')?.addEventListener('click', (e) => {
+      if (e.target === ids('mobile-more-overlay')) {
+        ids('mobile-more-overlay')?.classList.remove('open');
+      }
+    });
+
+    // ─── Mobile Dashboard Icon Grid ──────────────────────────────────
+    const DASHBOARD_ICONS = {
+      owner: [
+        { icon: '📅', label: 'Clases', tab: 'calendario', color: '#2ecc71' },
+        { icon: '👥', label: 'Alumnos', tab: 'academico', color: '#2980b9' },
+        { icon: '📝', label: 'Evaluar', tab: 'academico', color: '#e67e22' },
+        { icon: '💰', label: 'Pagos', tab: 'finanzas', color: '#2e8b57' },
+        { icon: '📋', label: 'Prospectos', tab: 'prospectos', color: '#9b59b6' },
+        { icon: '🏆', label: 'Torneos', tab: 'torneos', color: '#e74c3c' },
+        { icon: '🛒', label: 'Tienda', tab: 'marketplace', color: '#1abc9c' },
+        { icon: '💬', label: 'Mensajes', tab: 'comunidad', color: '#3498db' },
+        { icon: '📊', label: 'Reportes', tab: 'finanzas', color: '#f1c40f' }
+      ],
+      sensei: [
+        { icon: '📅', label: 'Mis Clases', tab: 'calendario', color: '#2ecc71' },
+        { icon: '👥', label: 'Alumnos', tab: 'academico', color: '#2980b9' },
+        { icon: '📝', label: 'Evaluar', tab: 'academico', color: '#e67e22' },
+        { icon: '📊', label: 'Asistencia', tab: 'calendario', color: '#9b59b6' },
+        { icon: '💬', label: 'Mensajes', tab: 'comunidad', color: '#3498db' },
+        { icon: '💰', label: 'Pagos', tab: 'finanzas', color: '#2e8b57' }
+      ],
+      student: [
+        { icon: '📚', label: 'Mis Cursos', tab: 'academico', color: '#2980b9' },
+        { icon: '📅', label: 'Clases', tab: 'calendario', color: '#2ecc71' },
+        { icon: '📊', label: 'Asistencia', tab: 'academico', color: '#e67e22' },
+        { icon: '💰', label: 'Pagos', tab: 'finanzas', color: '#2e8b57' },
+        { icon: '💬', label: 'Notificaciones', tab: 'comunidad', color: '#3498db' },
+        { icon: '📝', label: 'Exámenes', tab: 'teoria', color: '#9b59b6' }
+      ],
+      superadmin: [
+        { icon: '🏢', label: 'Dojos', tab: 'configuracion', color: '#2980b9' },
+        { icon: '👥', label: 'Usuarios', tab: 'administracion', color: '#e67e22' },
+        { icon: '💰', label: 'Finanzas', tab: 'finanzas', color: '#2e8b57' },
+        { icon: '📅', label: 'Clases', tab: 'calendario', color: '#2ecc71' },
+        { icon: '📊', label: 'Reportes', tab: 'finanzas', color: '#f1c40f' },
+        { icon: '⚙️', label: 'Config', tab: 'configuracion', color: '#9b59b6' }
+      ]
+    };
+
+    function renderMobileDashboardGrid() {
+      const role = getMobileRole();
+      const icons = DASHBOARD_ICONS[role] || DASHBOARD_ICONS.owner;
+      
+      // Remove existing grid
+      const existing = document.querySelector('.mobile-dashboard-grid');
+      if (existing) existing.remove();
+      
+      const grid = document.createElement('div');
+      grid.className = 'mobile-dashboard-grid';
+      
+      grid.innerHTML = icons.map(item => `
+        <button class="mobile-dash-item" onclick="showTab('${item.tab}')" type="button" style="border-top: 3px solid ${item.color};">
+          <span class="dash-icon">${item.icon}</span>
+          <span class="dash-label">${item.label}</span>
+        </button>
+      `).join('');
+      
+      // Insert at top of tab-operacion
+      const tabOp = ids('tab-operacion');
+      if (tabOp) {
+        tabOp.prepend(grid);
+      }
+    }
+
+    // Override showOperacionDashboard to add mobile grid
+    const _origShowOperacionDashboard = showOperacionDashboard;
+    showOperacionDashboard = function() {
+      _origShowOperacionDashboard();
+      if (window.innerWidth <= 768) {
+        renderMobileDashboardGrid();
+        initMobileNav();
+      }
+    };
 
     function renderDisciplineChecks() {
       const wrap = ids('discipline-checks');

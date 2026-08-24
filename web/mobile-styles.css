@@ -1,65 +1,54 @@
 /* ══════════════════════════════════════════════════════════════
-   MartialSystem - Mobile Styles (overrides for APK / small screens)
+   MartialSystem - Mobile Styles v2 (APK Native-like)
+   Bottom Navigation, Icon Grid Dashboard, Clean Login
    ══════════════════════════════════════════════════════════════ */
 
-/* ─── Tablet / Mobile breakpoints ─────────────────────────── */
-@media (max-width: 1024px) {
-  /* ─── Hero Header Compact ─── */
+/* ─── Only apply on mobile (< 768px) ──────────────────────── */
+@media (max-width: 768px) {
+  /* ─── Reset body for mobile ─── */
+  body {
+    padding-bottom: 70px !important; /* space for bottom nav */
+    overflow-x: hidden;
+  }
+  body.auth .wrap {
+    margin-left: 0 !important;
+    max-width: 100% !important;
+    padding: 0 0 0 0 !important;
+    margin: 0 !important;
+  }
+  .wrap {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* ─── Hide desktop elements ─── */
+  .tabs, #app-tabs, .tab-btn, .drawer-overlay, #hamburger-btn,
+  #btn-dash-trace, .pill, .mode-btn, #ui-clean-btn, #ui-dojo-btn,
+  #system-version, .hero-right .btn.alt {
+    display: none !important;
+  }
+
+  /* ─── Hero minimal ─── */
   .hero {
-    padding: 8px 10px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
+    border-radius: 0 0 12px 12px !important;
+    margin: 0 !important;
+    padding: 8px 12px !important;
     gap: 6px !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-top: 0 !important;
+    min-height: 48px !important;
   }
   .hero-left {
     flex-direction: row !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 8px !important;
     flex: 1 !important;
     min-width: 0 !important;
-  }
-  .hero-left h1 {
-    font-size: 1.1rem !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-  #system-logo-img {
-    height: 32px !important;
-    max-width: 120px !important;
-  }
-  #system-version {
-    font-size: 10px !important;
-    padding: 2px 6px !important;
-  }
-  /* Hide theme toggle pills in hero on mobile, keep only hamburger & logout */
-  .hero-right .pill {
-    display: none !important;
-  }
-  #user-info {
-    font-size: 11px !important;
-  }
-  .hero-right {
-    gap: 4px !important;
-  }
-  .mode-btn {
-    font-size: 8px !important;
-    padding: 3px 5px !important;
-    min-height: 28px !important;
-    min-width: 0 !important;
-  }
-}
-
-@media (max-width: 768px) {
-  /* ─── Hero minimal ─── */
-  .hero {
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    border-radius: 0 0 12px 12px !important;
-    margin: 0 !important;
-  }
-  .wrap {
-    padding: 0 4px !important;
-    margin: 4px auto !important;
   }
   #system-logo-img {
     height: 28px !important;
@@ -67,140 +56,353 @@
   }
   .hero-left h1 {
     font-size: 0.95rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
-  #system-version {
-    display: none !important;
+  #user-info {
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 140px !important;
   }
-  .mode-btn {
-    font-size: 7px !important;
-    padding: 2px 4px !important;
-    min-height: 26px !important;
+  .hero-right {
+    gap: 4px !important;
+    flex-wrap: nowrap !important;
+    width: auto !important;
   }
 
-  /* ─── Dashboard Cards: Full-width compact ─── */
-  #tab-operacion .grid {
+  /* ─── Bottom Navigation Bar ─── */
+  .mobile-bottom-nav {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 100 !important;
+    background: linear-gradient(180deg, #1a2029 0%, #141b24 100%) !important;
+    border-top: 1px solid #334053 !important;
+    display: flex !important;
+    justify-content: space-around !important;
+    align-items: center !important;
+    padding: 4px 0 env(safe-area-inset-bottom, 4px) 0 !important;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.3) !important;
+    height: 64px !important;
+  }
+  body.theme-clean .mobile-bottom-nav {
+    background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%) !important;
+    border-top: 1px solid #d1dcea !important;
+  }
+  .mobile-bottom-nav .nav-item {
     display: flex !important;
     flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    padding: 4px 8px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    border: none !important;
+    background: transparent !important;
+    color: #9aabb8 !important;
+    cursor: pointer !important;
+    transition: color 150ms ease, transform 150ms ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation !important;
+  }
+  .mobile-bottom-nav .nav-item:active {
+    transform: scale(0.92) !important;
+  }
+  .mobile-bottom-nav .nav-item.active {
+    color: #c64834 !important;
+  }
+  body.theme-clean .mobile-bottom-nav .nav-item.active {
+    color: #b3412f !important;
+  }
+  .mobile-bottom-nav .nav-item .nav-icon {
+    font-size: 22px !important;
+    line-height: 1 !important;
+  }
+  .mobile-bottom-nav .nav-item .nav-label {
+    font-size: 9px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    letter-spacing: 0.2px !important;
+  }
+
+  /* ─── Login Screen Full Mobile ─── */
+  #login-gate {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 200 !important;
+    background: var(--bg) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 20px !important;
+    min-height: 100vh !important;
+    transition: opacity 300ms ease !important;
+  }
+  body.auth #login-gate {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  #login-card, #trial-signup-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 16px !important;
+    margin: 0 !important;
+    border-radius: 12px !important;
+  }
+  #login-card h3 {
+    font-size: 1.1rem !important;
+    text-align: center !important;
+  }
+  #login-card p {
+    text-align: center !important;
+    font-size: 12px !important;
+  }
+  #login-form .btn, #trial-signup-form .btn {
+    min-height: 48px !important;
+    font-size: 15px !important;
+  }
+  #login-output {
+    display: none !important;
+  }
+  /* Show login output only in config debug mode */
+  #login-output.show-debug {
+    display: block !important;
+  }
+
+  /* ─── Dashboard Icon Grid (Home) ─── */
+  .mobile-dashboard-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+  .mobile-dash-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 14px 8px !important;
+    border-radius: 14px !important;
+    border: 1px solid var(--line) !important;
+    background: var(--panel) !important;
+    cursor: pointer !important;
+    transition: transform 120ms ease, box-shadow 120ms ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation !important;
+    min-height: 80px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  }
+  .mobile-dash-item:active {
+    transform: scale(0.95) !important;
+  }
+  .mobile-dash-item .dash-icon {
+    font-size: 28px !important;
+    line-height: 1 !important;
+  }
+  .mobile-dash-item .dash-label {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    text-align: center !important;
+    line-height: 1.2 !important;
+    color: var(--text) !important;
+  }
+  .mobile-dash-item .dash-badge {
+    position: absolute !important;
+    top: -4px !important;
+    right: -4px !important;
+    background: #c64834 !important;
+    color: #fff !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    padding: 2px 6px !important;
+    border-radius: 999px !important;
+    min-width: 18px !important;
+    text-align: center !important;
+  }
+
+  /* ─── Hide old dashboard sections on mobile ─── */
+  #dashboard-student-guardian,
+  #dashboard-sensei,
+  #dashboard-superadmin,
+  #dashboard-admin-controls {
+    display: none !important;
+  }
+  /* Show only the active one */
+  #dashboard-student-guardian.active-mobile,
+  #dashboard-sensei.active-mobile,
+  #dashboard-superadmin.active-mobile,
+  #dashboard-admin-controls.active-mobile {
+    display: block !important;
+  }
+
+  /* ─── Tab content sections on mobile ─── */
+  section.grid {
+    margin-top: 0 !important;
+    padding: 8px !important;
     gap: 8px !important;
   }
-  #tab-operacion .card,
-  #tab-operacion .card.full {
-    grid-column: 1 / -1 !important;
+  section.grid .card {
     padding: 10px !important;
-    margin: 0 !important;
     border-radius: 10px !important;
+    margin-bottom: 0 !important;
   }
-  #tab-operacion .card h3 {
+  section.grid .card h3 {
     font-size: 0.9rem !important;
     margin-bottom: 6px !important;
   }
-
-  /* ─── Owner Dashboard compact grid ─── */
-  #dashboard-admin-controls article > div:first-child {
+  .form {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+    font-size: 16px !important;
+    min-height: 44px !important;
+    padding: 10px !important;
+  }
+  .btn, .btn.alt {
+    min-height: 44px !important;
+    font-size: 14px !important;
+    padding: 10px 14px !important;
+    border-radius: 10px !important;
+  }
+  .row {
+    gap: 6px !important;
+  }
+  .finance-kpis {
     grid-template-columns: 1fr 1fr !important;
     gap: 6px !important;
   }
-  #dashboard-admin-controls article > div:first-child > div {
+  .kpi-tile {
     padding: 8px 10px !important;
   }
-  #dashboard-admin-controls article > div:first-child > div > div:first-child {
-    font-size: 10px !important;
-  }
-  #dashboard-admin-controls article > div:first-child > div > div:last-child {
-    font-size: 1.2rem !important;
-  }
-
-  /* ─── Owner dashboard bottom sections ─── */
-  #owner-disc-list-wrap,
-  #owner-classes-today-wrap,
-  #owner-delinquent-wrap,
-  #owner-notifs-wrap {
-    grid-column: 1 / -1 !important;
-  }
-
-  /* ─── Hide desktop-only elements ─── */
-  #btn-dash-trace {
-    display: none !important;
-  }
-
-  /* ─── Superadmin dashboard compact ─── */
-  #dashboard-superadmin .card {
-    padding: 8px 10px !important;
-  }
-  #dashboard-superadmin .card h3 {
-    font-size: 0.75rem !important;
-    margin-bottom: 4px !important;
-  }
-  #dashboard-superadmin .card > div[id^="kpi-"] {
-    font-size: 1.4rem !important;
-  }
-
-  /* ─── Student dashboard ─── */
-  #dashboard-student-guardian .card {
-    padding: 8px 10px !important;
-  }
-  #dashboard-student-guardian .card h3 {
-    font-size: 0.85rem !important;
-    margin-bottom: 4px !important;
-  }
-
-  /* ─── Sensei dashboard ─── */
-  #dashboard-sensei .card {
-    padding: 8px 10px !important;
-  }
-  #dashboard-sensei .card h3 {
-    font-size: 0.85rem !important;
-    margin-bottom: 4px !important;
-  }
-
-  /* ─── Login Screen Mobile ─── */
-  #login-gate {
-    padding-top: 10px !important;
-    min-height: 60vh !important;
-  }
-  #login-card,
-  #trial-signup-card {
-    padding: 10px !important;
-    margin-bottom: 10px !important;
-  }
-  #login-card h3 {
+  .kpi-tile .kpi-value {
     font-size: 1rem !important;
   }
-
-  /* ─── Tree (Arbol) section ─── */
-  #tree-establishment {
-    font-size: 13px !important;
-    min-height: 40px !important;
+  .kpi-tile .kpi-label {
+    font-size: 10px !important;
   }
 
-  /* ─── Quick action button bar (mobile dashboard) ─── */
-  .mobile-quick-actions {
+  /* ─── More Menu (slide-up panel) ─── */
+  .mobile-more-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 90 !important;
+    background: rgba(0,0,0,0.5) !important;
+    display: none !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+  }
+  .mobile-more-overlay.open {
     display: flex !important;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
   }
-  .mobile-quick-actions .btn {
-    flex: 1;
-    min-width: 60px;
-    padding: 8px 6px !important;
-    font-size: 11px !important;
-    min-height: 40px !important;
-    border-radius: 8px !important;
+  .mobile-more-panel {
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 16px 16px 0 0 !important;
+    width: 100% !important;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    padding: 16px 12px calc(12px + env(safe-area-inset-bottom, 12px)) !important;
+    animation: slideUp 0.25s ease !important;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .mobile-more-panel .more-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+    border-radius: 10px !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    width: 100% !important;
+    text-align: left !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation !important;
+  }
+  .mobile-more-panel .more-item:active {
+    background: rgba(255,255,255,0.08) !important;
+  }
+  .mobile-more-panel .more-item .more-icon {
+    font-size: 20px !important;
+    width: 28px !important;
+    text-align: center !important;
+  }
+  .mobile-more-panel .more-close {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 12px !important;
+    margin-top: 8px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--line) !important;
+    background: transparent !important;
+    color: var(--muted) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    width: 100% !important;
+    cursor: pointer !important;
   }
 
-  /* ─── Tree / Distribution section ─── */
-  .tree-grid {
-    grid-template-columns: 1fr !important;
+  /* ─── Config section: debug login output ─── */
+  #cfg-debug-output {
+    display: block !important;
   }
-  .tree-card {
-    padding: 8px !important;
-    font-size: 12px !important;
+  #cfg-debug-output pre {
+    font-size: 10px !important;
+    max-height: 200px !important;
+    overflow: auto !important;
+  }
+
+  /* ─── Hide desktop-only tab content ─── */
+  #tab-onboarding, #tab-roles, #tab-comisiones, #tab-pasarela, #tab-facturacion {
+    display: none !important;
   }
 }
 
-/* ─── Small phones ─── */
+/* ─── Small phones (≤540px) ─── */
 @media (max-width: 540px) {
+  .mobile-dashboard-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    padding: 8px !important;
+  }
+  .mobile-dash-item {
+    min-height: 70px !important;
+    padding: 10px 6px !important;
+    border-radius: 10px !important;
+  }
+  .mobile-dash-item .dash-icon {
+    font-size: 22px !important;
+  }
+  .mobile-dash-item .dash-label {
+    font-size: 10px !important;
+  }
+  .mobile-bottom-nav .nav-item .nav-icon {
+    font-size: 20px !important;
+  }
+  .mobile-bottom-nav .nav-item .nav-label {
+    font-size: 8px !important;
+  }
   .hero-left h1 {
     font-size: 0.85rem !important;
   }
@@ -208,84 +410,21 @@
     height: 24px !important;
     max-width: 60px !important;
   }
-  .mode-btn {
-    font-size: 6px !important;
-    padding: 2px 3px !important;
-    min-height: 24px !important;
-  }
-
-  /* Compact cards */
-  #tab-operacion .card {
-    padding: 8px !important;
-    border-radius: 8px !important;
-  }
-  #tab-operacion .card h3 {
-    font-size: 0.8rem !important;
-  }
-
-  /* Dashboard admin controls buttons */
-  #dashboard-admin-controls article > div:first-child {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 4px !important;
-  }
-  #dashboard-admin-controls .btn {
-    padding: 6px !important;
-    font-size: 10px !important;
-    min-height: 36px !important;
-  }
-
-  /* Superadmin KPIs compact */
-  #dashboard-superadmin .card > div[id^="kpi-"] {
-    font-size: 1.2rem !important;
-  }
-  #dashboard-superadmin .card h3 {
-    font-size: 0.7rem !important;
-  }
-
-  /* Tree section */
-  .row {
-    gap: 4px !important;
-  }
-  .row .btn {
-    font-size: 10px !important;
-    padding: 6px 8px !important;
-    min-height: 36px !important;
-  }
 }
 
-/* ─── Drawer tabs on mobile ─── */
-@media (max-width: 768px) {
-  .tabs {
-    width: 100% !important;
-    max-width: 100% !important;
-    left: 0 !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    border-radius: 0 !important;
-    padding: 12px !important;
-    padding-top: 60px !important;
+/* ─── Tiny phones (≤380px) ─── */
+@media (max-width: 380px) {
+  .mobile-dashboard-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
-  .tab-btn {
-    min-height: 48px !important;
-    font-size: 14px !important;
-    padding: 12px 14px !important;
-    border-radius: 10px !important;
+  .mobile-bottom-nav .nav-item {
+    min-width: 40px !important;
+    padding: 2px 4px !important;
   }
-}
-
-/* ─── Login speed boost: hide login immediately on restore ─── */
-body.auth #login-gate {
-  display: none !important;
-}
-
-/* ─── Fix for tree establishment selector on mobile ─── */
-@media (max-width: 768px) {
-  #tab-operacion .card:last-child .row {
-    flex-direction: column !important;
-    align-items: stretch !important;
+  .mobile-bottom-nav .nav-item .nav-icon {
+    font-size: 18px !important;
   }
-  #tab-operacion .card:last-child .row select,
-  #tab-operacion .card:last-child .row button {
-    width: 100% !important;
+  .mobile-bottom-nav .nav-item .nav-label {
+    font-size: 7px !important;
   }
 }

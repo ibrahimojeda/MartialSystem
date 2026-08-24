@@ -25,7 +25,34 @@
   /* ─── Hide desktop elements ─── */
   .tabs, #app-tabs, .tab-btn, .drawer-overlay, #hamburger-btn,
   #btn-dash-trace, .pill, .mode-btn, #ui-clean-btn, #ui-dojo-btn,
-  #system-version, .hero-right .btn.alt {
+  #system-version {
+    display: none !important;
+  }
+  
+  /* Rearrange hero-right: keep only user-info and logout */
+  .hero-right .mode-btn,
+  .hero-right .pill {
+    display: none !important;
+  }
+  .hero-right #user-info {
+    display: inline !important;
+    font-size: 11px !important;
+    max-width: 120px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .hero-right #logout-btn {
+    display: inline-flex !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    min-height: 32px !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+  }
+  
+  /* ─── Supabase Connection Monitor - Hide on mobile ─── */
+  #ms-conn-monitor {
     display: none !important;
   }
 

@@ -943,6 +943,7 @@
   <script src="/supabase-connection-monitor.js"></script>
   <script src="/mobile-connector.js"></script>
   <script src="/supabase-data-sync.js"></script>
+  <script src="/biometric-auth.js"></script>
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -984,6 +985,11 @@
 
     <section id="login-gate" style="display:flex;justify-content:center;align-items:flex-start;padding-top:40px;min-height:80vh;">
       <div style="width:100%;max-width:480px;">
+        <div style="text-align:center;margin-bottom:16px;">
+          <img id="login-logo" src="/icons/Icon DRK.png" alt="MartialSystem" style="height:clamp(64px, 12vh, 96px);width:auto;max-width:280px;object-fit:contain;display:inline-block;">
+          <div style="font-size:clamp(1.2rem, 3vw, 1.6rem);font-weight:800;font-family:Rajdhani,sans-serif;letter-spacing:1px;margin-top:4px;text-transform:uppercase;">MartialSystem</div>
+          <div class="muted" style="font-size:clamp(11px, 1.4vw, 13px);">Dojo Operations Suite</div>
+        </div>
         <article class="card full" id="login-card" style="margin-bottom:16px;">
           <h3>Acceso al sistema</h3>
           <p class="muted">Ingresa tus credenciales para acceder.</p>
@@ -995,6 +1001,16 @@
             <div class="full">
               <label>Password</label>
               <input id="login-password" type="password" required autocomplete="current-password">
+            </div>
+            <div class="full" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text);">
+                <input type="checkbox" id="remember-me" style="width:18px;height:18px;min-height:18px;">
+                Recordarme
+              </label>
+              <span id="biometric-label" class="muted" style="font-size:11px;display:none;"></span>
+            </div>
+            <div class="full" id="biometric-login-btn-wrap" style="display:none;margin-bottom:8px;">
+              <button class="btn alt" id="biometric-login-btn" type="button" style="width:100%;"></button>
             </div>
             <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn" type="submit" style="flex:1;">Iniciar sesion</button>
@@ -3068,6 +3084,14 @@
           try { localStorage.removeItem('ms_refresh_token'); } catch (_) {}
           state.accessToken = '';
           setAuthenticated(false);
+          // Intentar auto-login con biometría (Recordarme)
+          setTimeout(async () => {
+            try {
+              if (window.MartialBiometric && typeof window.MartialBiometric.doBiometricLogin === 'function') {
+                await window.MartialBiometric.doBiometricLogin();
+              }
+            } catch (_) {}
+          }, 500);
         }
       })();
     } catch (_) {}
@@ -6456,6 +6480,13 @@
         if (result.refresh_token) {
           try { localStorage.setItem('ms_refresh_token', result.refresh_token); } catch (_) {}
         }
+        // Recordarme: guardar credenciales si el checkbox está marcado
+        try {
+          const rememberMe = ids('remember-me')?.checked;
+          if (rememberMe && window.MartialBiometric) {
+            await window.MartialBiometric.saveCredentials(username, password);
+          }
+        } catch (_) {}
         // También registrar la sesión en el cliente Supabase del navegador para auto-refresh
         try {
           const sb = window.MartialSupabase;
@@ -11176,6 +11207,50 @@
     loadSystemVersion();
 
     loadDebug();
+
+    // ─── Biometric UI Init ──────────────────────────────────────────
+    (async function initBiometricUI() {
+      try {
+        // Actualizar logo del login según el tema
+        const loginLogo = ids('login-logo');
+        if (loginLogo) {
+          const isClean = document.body.classList.contains('theme-clean');
+          loginLogo.src = isClean ? '/icons/ICON BL.png' : '/icons/Icon DRK.png';
+        }
+
+        if (!window.MartialBiometric) return;
+        const saved = await window.MartialBiometric.isCredentialsSaved();
+        if (saved) {
+          const label = await window.MartialBiometric.getBiometryLabel();
+          const bioLabel = ids('biometric-label');
+          if (bioLabel) {
+            bioLabel.textContent = '🔒 ' + label;
+            bioLabel.style.display = 'inline';
+          }
+          const bioBtn = ids('biometric-login-btn');
+          const bioWrap = ids('biometric-login-btn-wrap');
+          if (bioBtn && bioWrap) {
+            bioBtn.innerHTML = '🔑 Iniciar sesión con ' + label;
+            bioWrap.style.display = 'block';
+            bioBtn.addEventListener('click', async () => {
+              if (window.MartialBiometric && typeof window.MartialBiometric.doBiometricLogin === 'function') {
+                await window.MartialBiometric.doBiometricLogin();
+              }
+            });
+          }
+        }
+      } catch (_) {}
+    })();
+
+    // Actualizar logo del login al cambiar tema
+    const _origSetUiTheme = setUiTheme;
+    setUiTheme = function(mode) {
+      if (typeof _origSetUiTheme === 'function') _origSetUiTheme(mode);
+      const loginLogo = ids('login-logo');
+      if (loginLogo) {
+        loginLogo.src = mode === 'clean' ? '/icons/ICON BL.png' : '/icons/Icon DRK.png';
+      }
+    };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

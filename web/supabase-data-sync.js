@@ -302,4 +302,20 @@
     window._dataSync = instance;
     return instance;
   };
+
+
+  // Auto-init
+  function waitForSupabaseAndInit() {
+    if (window.MartialSupabase) {
+      window.createDataSync(window.MartialSupabase);
+      console.log("[DataSync] Instancia creada");
+    } else {
+      setTimeout(waitForSupabaseAndInit, 200);
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", waitForSupabaseAndInit);
+  } else {
+    waitForSupabaseAndInit();
+  }
 })();

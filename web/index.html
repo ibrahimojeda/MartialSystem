@@ -942,6 +942,7 @@
   <script src="/supabase-direct.js"></script>
   <script src="/supabase-connection-monitor.js"></script>
   <script src="/mobile-connector.js"></script>
+  <script src="/supabase-data-sync.js"></script>
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -3037,6 +3038,17 @@
             if (treeSelect) {
               treeSelect.dispatchEvent(new Event('change'));
             }
+            // Inicializar DataSync para polling cada 5 minutos
+            try {
+              if (window._dataSync && state.profileId && state.accessToken) {
+                window._dataSync.start(state.profileId, state.accessToken).catch(() => {});
+                window._dataSync.on('dataChange', () => {
+                  if (document.querySelector('#tab-operacion')?.style.display !== 'none') {
+                    showOperacionDashboard();
+                  }
+                });
+              }
+            } catch (_) {}
           } catch (_) {
             // Dashboard puede fallar parcialmente, pero la sesión se mantiene
           }
@@ -3067,10 +3079,115 @@
       }
     } catch (_) {}
 
-    // â”€â”€ API HELPER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // â”€â”€ API HELPER (con fallback a Supabase Direct en APK) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async function api(path, opts = {}) {
+      const isApk = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+      const ds = window._dataSync;
       const headers = { 'Content-Type': 'application/json' };
       if (state.accessToken) headers['Authorization'] = 'Bearer ' + state.accessToken;
+
+      if (isApk && ds) {
+        // En modo APK, usar Supabase Direct para endpoints conocidos
+        const pathLower = path.toLowerCase();
+
+        // Dashboard
+        if (pathLower.includes('/api/dashboard/student')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          return ds.formatResult(await ds.loadDashboardStudent(eid ? eid[1] : null, state.profileId));
+        }
+        if (pathLower.includes('/api/dashboard/sensei')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          return ds.formatResult(await ds.loadDashboardSensei(eid ? eid[1] : null, state.profileId));
+        }
+        if (pathLower.includes('/api/dashboard/owner')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          return ds.formatResult(await ds.loadDashboardOwner(eid ? eid[1] : null));
+        }
+        if (pathLower.includes('/api/dashboard/stats')) {
+          return ds.formatResult(await ds.loadDashboardSuperadmin());
+        }
+
+        // Students
+        if (pathLower.includes('/api/students') && (!opts.method || opts.method === 'GET')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          const disc = pathLower.match(/disciplinecode=([^&]+)/);
+          return ds.formatResult(await ds.getStudents(eid ? eid[1] : null, disc ? disc[1] : null));
+        }
+        if (pathLower.includes('/api/students') && opts.method === 'POST') {
+          const body = JSON.parse(opts.body || '{}');
+          return ds.formatResult(await ds.createStudent(body));
+        }
+
+        // Classes
+        if (pathLower.includes('/api/classes') && (!opts.method || opts.method === 'GET')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          const disc = pathLower.match(/disciplinecode=([^&]+)/);
+          const date = pathLower.match(/date=([^&]+)/);
+          return ds.formatResult(await ds.getClasses(eid ? eid[1] : null, disc ? disc[1] : null, date ? date[1] : null));
+        }
+        if (pathLower.includes('/api/classes') && opts.method === 'POST') {
+          const body = JSON.parse(opts.body || '{}');
+          return ds.formatResult(await ds.createClass(body));
+        }
+
+        // Payments
+        if (pathLower.includes('/api/payments') && (!opts.method || opts.method === 'GET')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          const disc = pathLower.match(/disciplinecode=([^&]+)/);
+          const sid = pathLower.match(/studentid=([^&]+)/);
+          return ds.formatResult(await ds.getPayments(eid ? eid[1] : null, disc ? disc[1] : null, sid ? sid[1] : null));
+        }
+        if (pathLower.includes('/api/payments') && opts.method === 'POST') {
+          const body = JSON.parse(opts.body || '{}');
+          return ds.formatResult(await ds.createPayment(body));
+        }
+
+        // Notifications
+        if (pathLower.includes('/api/notifications') && (!opts.method || opts.method === 'GET') && !pathLower.includes('/read')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          const disc = pathLower.match(/disciplinecode=([^&]+)/);
+          return ds.formatResult(await ds.getNotifications(eid ? eid[1] : null, disc ? disc[1] : null));
+        }
+        if (pathLower.includes('/api/notifications') && opts.method === 'POST') {
+          const body = JSON.parse(opts.body || '{}');
+          return ds.formatResult(await ds.createNotification(body));
+        }
+
+        // Instructors
+        if (pathLower.includes('/api/instructors') && (!opts.method || opts.method === 'GET')) {
+          const eid = pathLower.match(/establishmentid=([^&]+)/);
+          return ds.formatResult(await ds.getInstructors(eid ? eid[1] : null));
+        }
+        if (pathLower.includes('/api/instructors') && opts.method === 'POST') {
+          const body = JSON.parse(opts.body || '{}');
+          return ds.formatResult(await ds.createInstructor(body));
+        }
+
+        // Disciplines
+        if (pathLower.includes('/api/disciplines')) {
+          return ds.formatResult(await ds.syncDisciplines());
+        }
+
+        // Me / Profile
+        if (pathLower.includes('/api/me')) {
+          const profile = await ds.syncProfile();
+          const memberships = await ds.syncMemberships();
+          return ds.formatResult({ profile, memberships });
+        }
+
+        // Fallback: intentar servidor Express, si falla devolver error
+        try {
+          const res = await fetch(path, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+          return data;
+        } catch (e) {
+          console.warn('[API] APK: sin servidor Express, endpoint no implementado:', path);
+          throw new Error('Endpoint no disponible en modo APK: ' + path);
+        }
+      }
+
+      // Modo normal (web con servidor Express)
       const res = await fetch(path, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
@@ -6361,6 +6478,17 @@
         updateUserInfo();
         const allowed = allowedModulesForCurrentEstablishment();
         showTab(allowed[0] || 'operacion');
+        // Inicializar DataSync para polling cada 5 minutos
+        try {
+          if (window._dataSync && state.profileId && state.accessToken) {
+            window._dataSync.start(state.profileId, state.accessToken).catch(() => {});
+            window._dataSync.on('dataChange', () => {
+              if (document.querySelector('#tab-operacion')?.style.display !== 'none') {
+                showOperacionDashboard();
+              }
+            });
+          }
+        } catch (_) {}
       } catch (err) {
         ids('login-output').textContent = err.message;
       }

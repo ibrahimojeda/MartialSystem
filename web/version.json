@@ -1,16 +1,16 @@
 {
-  "version": "1.4.0",
-  "buildNumber": 6,
-  "message": "Optimización móvil: Dashboard adaptado para APK con diseño compacto, botones de acción rápida y carga inmediata del Dashboard al abrir la app.",
+  "version": "2.1.0",
+  "buildNumber": 7,
+  "message": "Supabase DataSync: Polling cada 5 minutos, datos en vivo desde Supabase Direct sin servidor Express, todos los botones funcionan en APK.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/app-debug.apk",
-  "releaseDate": "2026-08-22",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.1.0.apk",
+  "releaseDate": "2026-08-24",
   "changelog": [
-    "Nuevo diseño responsive para móvil: hero compacto, dashboard en columna, cards con padding reducido",
-    "Barra de acciones rápidas en el Dashboard para cada rol (Owner, Sensei, Student, Superadmin)",
-    "Login desaparece instantáneamente al restaurar sesión guardada, mostrando el Dashboard directo",
-    "Sistema de actualización automática mejorado: la APK detecta nueva versión desde GitHub y la instala automáticamente con barra de progreso",
-    "Optimización de layout para pantallas de 540px y 380px (teléfonos pequeños)",
-    "Drawer de navegación a pantalla completa en dispositivos móviles"
+    "Nuevo Motor de Datos: MartialDataSync con polling cada 5 minutos a Supabase",
+    "Todos los botones ahora funcionan en APK: crea alumnos, clases, pagos, notificaciones e instructores directamente desde Supabase Direct",
+    "Dashboard carga datos en vivo desde Supabase: estudiantes, clases, pagos, asistencia",
+    "API helper con fallback automático a Supabase Direct cuando no hay servidor Express",
+    "Evento dataChange: al detectar cambios en Supabase, el Dashboard se refresca automáticamente",
+    "Navegación inferior fija, información de usuario visible, monitor de conexión oculto"
   ]
 }

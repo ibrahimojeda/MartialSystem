@@ -3441,7 +3441,11 @@
             txEl.innerHTML = '<table style="width:100%;font-size:12px;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--line);"><td style="padding:8px;color:var(--muted);">Fecha</td><td style="padding:8px;color:var(--muted);">Establecimiento</td><td style="padding:8px;color:var(--muted);text-align:right;">Monto</td></tr>' + d.lastTransactions.map(tx => '<tr style="border-bottom:1px solid var(--line);"><td style="padding:8px;">' + (tx.paid_at ? tx.paid_at.slice(0,10) : '-') + '</td><td style="padding:8px;">' + tx.establishment + '</td><td style="padding:8px;text-align:right;color:var(--ok);">$' + Number(tx.amount||0).toLocaleString() + '</td></tr>').join('') + '</table>';
           } else { txEl.innerHTML = '<span class="muted" style="font-size:12px;">No hay transacciones registradas</span>'; }
         }
-      } catch (err) { console.warn('Dashboard stats error:', err.message); }
+      } catch (err) {
+        console.warn('Dashboard stats error:', err.message);
+        const txEl = ids('kpi-transactions');
+        if (txEl) txEl.innerHTML = '<span style="color:#e76f51;font-size:12px;">⚠️ Error cargando el dashboard: ' + String(err.message || err).replace(/</g, '&lt;') + '</span>';
+      }
       setTimeout(refreshDashCardsReport, 50);
     }
 

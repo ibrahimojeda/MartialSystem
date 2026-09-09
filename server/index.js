@@ -104,7 +104,21 @@ if (!SUPERADMIN_PASSWORD) {
   console.error('FATAL: SUPERADMIN_PASSWORD no está configurada en .env');
   process.exit(1);
 }
+const superadminSessionsPath = path.join(__dirname, '..', 'data', 'superadmin-sessions.json');
 const superadminSessions = new Set();
+const persistSuperadminSessions = () => {
+  try {
+    fs.mkdirSync(path.dirname(superadminSessionsPath), { recursive: true });
+    fs.writeFileSync(superadminSessionsPath, JSON.stringify(Array.from(superadminSessions)), 'utf-8');
+  } catch (_) { /* best-effort */ }
+};
+// Cargar sesiones guardadas al arrancar (soportan reinicios del servidor)
+try {
+  if (fs.existsSync(superadminSessionsPath)) {
+    const arr = JSON.parse(fs.readFileSync(superadminSessionsPath, 'utf-8'));
+    if (Array.isArray(arr)) arr.forEach((t) => { if (t && t.startsWith('sa_')) superadminSessions.add(t); });
+  }
+} catch (_) { /* best-effort */ }
 
 const defaultTreeForDiscipline = (disciplineName) => ({
   modules: [
@@ -1098,6 +1112,7 @@ app.post('/api/login', async (req, res) => {
   if (normalizedUsername === SUPERADMIN_USERNAME && password === SUPERADMIN_PASSWORD) {
     const accessToken = createSuperadminToken();
     superadminSessions.add(accessToken);
+    persistSuperadminSessions();
     return res.json({
       ok: true,
       data: {

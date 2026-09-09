@@ -4172,6 +4172,8 @@
       if (bottomNav) {
         bottomNav.style.display = auth ? '' : 'none';
       }
+      // Actualizar estado del Asistente IA tras autenticarse (superadmin)
+      if (auth) setTimeout(function () { try { if (window.aiCheckStatus) window.aiCheckStatus(); } catch (e) {} }, 300);
     }
 
     // ─── Mobile Bottom Navigation ────────────────────────────────────
@@ -11346,9 +11348,8 @@
       const card = ids('ai-assistant-card');
       const statusLine = ids('ai-status-line');
       const billingBlock = ids('ai-billing-block');
-      if (!window.aiIsSuperadmin()) {
-        if (card) card.style.display = 'none';
-        return;
+      if (!state.accessToken || !window.aiIsSuperadmin()) {
+        return; // la visibilidad de la tarjeta la controla la seccion dashboard-superadmin
       }
       try {
         const eid = ids('tree-establishment')?.value || '';

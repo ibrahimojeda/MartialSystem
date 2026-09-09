@@ -7,6 +7,8 @@
 (function () {
   'use strict';
 
+  const isUuid = (v) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
   class MartialDataSync {
     constructor(supabaseClient) {
       this.supabase = supabaseClient || window.MartialSupabase;
@@ -40,6 +42,12 @@
       this.profileId = profileId;
       this.accessToken = accessToken;
       console.log('[DataSync] Iniciando sincronizacion de datos...');
+      // El superadmin es cuenta virtual del servidor Express; no tiene perfil
+      // real en las tablas de Supabase. Omitir sync directo evita queries 400.
+      if (profileId && !isUuid(profileId)) {
+        console.log('[DataSync] profileId no es UUID (' + profileId + '): omitiendo sync directo.');
+        return false;
+      }
       try { await this.fullSync(); } catch (e) { console.warn('[DataSync] sync inicial parcial:', e.message); }
       this.startPolling();
       this.emit('ready', { profileId, timestamp: new Date().toISOString() });
@@ -100,14 +108,14 @@
     }
 
     async syncProfile() {
-      if (!this.profileId) return null;
+      if (!this.profileId || !isUuid(this.profileId)) return null;
       const { data, error } = await this.supabase.from('profiles').select('*').eq('id', this.profileId).single();
       if (!error && data) { this.cache.profile = data; this.emit('profile', data); }
       return this.cache.profile || null;
     }
 
     async syncMemberships() {
-      if (!this.profileId) return [];
+      if (!this.profileId || !isUuid(this.profileId)) return [];
       const { data, error } = await this.supabase
         .from('establishment_members')
         .select('*, establishment:establishments(*)')

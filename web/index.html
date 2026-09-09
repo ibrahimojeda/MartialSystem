@@ -1237,89 +1237,88 @@
       <!-- 3ï¸âƒ£ DASHBOARD SUPERADMIN -->
       <div id="dashboard-superadmin" class="hidden" style="width: 100%;">
         
-        <!-- KPI Row 1 -->
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Total Establecimientos</h3>
-          <div id="kpi-estabs-total" style="font-size: 2.2rem; font-weight: 700; color: var(--accent);">&#x2014;</div>
-          <div id="kpi-estabs-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Usuarios Totales</h3>
-          <div id="kpi-users-total" style="font-size: 2.2rem; font-weight: 700; color: var(--brand-2);">&#x2014;</div>
-          <div id="kpi-users-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Ingresos Semana</h3>
-          <div id="kpi-ingresos-total" style="font-size: 2.2rem; font-weight: 700; color: var(--ok);">&#x2014;</div>
-          <div id="kpi-ingresos-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Alumnos Totales</h3>
-          <div id="kpi-students-total" style="font-size: 2.2rem; font-weight: 700; color: var(--danger);">&#x2014;</div>
-          <div id="kpi-students-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <!-- KPI Row 2 -->
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Disciplinas Activas</h3>
-          <div id="kpi-disciplines-total" style="font-size: 2.2rem; font-weight: 700; color: var(--brand);">&#x2014;</div>
-          <div id="kpi-disciplines-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <article class="card" style="grid-column: span 3;">
-          <h3 id="dashboard-superadmin-memberships-title" style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Miembros por Rol</h3>
-          <div id="kpi-memberships-total" style="font-size: 2.2rem; font-weight: 700; color: var(--ok);">&#x2014;</div>
-          <div id="kpi-memberships-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Nuevos Registros</h3>
-          <div id="kpi-new-total" style="font-size: 2.2rem; font-weight: 700; color: var(--brand-2);">&#x2014;</div>
-          <div class="muted" style="font-size: 11px; margin-top: 4px;">Esta semana</div>
-        </article>
-
-        <article class="card" style="grid-column: span 3;">
-          <h3 style="font-size: 0.9rem; color: var(--muted); text-transform: uppercase; margin-bottom: 8px;">Tasa de Asistencia</h3>
-          <div id="kpi-attendance-rate" style="font-size: 2.2rem; font-weight: 700; color: var(--accent);">&#x2014;</div>
-          <div id="kpi-attendance-sub" class="muted" style="font-size: 11px; margin-top: 4px;">Cargando...</div>
-        </article>
-
-        <!-- Top Establecimientos -->
-        <article class="card" style="grid-column: span 6;">
-          <h3 id="dashboard-superadmin-establishments-title">Establecimientos destacados</h3>
-          <div id="kpi-top-estabs" style="padding: 8px 0;">
-            <span class="muted" style="font-size:12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Disciplinas Populares -->
-        <article class="card" style="grid-column: span 6;">
-          <h3 id="dashboard-superadmin-disciplines-title">Disciplinas destacadas</h3>
-          <div id="kpi-top-disciplines" style="padding: 8px 0;">
-            <span class="muted" style="font-size:12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Ultimas Transacciones -->
+        <!-- Dashboard en un solo recuadro -->
         <article class="card" style="grid-column: 1 / -1;">
-          <h3 id="dashboard-superadmin-transactions-title">Ultimas Transacciones</h3>
-          <div id="kpi-transactions" style="padding: 8px 0; overflow-x: auto;">
-            <span class="muted" style="font-size:12px;">Cargando...</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+            <h3 style="margin:0;">Dashboard del Sistema</h3>
+            <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Bienvenido, Venta 👋 · Superadmin</span>
+          </div>
+
+          <!-- KPIs -->
+          <div class="finance-kpis">
+            <div class="kpi-tile" data-kpi="kpi-estabs-total">
+              <div class="kpi-label">Total Establecimientos</div>
+              <div id="kpi-estabs-total" style="font-size:1.5rem;font-weight:800;color:var(--accent);">&#x2014;</div>
+              <div id="kpi-estabs-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-users-total">
+              <div class="kpi-label">Usuarios Totales</div>
+              <div id="kpi-users-total" style="font-size:1.5rem;font-weight:800;color:var(--brand-2);">&#x2014;</div>
+              <div id="kpi-users-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-ingresos-total">
+              <div class="kpi-label">Ingresos Semana</div>
+              <div id="kpi-ingresos-total" style="font-size:1.5rem;font-weight:800;color:var(--ok);">&#x2014;</div>
+              <div id="kpi-ingresos-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-students-total">
+              <div class="kpi-label">Alumnos Totales</div>
+              <div id="kpi-students-total" style="font-size:1.5rem;font-weight:800;color:var(--danger);">&#x2014;</div>
+              <div id="kpi-students-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-disciplines-total">
+              <div class="kpi-label">Disciplinas Activas</div>
+              <div id="kpi-disciplines-total" style="font-size:1.5rem;font-weight:800;color:var(--brand);">&#x2014;</div>
+              <div id="kpi-disciplines-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-memberships-total">
+              <div class="kpi-label">Miembros por Rol</div>
+              <div id="kpi-memberships-total" style="font-size:1.5rem;font-weight:800;color:var(--ok);">&#x2014;</div>
+              <div id="kpi-memberships-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-new-total">
+              <div class="kpi-label">Nuevos Registros</div>
+              <div id="kpi-new-total" style="font-size:1.5rem;font-weight:800;color:var(--brand-2);">&#x2014;</div>
+              <div class="muted" style="font-size:11px;margin-top:4px;">Esta semana</div>
+            </div>
+            <div class="kpi-tile" data-kpi="kpi-attendance-rate">
+              <div class="kpi-label">Tasa de Asistencia</div>
+              <div id="kpi-attendance-rate" style="font-size:1.5rem;font-weight:800;color:var(--accent);">&#x2014;</div>
+              <div id="kpi-attendance-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            </div>
+          </div>
+
+          <!-- Establecimientos + Disciplinas -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
+            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;" data-kpi="kpi-top-estabs">
+              <div style="font-size:11px;color:var(--muted);">Establecimientos destacados</div>
+              <div id="kpi-top-estabs" style="padding:8px 0;"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+            </div>
+            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;" data-kpi="kpi-top-disciplines">
+              <div style="font-size:11px;color:var(--muted);">Disciplinas destacadas</div>
+              <div id="kpi-top-disciplines" style="padding:8px 0;"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+            </div>
+          </div>
+
+          <!-- Transacciones -->
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;margin-top:10px;" data-kpi="kpi-transactions">
+            <div style="font-size:11px;color:var(--muted);">Ultimas Transacciones</div>
+            <div id="kpi-transactions" style="padding:8px 0;overflow-x:auto;"><span class="muted" style="font-size:12px;">Cargando...</span></div>
           </div>
         </article>
 
         <!-- Asistente IA (Fase 0 — solo superadmin) -->
         <article class="card" style="grid-column: 1 / -1; border: 1px solid #3f6f52;" id="ai-assistant-card">
-          <h3>🤖 Asistente IA <span class="pill">Solo superadmin</span></h3>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
+            <span class="pill">🔒 Solo superadmin</span>
+          </div>
           <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
             <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
           </div>
           <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
           <div style="display:flex;gap:8px;align-items:flex-start;">
-            <input id="ai-prompt" style="flex:1;" placeholder="Escribe tu consulta para el asistente IA...">
+            <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
             <button class="btn" id="ai-send" type="button">Enviar ➤</button>
           </div>
           <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
@@ -3371,8 +3370,8 @@
         const json = await res.json();
         if (!json.ok) throw new Error(json.error);
         const d = json.data;
-        function hideCard(elId) { const el = ids(elId); if (el) { const card = el.closest('article.card'); if (card) card.style.display = 'none'; } }
-        function showCard(elId) { const el = ids(elId); if (el) { const card = el.closest('article.card'); if (card) card.style.display = ''; } }
+        function hideCard(elId) { const el = ids(elId); if (el) { const box = el.closest('[data-kpi]') || el.closest('article.card'); if (box) box.style.display = 'none'; } }
+        function showCard(elId) { const el = ids(elId); if (el) { const box = el.closest('[data-kpi]') || el.closest('article.card'); if (box) box.style.display = ''; } }
         // KPI: Establecimientos
         const et = ids('kpi-estabs-total'); const es = ids('kpi-estabs-sub');
         if (et) et.textContent = d.establishments.total;

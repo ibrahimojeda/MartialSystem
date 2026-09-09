@@ -141,6 +141,7 @@
         if (notif) r.notifications = notif;
       } catch (e) { console.warn('[DataSync] loadDashboardStudent:', e.message); }
       return r;
+    }
 // â”€â”€â”€ DASHBOARD SENSEI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     async loadDashboardSensei(establishmentId, profileId) {
       const r = { disciplines: [], totalStudents: 0, studentsPerDiscipline: {}, todayAttendance: null, todayClasses: [], pendingEvaluations: 0, notifications: [] };

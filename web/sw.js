@@ -1,4 +1,4 @@
-const CACHE_NAME = 'martialsystem-v4';
+const CACHE_NAME = 'martialsystem-v5';
 const VERSION_URL = '/version.json';
 
 const STATIC_ASSETS = [

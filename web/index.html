@@ -11402,10 +11402,14 @@
     }
     document.addEventListener('DOMContentLoaded', function () {
       aiWireUI();
-      if (window.aiIsSuperadmin()) {
-        aiLoadConfig();
-        aiCheckStatus();
+      const cfgCard = ids('ai-config-card');
+      if (!window.aiIsSuperadmin()) {
+        if (cfgCard) cfgCard.style.display = 'none';
+        return;
       }
+      if (cfgCard) cfgCard.style.display = '';
+      aiLoadConfig();
+      aiCheckStatus();
     });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>

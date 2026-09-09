@@ -7607,6 +7607,189 @@ app.patch('/api/system-billing/approve-upgrade/:requestId', requireAuth, async (
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// ASISTENTE IA — Fase 0 (solo superadmin)
+// ══════════════════════════════════════════════════════════════
+const AI_SETTINGS_KEY = '__ai__';
+const AI_PROVIDERS = {
+  openai:   { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
+  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' },
+  gemini:   { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
+  custom:   { label: 'Custom (OpenAI-compatible)', baseUrl: '', defaultModel: '' }
+};
+
+const getAIConfig = async () => {
+  try {
+    const { data } = await supabaseAdmin
+      .from('app_settings')
+      .select('settings_value')
+      .eq('establishment_id', null)
+      .eq('settings_key', AI_SETTINGS_KEY)
+      .maybeSingle();
+    if (data?.settings_value && typeof data.settings_value === 'object') return data.settings_value;
+  } catch (_) { /* fallback */ }
+  const envKey = String(process.env.AI_API_KEY || '').trim();
+  if (envKey) return { provider: 'openai', model: 'gpt-4o-mini', enabled: true, apiKey: envKey, apiKeyHint: envKey.slice(-4), fromEnv: true };
+  return { provider: 'openai', model: 'gpt-4o-mini', enabled: false, apiKey: '', apiKeyHint: '' };
+};
+
+const saveAIConfig = async (cfg) => {
+  const value = {
+    provider: cfg.provider || 'openai',
+    baseUrl: cfg.baseUrl || '',
+    model: cfg.model || '',
+    enabled: cfg.enabled !== undefined ? Boolean(cfg.enabled) : true,
+    apiKey: cfg.apiKey || '',
+    apiKeyHint: cfg.apiKey ? String(cfg.apiKey).slice(-4) : (cfg.apiKeyHint || ''),
+    updatedAt: new Date().toISOString()
+  };
+  await supabaseAdmin.from('app_settings').upsert({
+    establishment_id: null,
+    settings_key: AI_SETTINGS_KEY,
+    settings_value: value
+  }, { onConflict: 'establishment_id,settings_key' });
+  return value;
+};
+
+const getAIEffectiveKey = (cfg) => String(cfg.apiKey || process.env.AI_API_KEY || '').trim();
+const getAIBaseUrl = (cfg) => String(cfg.baseUrl || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].baseUrl) || AI_PROVIDERS.openai.baseUrl).trim();
+const getAIModel = (cfg) => String(cfg.model || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].defaultModel) || AI_PROVIDERS.openai.defaultModel).trim();
+
+// GET /api/ai/config — Superadmin lee la config de IA (nunca devuelve la key completa)
+app.get('/api/ai/config', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+  try {
+    const cfg = await getAIConfig();
+    return res.json({ ok: true, data: {
+      provider: cfg.provider || 'openai',
+      baseUrl: cfg.baseUrl || '',
+      model: cfg.model || '',
+      enabled: Boolean(cfg.enabled),
+      hasKey: Boolean(getAIEffectiveKey(cfg)),
+      apiKeyHint: cfg.apiKeyHint || '',
+      fromEnv: Boolean(cfg.fromEnv)
+    }});
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// PUT /api/ai/config — Superadmin guarda la config (apiKey opcional; vacía conserva la existente)
+app.put('/api/ai/config', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+  try {
+    const { provider, baseUrl, model, enabled, apiKey } = req.body || {};
+    const existing = await getAIConfig();
+    const cfg = await saveAIConfig({
+      provider: provider || existing.provider || 'openai',
+      baseUrl: baseUrl !== undefined ? baseUrl : (existing.baseUrl || ''),
+      model: model !== undefined ? model : (existing.model || ''),
+      enabled: enabled !== undefined ? enabled : existing.enabled,
+      apiKey: (apiKey && String(apiKey).trim()) ? String(apiKey).trim() : (existing.apiKey || ''),
+      apiKeyHint: existing.apiKeyHint || ''
+    });
+    return res.json({ ok: true, data: { provider: cfg.provider, model: cfg.model, enabled: cfg.enabled, hasKey: Boolean(getAIEffectiveKey(cfg)), apiKeyHint: cfg.apiKeyHint } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ai/status — Roles + verificación de mensualidad (billing)
+app.get('/api/ai/status', requireAuth, async (req, res) => {
+  try {
+    const cfg = await getAIConfig();
+    const allowed = Boolean(req.isSuperadmin);
+    const establishmentId = req.query.establishmentId || '';
+    let billing = { hasBill: false, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 };
+    if (establishmentId && !req.isSuperadmin) {
+      const membership = await getMembership(req.authUser.id, establishmentId);
+      if (membership) {
+        const now = new Date();
+        const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+        const { data: bill } = await supabaseAdmin.from('system_usage_bills')
+          .select('id, billing_month, amount, status, due_date')
+          .eq('establishment_id', establishmentId)
+          .eq('billing_month', currentMonth)
+          .maybeSingle();
+        if (bill && bill.status !== 'confirmed' && bill.status !== 'waived') {
+          const daysOverdue = Math.max(0, Math.floor((now.getTime() - new Date(bill.due_date).getTime()) / 86400000));
+          billing = { hasBill: true, daysOverdue, needsOverlay: daysOverdue >= 5, severeOverdue: daysOverdue >= 15, overlayType: daysOverdue >= 15 ? 'blocking' : daysOverdue >= 5 ? 'reminder' : 'none' };
+        } else if (bill) {
+          billing = { hasBill: true, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 };
+        }
+      }
+    }
+    return res.json({ ok: true, data: { allowed, enabled: Boolean(cfg.enabled), hasKey: Boolean(getAIEffectiveKey(cfg)), billing } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// POST /api/ai/chat — Superadmin only: proxy al proveedor IA con verificación de mensualidad
+app.post('/api/ai/chat', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+  try {
+    const cfg = await getAIConfig();
+    const apiKey = getAIEffectiveKey(cfg);
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. Coloca el API key en Configuración → IA (solo superadmin).' });
+    if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
+
+    const { message, establishmentId } = req.body || {};
+    if (!message || !String(message).trim()) return res.status(400).json({ ok: false, error: 'message is required' });
+
+    // Verificación de mensualidad: si el establecimiento tiene factura severamente vencida, bloquear
+    if (establishmentId) {
+      const now = new Date();
+      const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+      const { data: bill } = await supabaseAdmin.from('system_usage_bills')
+        .select('id, status, due_date')
+        .eq('establishment_id', establishmentId)
+        .eq('billing_month', currentMonth)
+        .maybeSingle();
+      if (bill && bill.status !== 'confirmed' && bill.status !== 'waived') {
+        const daysOverdue = Math.max(0, Math.floor((now.getTime() - new Date(bill.due_date).getTime()) / 86400000));
+        if (daysOverdue >= 15) {
+          return res.status(423).json({ ok: false, error: 'Mensualidad vencida', code: 'BILLING_BLOCKED', billing: { severeOverdue: true, daysOverdue } });
+        }
+      }
+    }
+
+    const baseUrl = getAIBaseUrl(cfg);
+    const model = getAIModel(cfg);
+    const systemPrompt = buildAIContext(req, establishmentId);
+
+    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: String(message) }
+        ],
+        temperature: 0.4,
+        max_tokens: 1024
+      })
+    });
+    const aiJson = await aiRes.json().catch(() => ({}));
+    if (!aiRes.ok) {
+      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiJson?.error?.message || aiRes.statusText || 'unknown'}` });
+    }
+    const content = aiJson?.choices?.[0]?.message?.content || '';
+    return res.json({ ok: true, data: { content, model } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'AI request failed' });
+  }
+});
+
+// buildAIContext — Fase 0: superadmin global. Fase 1: scope por rol/establecimiento.
+function buildAIContext(req, establishmentId) {
+  const role = req.isSuperadmin ? 'superadmin' : (req.authUser?.role || 'user');
+  const lines = [
+    'Eres el Asistente IA de MartialSystem, un sistema de gestión de escuelas de artes marciales (Karate, Judo, BJJ, Taekwondo, Kickboxing, etc.).',
+    'Responde en español, de forma clara y concisa.',
+    'Si te piden datos numéricos que no tienes, indícalo y sugiere dónde consultarlos en el sistema.',
+    `Rol del usuario actual: ${role}.`,
+    'Fase 0: solo el superadmin tiene acceso a la IA. No inventes datos de alumnos, pagos o reportes; si no los conoces, dilo.'
+  ];
+  if (establishmentId) lines.push(`Establecimiento en contexto: ${establishmentId}.`);
+  return lines.join('\n');
+}
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });

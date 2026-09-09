@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MartialSystem · Vista previa UI/UX Asistente IA (v3)</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ═══ CSS REAL DEL SISTEMA (web/index.html) ═══ */
+  :root {
+    --bg: #0b0b0b; --panel: #1a1a1a; --panel-2: #262626; --line: #3a3a3a;
+    --brand: #b03030; --brand-2: #c9a227; --accent: #4a4a4a; --text: #f0f0f0;
+    --muted: #9a9a9a; --ok: #2e8b57; --warn: #d18a2e; --danger: #c94a4a;
+    --shadow: 0 14px 36px rgba(0,0,0,0.5);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Manrope","Segoe UI",sans-serif;
+    background:
+      radial-gradient(1200px 600px at -15% -25%, #3a3030 0%, transparent 56%),
+      radial-gradient(900px 400px at 120% 8%, #4a2020 0%, transparent 45%),
+      linear-gradient(180deg,#131313 0%,#0b0b0b 100%), var(--bg);
+    color: var(--text); min-height: 100vh; padding: 18px;
+  }
+  h3 { font-family: "Rajdhani",sans-serif; letter-spacing: .3px; font-size: 1.15rem; margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .tab-btn {
+    text-align: left; border: 1px solid #344157; border-radius: 10px; background: #1a2230; color: #d9e4f5;
+    padding: 10px 12px; cursor: pointer; font-weight: 600; font-size: 13px; font-family: "Manrope";
+    transition: background 140ms ease, border-color 140ms ease, transform 140ms ease; width: 100%;
+  }
+  .tab-btn:hover { background: #232e40; border-color: #496188; transform: translateX(2px); }
+  .tab-btn.active { border-color: #b2572f; background: linear-gradient(90deg,#4a2a23 0%,#2a2120 100%); color: #ffd8bc; }
+  .card { background: rgba(23,29,36,0.97); border: 1px solid var(--line); border-radius: 12px; padding: 14px 14px 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input:not([type=checkbox]):not([type=radio]), select, textarea {
+    width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #3a4960; background: #111a27;
+    color: var(--text); outline: none; font-family: "Manrope"; font-size: 13px;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #5682b8; box-shadow: 0 0 0 3px rgba(47,111,163,0.22); }
+  input, select { min-height: 40px; }
+  .btn {
+    border: 0; border-radius: 10px; background: linear-gradient(180deg,#c64834 0%,#a73727 100%);
+    color: #fff; padding: 10px 14px; cursor: pointer; font-weight: 700; font-family: "Manrope"; font-size: 13px;
+    box-shadow: 0 8px 16px rgba(194,59,42,0.28); min-height: 40px;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn.alt { background: linear-gradient(180deg,#35506f 0%,#2b3f59 100%); box-shadow: 0 8px 16px rgba(43,63,89,0.25); }
+  .kpi-tile { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .kpi-tile .kpi-label { font-size: 11px; color: var(--muted); }
+  .kpi-tile .kpi-value { font-size: 1.2rem; font-weight: 800; margin-top: 4px; }
+  .finance-kpis { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
+  .chip { border: 1px solid #3b475d; border-radius: 8px; padding: 7px; background: #0f1520; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #233a2b; color: #c8f3d7; border: 1px solid #3f6f52; font-size: 12px; }
+  /* ═══ Preview ═══ */
+  .preview-banner {
+    background: linear-gradient(90deg,#2a1414,#1a1a1a); border: 1px solid var(--line);
+    border-left: 4px solid var(--brand-2); border-radius: 12px; padding: 12px 18px;
+    margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .preview-banner .tag { background: var(--brand-2); color: #1a1200; font-weight: 700; font-size: 11px; padding: 3px 10px; border-radius: 20px; }
+  .preview-banner p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  .badge-elite { background: linear-gradient(135deg,#c9a227,#8a6d12); color:#1a1200; font-weight:700; font-size:10px; padding:3px 8px; border-radius:20px; letter-spacing:.5px; }
+  .prompt-box { border: 1px solid #3a4960; border-radius: 12px; background: #111a27; padding: 12px; margin-top: 12px; }
+  .prompt-input-wrap { display: flex; gap: 8px; align-items: flex-start; }
+  .step-note { border: 1px solid #4a5770; border-left: 4px solid var(--brand-2); background: #1a2230; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; color: #dce8fb; }
+  @media (max-width: 1100px) {
+    .finance-kpis { grid-template-columns: 1fr 1fr; }
+    .sidebar-wrap { width: 100% !important; }
+    .app-flex { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+  <div class="preview-banner">
+    <div style="max-width:680px;">
+      <span class="tag">VISTA PREVIA v3 · PARA APROBACIÓN</span>
+      <p><strong>MartialSystem — Pantalla única asistente IA</strong> · Sin formularios: solo <strong>sidebar + Dashboard (1 recuadro) + caja del prompt debajo</strong>. Estética real del sistema.</p>
+    </div>
+  </div>
+
+  <div class="step-note"><strong>PANTALLA ÚNICA ·</strong> El usuario solo ve su Dashboard resumido en un recuadro y, debajo, la caja donde escribe su consulta a la IA.</div>
+
+  <div class="app-flex" style="display:flex;gap:12px;max-width:1320px;margin:0 auto;">
+    <!-- Sidebar real del sistema -->
+    <div class="sidebar-wrap" style="width:250px;flex-shrink:0;background:linear-gradient(180deg,#1a2029 0%,#141b24 100%);border:1px solid #334053;border-radius:16px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;gap:7px;align-self:flex-start;">
+      <div style="font-family:Rajdhani;font-size:1.05rem;font-weight:700;letter-spacing:.5px;color:#dce8fb;text-transform:uppercase;padding:4px 0 10px;border-bottom:1px solid #334053;margin-bottom:4px;">🥋 MartialSystem</div>
+      <div class="tab-btn active">📊 Operación</div>
+      <div class="tab-btn">💰 Finanzas</div>
+      <div class="tab-btn">🎓 Académico</div>
+      <div class="tab-btn">📢 Marketing</div>
+      <div class="tab-btn">🛒 Marketplace</div>
+      <div class="tab-btn">📋 Configuración</div>
+      <div style="margin-top:auto;border-top:1px solid #334053;padding-top:10px;">
+        <div class="chip" style="font-size:11px;width:100%;">👤 Venta · Owner</div>
+        <div class="chip" style="font-size:11px;width:100%;margin-top:6px;">🏠 Dojo Central · <span class="badge-elite">ELITE</span></div>
+      </div>
+    </div>
+
+    <!-- Contenido: Dashboard + Prompt -->
+    <div style="flex:1;min-width:0;">
+
+      <!-- Dashboard en un solo recuadro -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <h3 style="margin:0;">Dashboard del Dojo</h3>
+          <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Bienvenido, Venta 👋</span>
+        </div>
+        <div class="finance-kpis">
+          <div class="kpi-tile"><div class="kpi-label">Total Alumnos</div><div class="kpi-value" style="font-size:1.5rem;color:var(--accent);">128</div></div>
+          <div class="kpi-tile"><div class="kpi-label">Asistencia (30d)</div><div class="kpi-value" style="font-size:1.5rem;color:var(--ok);">82%</div></div>
+          <div class="kpi-tile"><div class="kpi-label">Ingresos Mes</div><div class="kpi-value" style="font-size:1.5rem;color:var(--ok);">$1,240</div></div>
+          <div class="kpi-tile"><div class="kpi-label">Brecha Cobro</div><div class="kpi-value" style="font-size:1.5rem;color:var(--warn);">$380</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);">Alumnos por Disciplina</div>
+            <div style="font-size:13px;margin-top:6px;">🥋 Karate 42 · BJJ 31 · Judo 20 · Kickboxing 35</div>
+          </div>
+          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+            <div style="font-size:11px;color:var(--muted);">Clases hoy</div>
+            <div style="font-size:13px;margin-top:6px;">📅 BJJ 7:00pm (9) · Karate 4:00pm (6) · Kickboxing 6:00pm (8)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Caja del prompt debajo del dashboard -->
+      <div class="prompt-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
+          <span class="pill">🔒 Solo ve datos de Dojo Central según tu rol</span>
+        </div>
+        <div class="prompt-input-wrap">
+          <input style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
+          <button class="btn">Enviar ➤</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>

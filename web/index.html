@@ -1310,6 +1310,20 @@
             <span class="muted" style="font-size:12px;">Cargando...</span>
           </div>
         </article>
+
+        <!-- Asistente IA (Fase 0 — solo superadmin) -->
+        <article class="card" style="grid-column: 1 / -1; border: 1px solid #3f6f52;" id="ai-assistant-card">
+          <h3>🤖 Asistente IA <span class="pill">Solo superadmin</span></h3>
+          <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
+            <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
+          </div>
+          <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
+          <div style="display:flex;gap:8px;align-items:flex-start;">
+            <input id="ai-prompt" style="flex:1;" placeholder="Escribe tu consulta para el asistente IA...">
+            <button class="btn" id="ai-send" type="button">Enviar ➤</button>
+          </div>
+          <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
+        </article>
       </div>
 
             <!-- Fallback: Controles de administración (oculto por defecto) -->
@@ -2159,6 +2173,42 @@
         <div class="muted" id="logo-status" style="font-size:11px;margin-top:6px;">Sin acciones</div>
         <div style="margin-top:8px;">
           <img id="logo-preview" src="" alt="Vista previa" style="display:none;max-width:120px;max-height:70px;object-fit:contain;border-radius:8px;background:rgba(255,255,255,0.08);padding:4px;border:1px solid var(--line);">
+        </div>
+      </article>
+
+      <article class="card full" id="ai-config-card">
+        <h3>🤖 Asistente IA (Configuración) <span class="pill">Solo superadmin</span></h3>
+        <p class="muted">Coloca el API key del proveedor de IA que usará el sistema. La key se guarda solo en el servidor y nunca se muestra completa.</p>
+        <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap;">
+          <div style="flex:1;min-width:180px;">
+            <label>Proveedor</label>
+            <select id="ai-provider" style="min-height:40px;">
+              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="custom">Custom (OpenAI-compatible)</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:200px;">
+            <label>Modelo</label>
+            <input id="ai-model" placeholder="gpt-4o-mini / deepseek-chat / gemini-2.0-flash">
+          </div>
+          <div style="flex:1;min-width:220px;">
+            <label>API Key</label>
+            <input id="ai-api-key" type="password" placeholder="sk-... (vacío conserva la actual)" autocomplete="off">
+          </div>
+          <div style="flex:1;min-width:200px;">
+            <label>URL base (solo custom)</label>
+            <input id="ai-base-url" placeholder="https://...">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--text);">
+            <input type="checkbox" id="ai-enabled" style="width:20px;height:20px;min-height:20px;"> Habilitar IA
+          </label>
+          <button class="btn" id="ai-config-save" type="button">Guardar configuración</button>
+          <button class="btn alt" id="ai-config-load" type="button">Cargar</button>
+          <span class="muted" id="ai-config-status" style="font-size:12px;">Sin cambios</span>
         </div>
       </article>
 
@@ -11251,6 +11301,112 @@
         loginLogo.src = mode === 'clean' ? '/icons/ICON BL.png' : '/icons/Icon DRK.png';
       }
     };
+
+    // ═══ ASISTENTE IA (Fase 0 — solo superadmin) ═══
+    window.aiIsSuperadmin = function () {
+      const role = (typeof currentMembershipRole === 'function' ? currentMembershipRole() : '') || state.profileRole || '';
+      return role === 'superadmin';
+    };
+    async function aiLoadConfig() {
+      try {
+        const r = await api('/api/ai/config');
+        const d = r.data || {};
+        ids('ai-provider').value = d.provider || 'openai';
+        ids('ai-model').value = d.model || '';
+        ids('ai-base-url').value = d.baseUrl || '';
+        ids('ai-enabled').checked = !!d.enabled;
+        const st = ids('ai-config-status');
+        if (st) st.textContent = d.hasKey ? ('Key configurada (…' + (d.apiKeyHint || '') + ')' + (d.fromEnv ? ' · desde .env' : '')) : 'Sin key configurada';
+      } catch (err) {
+        const st = ids('ai-config-status');
+        if (st) st.textContent = 'Error al cargar: ' + err.message;
+      }
+    }
+    async function aiSaveConfig() {
+      const st = ids('ai-config-status');
+      if (st) st.textContent = 'Guardando...';
+      try {
+        const r = await api('/api/ai/config', {
+          method: 'PUT',
+          body: JSON.stringify({
+            provider: ids('ai-provider').value,
+            model: ids('ai-model').value.trim(),
+            baseUrl: ids('ai-base-url').value.trim(),
+            enabled: ids('ai-enabled').checked,
+            apiKey: ids('ai-api-key').value.trim()
+          })
+        });
+        ids('ai-api-key').value = '';
+        if (st) st.textContent = 'Guardado ✓ (' + (r.data && r.data.hasKey ? 'key configurada' : 'key pendiente') + ')';
+        aiCheckStatus();
+      } catch (err) {
+        if (st) st.textContent = 'Error: ' + err.message;
+      }
+    }
+    async function aiCheckStatus() {
+      const card = ids('ai-assistant-card');
+      const statusLine = ids('ai-status-line');
+      const billingBlock = ids('ai-billing-block');
+      if (!window.aiIsSuperadmin()) {
+        if (card) card.style.display = 'none';
+        return;
+      }
+      try {
+        const eid = ids('tree-establishment')?.value || '';
+        const r = await api('/api/ai/status' + (eid ? '?establishmentId=' + encodeURIComponent(eid) : ''));
+        const d = r.data || {};
+        if (card) card.style.display = '';
+        if (statusLine) {
+          if (!d.allowed) statusLine.textContent = '🔒 La IA está restringida al superadmin.';
+          else if (!d.enabled) statusLine.textContent = '⚠️ IA desactivada. Actívala en Configuración → IA.';
+          else if (!d.hasKey) statusLine.textContent = '⚠️ Sin API key. Colócala en Configuración → IA para usar el asistente.';
+          else if (d.billing && d.billing.severeOverdue) statusLine.textContent = '🚫 Mensualidad vencida (' + d.billing.daysOverdue + ' días). El asistente está bloqueado.';
+          else statusLine.textContent = '✅ Asistente listo. Solo tú (superadmin) puedes usarlo.';
+        }
+        if (billingBlock) billingBlock.style.display = (d.billing && d.billing.severeOverdue) ? '' : 'none';
+      } catch (err) {
+        if (statusLine) statusLine.textContent = 'Estado IA: ' + err.message;
+      }
+    }
+    async function aiSendPrompt() {
+      const input = ids('ai-prompt');
+      const out = ids('ai-output');
+      const msg = (input.value || '').trim();
+      if (!msg || !out) return;
+      const eid = ids('tree-establishment')?.value || '';
+      out.style.display = 'block';
+      out.innerHTML = '⏳ Consultando al asistente...';
+      try {
+        const r = await api('/api/ai/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message: msg, establishmentId: eid || null })
+        });
+        out.textContent = (r.data && r.data.content) ? r.data.content : '(sin respuesta)';
+      } catch (err) {
+        if (/mensualidad|vencida|billing/i.test(err.message || '')) {
+          out.innerHTML = '🚫 <strong>Mensualidad vencida.</strong> Regulariza tu pago para usar la IA.';
+        } else {
+          out.innerHTML = '❌ ' + err.message;
+        }
+      }
+    }
+    function aiWireUI() {
+      const saveBtn = ids('ai-config-save');
+      if (saveBtn) saveBtn.addEventListener('click', aiSaveConfig);
+      const loadBtn = ids('ai-config-load');
+      if (loadBtn) loadBtn.addEventListener('click', aiLoadConfig);
+      const sendBtn = ids('ai-send');
+      if (sendBtn) sendBtn.addEventListener('click', aiSendPrompt);
+      const promptInput = ids('ai-prompt');
+      if (promptInput) promptInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') aiSendPrompt(); });
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      aiWireUI();
+      if (window.aiIsSuperadmin()) {
+        aiLoadConfig();
+        aiCheckStatus();
+      }
+    });
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

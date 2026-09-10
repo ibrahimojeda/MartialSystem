@@ -11396,13 +11396,18 @@
         } else {
           if (cfgCardV) cfgCardV.style.display = 'none';
         }
-        // Mostrar fila de configuración de API key (si hay sesión)
+        // Mostrar fila de configuración de API key (SOLO superadmin)
         const keyRow = ids('ai-key-row');
-        if (keyRow) keyRow.style.display = '';
+        const isSA = window.aiIsSuperadmin();
+        if (keyRow) keyRow.style.display = isSA ? '' : 'none';
         const keyStatus = ids('ai-key-status');
         if (keyStatus) {
-          if (d.hasKey) keyStatus.textContent = '✅ Key registrada (…' + (d.apiKeyHint || '') + '). La IA está activa.';
-          else keyStatus.textContent = '⚠️ Sin key aún: pega tu API key arriba y pulsa "Guardar key".';
+          if (isSA) {
+            if (d.hasKey) keyStatus.textContent = '✅ Key registrada (…' + (d.apiKeyHint || '') + '). La IA está activa.';
+            else keyStatus.textContent = '⚠️ Sin key aún: pega tu API key arriba y pulsa "Guardar key".';
+          } else {
+            keyStatus.textContent = '';
+          }
         }
         // Mi Información: datos del usuario (nombre, rol, accesos)
         const uname = ids('ai-user-name');

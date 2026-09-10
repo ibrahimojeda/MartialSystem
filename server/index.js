@@ -7942,7 +7942,81 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/ai/memory — Historial de conversaciones del usuario (acotado)
+// POST /api/ai/draft — Fase 2: genera borrador editable para un formulario según rol.
+// NUNCA inserta en la base: solo propone valores (y pregunta si falta algo obligatorio).
+app.post('/api/ai/draft', requireAuth, async (req, res) => {
+  try {
+    const cfg = await getAIConfig();
+    const apiKey = getAIEffectiveKey(cfg);
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
+
+    const { formType, fields, establishmentId } = req.body || {};
+    if (!formType || !fields || typeof fields !== 'object') {
+      return res.status(400).json({ ok: false, error: 'formType y fields son requeridos' });
+    }
+
+    // Gating por plan
+    if (!req.isSuperadmin && establishmentId) {
+      const planOk = await hasAIFeature(establishmentId);
+      if (!planOk) return res.status(403).json({ ok: false, error: 'Tu plan no incluye IA. Contacta al superadmin.', code: 'PLAN_NO_IA' });
+    }
+
+    const formGuides = {
+      marketplace: 'Redacta para un item del marketplace de una escuela de artes marciales. Campos: mk-title (título del producto), mk-description (descripción comercial atractiva, 1-2 frases), mk-price (número), mk-currency (código moneda). No inventes precios si el usuario no dio una pista; propón un valor razonable o déjalo vacío.',
+      notification: 'Redacta una notificación para alumnos/padres. Campos: nt-title (título corto), nt-body (mensaje claro y amable en español). Usa marcadores [Nombre] si hace falta personalizar.',
+      waiver: 'Redacta una plantilla de waiver/contrato de responsabilidad para un dojo de artes marciales. Campos: wtemp-title (título), wtemp-content (HTML permitido, texto formal en español, incluye cláusulas de riesgo, uso de imagen y menores si aplica). Usa [Nombre del alumno], [Nombre del dojo] como marcadores.'
+    };
+    const guide = formGuides[formType] || 'Redacta contenido de formulario coherente con los campos indicados.';
+
+    const systemPrompt = await buildAIContext(req, establishmentId);
+    const userPrompt = [
+      guide,
+      `Formulario: ${formType}`,
+      `Valores actuales del formulario (JSON): ${JSON.stringify(fields || {})}`,
+      'Responde ÚNICAMENTE con JSON válido: {"draft": {"campoId": "valor propuesto"}, "question": null}',
+      'Reglas:',
+      '- Proponen valores SOLO para campos que puedas rellenar con seguridad; omite el resto.',
+      '- Si un campo obligatorio está vacío y NO se puede deducir del contexto, pon "question" con una pregunta corta en español pidiendo ese dato, y deja draft mínimo.',
+      '- "question" debe ser null si no necesitas preguntar.',
+      '- No inventes nombres de personas reales; usa marcadores como [Nombre].',
+      '- No envuelvas el JSON en markdown ni lo comentes.'
+    ].join('\n');
+
+    const baseUrl = getAIBaseUrl(cfg);
+    const model = getAIModel(cfg);
+    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+        temperature: 0.4,
+        max_tokens: 700
+      })
+    });
+    const aiJson = await aiRes.json().catch(() => ({}));
+    if (!aiRes.ok) {
+      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
+      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+    }
+    let raw = aiJson?.choices?.[0]?.message?.content || '';
+    raw = raw.replace(/```(json)?/gi, '').trim();
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch (_) {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch (_e) { parsed = null; } }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió un JSON inválido.', raw });
+    }
+    const draft = (parsed && parsed.draft && typeof parsed.draft === 'object') ? parsed.draft : {};
+    const question = parsed && parsed.question ? String(parsed.question) : null;
+    return res.json({ ok: true, data: { draft, question } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'AI draft failed' });
+  }
+});
 app.get('/api/ai/memory', requireAuth, async (req, res) => {
   try {
     const profileId = req.authUser.id;

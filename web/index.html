@@ -1619,6 +1619,7 @@
           </div>
           <div class="full">
             <button class="btn" type="submit">Crear item</button>
+            <button class="btn alt" id="ai-draft-marketplace" type="button">✨ Redactar con IA</button>
             <button class="btn alt" id="mk-load" type="button">Cargar items</button>
           </div>
         </form>
@@ -1700,6 +1701,7 @@
           </div>
           <div class="full">
             <button class="btn" type="submit">Enviar notificacion</button>
+            <button class="btn alt" id="ai-draft-notification" type="button">✨ Redactar con IA</button>
             <button class="btn alt" id="nt-load" type="button">Cargar notificaciones</button>
           </div>
         </form>
@@ -11413,6 +11415,22 @@
         }
       }
     }
+    // Fase 2: Autocompletado de formularios con IA (borrador editable; nunca guarda)
+    window.aiFillForm = async function (formType, fieldIds, establishmentId) {
+      const fields = {};
+      (fieldIds || []).forEach(function (id) { const el = ids(id); if (el) fields[id] = el.value || ''; });
+      const r = await api('/api/ai/draft', {
+        method: 'POST',
+        body: JSON.stringify({ formType: formType, fields: fields, establishmentId: establishmentId || null })
+      });
+      const d = r.data || {};
+      const draft = d.draft || {};
+      Object.keys(draft).forEach(function (id) { const el = ids(id); if (el) el.value = String(draft[id]); });
+      if (d.question) {
+        alert('🤖 La IA pregunta: ' + d.question);
+      }
+      return d;
+    };
     function aiWireUI() {
       const saveBtn = ids('ai-config-save');
       if (saveBtn) saveBtn.addEventListener('click', aiSaveConfig);
@@ -11422,6 +11440,23 @@
       if (sendBtn) sendBtn.addEventListener('click', aiSendPrompt);
       const promptInput = ids('ai-prompt');
       if (promptInput) promptInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') aiSendPrompt(); });
+      // Fase 2: botones "Redactar con IA" en formularios
+      const dmk = ids('ai-draft-marketplace');
+      if (dmk) dmk.addEventListener('click', async function () {
+        try {
+          dmk.disabled = true; dmk.textContent = '✨ Redactando...';
+          await window.aiFillForm('marketplace', ['mk-title', 'mk-description', 'mk-price', 'mk-currency'], selectedEstablishmentId());
+        } catch (err) { alert('⚠️ ' + err.message); }
+        finally { dmk.disabled = false; dmk.textContent = '✨ Redactar con IA'; }
+      });
+      const dnt = ids('ai-draft-notification');
+      if (dnt) dnt.addEventListener('click', async function () {
+        try {
+          dnt.disabled = true; dnt.textContent = '✨ Redactando...';
+          await window.aiFillForm('notification', ['nt-title', 'nt-body'], selectedEstablishmentId());
+        } catch (err) { alert('⚠️ ' + err.message); }
+        finally { dnt.disabled = false; dnt.textContent = '✨ Redactar con IA'; }
+      });
     }
     document.addEventListener('DOMContentLoaded', function () {
       aiWireUI();

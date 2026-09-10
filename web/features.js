@@ -289,6 +289,7 @@
           <div class="full"><label>Contenido (HTML permitido)</label><textarea id="wtemp-content" rows="6" placeholder="Escribe el texto del waiver / contrato..."></textarea></div>
           <div class="full">
             <button class="btn" type="submit">💾 Guardar plantilla</button>
+            <button class="btn alt" id="ai-draft-waiver" type="button">✨ Redactar con IA</button>
           </div>
         </form>
       </div>
@@ -343,6 +344,31 @@
       } catch (err) {
         // Fallback: store locally
         alert(`Plantilla creada localmente (DB schema pending): ${err.message}`);
+      }
+    });
+
+    // ✨ Redactar plantilla con IA (Fase 2)
+    $('ai-draft-waiver').addEventListener('click', async () => {
+      const btn = $('ai-draft-waiver');
+      try {
+        btn.disabled = true;
+        btn.textContent = '✨ Redactando...';
+        const fields = { 'wtemp-title': $('wtemp-title').value, 'wtemp-content': $('wtemp-content').value };
+        const r = await api('/api/ai/draft', {
+          method: 'POST',
+          body: JSON.stringify({ formType: 'waiver', fields, establishmentId: estId || null })
+        });
+        if (!r.ok) throw new Error(r.error || 'Error');
+        const d = r.data || {};
+        const draft = d.draft || {};
+        if (draft['wtemp-title']) $('wtemp-title').value = draft['wtemp-title'];
+        if (draft['wtemp-content']) $('wtemp-content').value = draft['wtemp-content'];
+        if (d.question) alert('🤖 La IA pregunta: ' + d.question);
+      } catch (err) {
+        alert('⚠️ ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✨ Redactar con IA';
       }
     });
   }

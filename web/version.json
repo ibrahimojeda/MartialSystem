@@ -1,15 +1,15 @@
 {
-  "version": "2.4.0",
-  "buildNumber": 9,
-  "message": "Fase 1 IA: Asistente IA para todos los roles con contexto filtrado por rol/establecimiento y memoria por usuario.",
+  "version": "2.5.0",
+  "buildNumber": 10,
+  "message": "Fase 2 IA: Autocompletado de formularios con IA (waivers, marketplace, notificaciones) con borradores editables.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.4.0.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.5.0.apk",
   "releaseDate": "2026-09-10",
   "changelog": [
-    "Asistente IA disponible para TODOS los roles (owner, sensei, instructor, estudiante, guardián)",
-    "Contexto filtrado por rol y establecimiento: cada usuario ve solo lo que su rol permite",
-    "Memoria por usuario: la IA recuerda las conversaciones (tabla ai_memory con RLS)",
-    "Panel IA en un solo recuadro para todos los roles con indicador de alcance y memoria",
-    "Gating por plan: solo establecimientos cuyo plan incluya ia_features"
+    "Botón '✨ Redactar con IA' en formularios: waivers, marketplace y notificaciones",
+    "La IA propone un borrador editable que el usuario revisa antes de guardar",
+    "Si falta un dato obligatorio en la plantilla, la IA pregunta antes de completar",
+    "El guardado final siempre lo hace el código normal del sistema (nunca la IA)",
+    "Endpoint /api/ai/draft con contexto por rol y gating por plan"
   ]
 }

@@ -1237,73 +1237,27 @@
       <!-- 3ï¸âƒ£ DASHBOARD SUPERADMIN -->
       <div id="dashboard-superadmin" class="hidden" style="width: 100%;">
         
-        <!-- Dashboard en un solo recuadro -->
+        <!-- Dashboard: solo información del usuario -->
         <article class="card" style="grid-column: 1 / -1;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-            <h3 style="margin:0;">Dashboard del Sistema</h3>
-            <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Bienvenido, Venta 👋 · Superadmin</span>
+            <h3 style="margin:0;">Mi Información</h3>
+            <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Conectado</span>
           </div>
-
-          <!-- KPIs -->
-          <div class="finance-kpis">
-            <div class="kpi-tile" data-kpi="kpi-estabs-total">
-              <div class="kpi-label">Total Establecimientos</div>
-              <div id="kpi-estabs-total" style="font-size:1.5rem;font-weight:800;color:var(--accent);">&#x2014;</div>
-              <div id="kpi-estabs-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+              <div style="font-size:11px;color:var(--muted);">👤 Usuario</div>
+              <div id="ai-user-name" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
+              <div id="ai-user-role" class="muted" style="font-size:12px;margin-top:2px;">Role: ...</div>
             </div>
-            <div class="kpi-tile" data-kpi="kpi-users-total">
-              <div class="kpi-label">Usuarios Totales</div>
-              <div id="kpi-users-total" style="font-size:1.5rem;font-weight:800;color:var(--brand-2);">&#x2014;</div>
-              <div id="kpi-users-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
-            </div>
-            <div class="kpi-tile" data-kpi="kpi-ingresos-total">
-              <div class="kpi-label">Ingresos Semana</div>
-              <div id="kpi-ingresos-total" style="font-size:1.5rem;font-weight:800;color:var(--ok);">&#x2014;</div>
-              <div id="kpi-ingresos-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
-            </div>
-            <div class="kpi-tile" data-kpi="kpi-students-total">
-              <div class="kpi-label">Alumnos Totales</div>
-              <div id="kpi-students-total" style="font-size:1.5rem;font-weight:800;color:var(--danger);">&#x2014;</div>
-              <div id="kpi-students-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
-            </div>
-            <div class="kpi-tile" data-kpi="kpi-disciplines-total">
-              <div class="kpi-label">Disciplinas Activas</div>
-              <div id="kpi-disciplines-total" style="font-size:1.5rem;font-weight:800;color:var(--brand);">&#x2014;</div>
-              <div id="kpi-disciplines-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
-            </div>
-            <div class="kpi-tile" data-kpi="kpi-memberships-total">
-              <div class="kpi-label">Miembros por Rol</div>
-              <div id="kpi-memberships-total" style="font-size:1.5rem;font-weight:800;color:var(--ok);">&#x2014;</div>
-              <div id="kpi-memberships-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
-            </div>
-            <div class="kpi-tile" data-kpi="kpi-new-total">
-              <div class="kpi-label">Nuevos Registros</div>
-              <div id="kpi-new-total" style="font-size:1.5rem;font-weight:800;color:var(--brand-2);">&#x2014;</div>
-              <div class="muted" style="font-size:11px;margin-top:4px;">Esta semana</div>
-            </div>
-            <div class="kpi-tile" data-kpi="kpi-attendance-rate">
-              <div class="kpi-label">Tasa de Asistencia</div>
-              <div id="kpi-attendance-rate" style="font-size:1.5rem;font-weight:800;color:var(--accent);">&#x2014;</div>
-              <div id="kpi-attendance-sub" class="muted" style="font-size:11px;margin-top:4px;">Cargando...</div>
+            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+              <div style="font-size:11px;color:var(--muted);">🏢 Acceso / Establecimientos</div>
+              <div id="ai-user-estabs" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
+              <div class="muted" style="font-size:12px;margin-top:2px;">Establecimientos bajo tu acceso</div>
             </div>
           </div>
-
-          <!-- Establecimientos + Disciplinas -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
-            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;" data-kpi="kpi-top-estabs">
-              <div style="font-size:11px;color:var(--muted);">Establecimientos destacados</div>
-              <div id="kpi-top-estabs" style="padding:8px 0;"><span class="muted" style="font-size:12px;">Cargando...</span></div>
-            </div>
-            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;" data-kpi="kpi-top-disciplines">
-              <div style="font-size:11px;color:var(--muted);">Disciplinas destacadas</div>
-              <div id="kpi-top-disciplines" style="padding:8px 0;"><span class="muted" style="font-size:12px;">Cargando...</span></div>
-            </div>
-          </div>
-
-          <!-- Transacciones -->
-          <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;margin-top:10px;" data-kpi="kpi-transactions">
-            <div style="font-size:11px;color:var(--muted);">Ultimas Transacciones</div>
-            <div id="kpi-transactions" style="padding:8px 0;overflow-x:auto;"><span class="muted" style="font-size:12px;">Cargando...</span></div>
+          <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5;">
+            💡 <strong>La IA es el buscador de tu sistema:</strong> pregúntale en la caja de abajo por alumnos, pagos, clases,
+            waivers, reportes de tu dojo o de todo el sistema según tu rol. Ella buscará y te responderá aquí.
           </div>
         </article>
 
@@ -2680,7 +2634,7 @@
     </section>
   <article class="card full" id="ai-assistant-card" style="margin-top:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
+        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🔍 Buscador del sistema — escribe tu consulta</label>
         <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
       </div>
       <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
@@ -2688,7 +2642,7 @@
       </div>
       <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
       <div style="display:flex;gap:8px;align-items:flex-start;">
-        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
+        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos tiene mi dojo? ¿Quiénes deben pagos? ¿Cuántas clases hay hoy? Explica el churn...">
         <button class="btn" id="ai-send" type="button">Enviar ➤</button>
       </div>
       <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
@@ -11379,6 +11333,16 @@
         const r = await api('/api/ai/status' + (eid ? '?establishmentId=' + encodeURIComponent(eid) : ''));
         const d = r.data || {};
         if (card) card.style.display = '';
+        // Mi Información: datos del usuario (nombre, rol, accesos)
+        const uname = ids('ai-user-name');
+        if (uname) uname.textContent = state.profileName || state.profileId || '—';
+        const urole = ids('ai-user-role');
+        if (urole) urole.textContent = 'Role: ' + (d.role || state.profileRole || 'user');
+        const uest = ids('ai-user-estabs');
+        if (uest) {
+          const n = (Array.isArray(state.memberships) ? state.memberships.length : 0);
+          uest.textContent = String(n);
+        }
         if (rolePill) rolePill.textContent = '🔒 Visible: ' + aiRoleLabel(d.role);
         if (billingBlock) billingBlock.style.display = (d.billing && d.billing.severeOverdue) ? '' : 'none';
         if (statusLine) {

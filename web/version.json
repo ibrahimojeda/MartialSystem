@@ -1,15 +1,15 @@
 {
-  "version": "2.5.0",
-  "buildNumber": 10,
-  "message": "Fase 2 IA: Autocompletado de formularios con IA (waivers, marketplace, notificaciones) con borradores editables.",
+  "version": "2.6.0",
+  "buildNumber": 11,
+  "message": "Dashboard global 'Mi Información + Buscador IA' para todos los roles; superadmin sin herramientas admin ni árbol; Fase 3 explica reportes.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.5.0.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.6.0.apk",
   "releaseDate": "2026-09-10",
   "changelog": [
-    "Botón '✨ Redactar con IA' en formularios: waivers, marketplace y notificaciones",
-    "La IA propone un borrador editable que el usuario revisa antes de guardar",
-    "Si falta un dato obligatorio en la plantilla, la IA pregunta antes de completar",
-    "El guardado final siempre lo hace el código normal del sistema (nunca la IA)",
-    "Endpoint /api/ai/draft con contexto por rol y gating por plan"
+    "Dashboard unificado para todos los roles: Mi Información (usuario, rol, accesos) + Buscador IA",
+    "La IA actúa como motor de búsqueda del sistema (alumnos, pagos, clases, reportes según rol)",
+    "Superadmin: se ocultan 'Herramientas de Administración' y 'Arbol de Distribución' del dashboard",
+    "Fase 3: botón '🤖 Explicar este reporte' en el reporte Churn (la IA interpreta números reales del sistema)",
+    "Endpoint /api/ai/explain con contexto por rol y gating por plan"
   ]
 }

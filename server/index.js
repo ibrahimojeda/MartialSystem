@@ -8018,6 +8018,58 @@ app.post('/api/ai/draft', requireAuth, async (req, res) => {
     return res.status(500).json({ ok: false, error: err.message || 'AI draft failed' });
   }
 });
+
+// POST /api/ai/explain — Fase 3: interpreta reportes en lenguaje natural.
+// Los números los calcula el sistema; la IA SOLO los explica (nunca los inventa).
+app.post('/api/ai/explain', requireAuth, async (req, res) => {
+  try {
+    const cfg = await getAIConfig();
+    const apiKey = getAIEffectiveKey(cfg);
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
+
+    const { reportType, data, establishmentId } = req.body || {};
+    if (!reportType || !data || typeof data !== 'object') {
+      return res.status(400).json({ ok: false, error: 'reportType y data son requeridos' });
+    }
+    if (!req.isSuperadmin && establishmentId) {
+      const planOk = await hasAIFeature(establishmentId);
+      if (!planOk) return res.status(403).json({ ok: false, error: 'Tu plan no incluye IA. Contacta al superadmin.', code: 'PLAN_NO_IA' });
+    }
+
+    const systemPrompt = await buildAIContext(req, establishmentId);
+    const userPrompt = [
+      `Explica el reporte de tipo "${reportType}" de MartialSystem.`,
+      `Datos del reporte (calculados por el sistema; NO inventes adicionales): ${JSON.stringify(data || {})}`,
+      'Responde en español en 4-6 frases, directo y útil para un dueño de dojo: qué significa, qué resalta y qué acción sugerirías.',
+      'No inventes cifras fuera de los datos entregados.'
+    ].join('\n');
+
+    const baseUrl = getAIBaseUrl(cfg);
+    const model = getAIModel(cfg);
+    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+        temperature: 0.4,
+        max_tokens: 500
+      })
+    });
+    const aiJson = await aiRes.json().catch(() => ({}));
+    if (!aiRes.ok) {
+      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
+      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+    }
+    const content = aiJson?.choices?.[0]?.message?.content || '';
+    if (!content) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
+    return res.json({ ok: true, data: { content, model } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'AI explain failed' });
+  }
+});
+
 app.get('/api/ai/memory', requireAuth, async (req, res) => {
   try {
     const profileId = req.authUser.id;

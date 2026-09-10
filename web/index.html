@@ -983,6 +983,49 @@
       </div>
     </section>
 
+    <!-- Mi Información + Buscador del sistema (globales, para todos los roles) -->
+    <article class="card full" id="ai-user-info-card" style="display:none;margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h3 style="margin:0;">Mi Información</h3>
+        <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Conectado</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);">👤 Usuario</div>
+          <div id="ai-user-name" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
+          <div id="ai-user-role" class="muted" style="font-size:12px;margin-top:2px;">Role: ...</div>
+        </div>
+        <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);">🏢 Acceso / Establecimientos</div>
+          <div id="ai-user-estabs" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
+          <div class="muted" style="font-size:12px;margin-top:2px;">Establecimientos bajo tu acceso</div>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5;">
+        💡 <strong>La IA es el buscador del sistema:</strong> pregúntale en la caja de abajo por alumnos, pagos, clases, waivers y reportes según tu rol.
+      </div>
+    </article>
+
+    <article class="card full" id="ai-assistant-card" style="display:none;margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🔍 Buscador del sistema — escribe tu consulta</label>
+        <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
+      </div>
+      <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
+        <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
+      </div>
+      <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos tiene mi dojo? ¿Quiénes deben pagos? ¿Cuántas clases hay hoy? Explica el churn...">
+        <button class="btn" id="ai-send" type="button">Enviar ➤</button>
+      </div>
+      <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
+        <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
+        <span>⚠️ La IA puede equivocarse · verifica los datos</span>
+      </div>
+    </article>
+
     <section id="login-gate" style="display:flex;justify-content:center;align-items:flex-start;padding-top:40px;min-height:80vh;">
       <div style="width:100%;max-width:480px;">
         <div style="text-align:center;margin-bottom:16px;">
@@ -1236,31 +1279,6 @@
 
       <!-- 3ï¸âƒ£ DASHBOARD SUPERADMIN -->
       <div id="dashboard-superadmin" class="hidden" style="width: 100%;">
-        
-        <!-- Dashboard: solo información del usuario -->
-        <article class="card" style="grid-column: 1 / -1;">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-            <h3 style="margin:0;">Mi Información</h3>
-            <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Conectado</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
-              <div style="font-size:11px;color:var(--muted);">👤 Usuario</div>
-              <div id="ai-user-name" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
-              <div id="ai-user-role" class="muted" style="font-size:12px;margin-top:2px;">Role: ...</div>
-            </div>
-            <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
-              <div style="font-size:11px;color:var(--muted);">🏢 Acceso / Establecimientos</div>
-              <div id="ai-user-estabs" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
-              <div class="muted" style="font-size:12px;margin-top:2px;">Establecimientos bajo tu acceso</div>
-            </div>
-          </div>
-          <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5;">
-            💡 <strong>La IA es el buscador de tu sistema:</strong> pregúntale en la caja de abajo por alumnos, pagos, clases,
-            waivers, reportes de tu dojo o de todo el sistema según tu rol. Ella buscará y te responderá aquí.
-          </div>
-        </article>
-
       </div>
 
             <!-- Fallback: Controles de administración (oculto por defecto) -->
@@ -1277,7 +1295,7 @@
         </article>
       </div>
 
-      <article class="card full">
+      <article class="card full" id="tree-card">
         <h3>Arbol de Distribucion por Local/Academia</h3>
         <p class="muted">Selecciona el local y carga el arbol para ver disciplinas y distribucion operativa.</p>
         <div class="row" style="margin-bottom:10px;">
@@ -2632,25 +2650,6 @@
         <pre id="disciplines">cargando...</pre>
       </article>
     </section>
-  <article class="card full" id="ai-assistant-card" style="margin-top:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🔍 Buscador del sistema — escribe tu consulta</label>
-        <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
-      </div>
-      <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
-        <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
-      </div>
-      <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
-      <div style="display:flex;gap:8px;align-items:flex-start;">
-        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos tiene mi dojo? ¿Quiénes deben pagos? ¿Cuántas clases hay hoy? Explica el churn...">
-        <button class="btn" id="ai-send" type="button">Enviar ➤</button>
-      </div>
-      <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
-        <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
-        <span>⚠️ La IA puede equivocarse · verifica los datos</span>
-      </div>
-    </article>
   </main>
 
   <!-- Panel flotante de diagnóstico de carga del Dashboard -->
@@ -4108,6 +4107,9 @@
       } else if (role === 'superadmin') {
         if (dashboardSuperadmin) dashboardSuperadmin.classList.remove('hidden');
         loadSuperadminDashboard();
+        // Superadmin: ocultar herramientas administrativas y arbol de distribucion del dashboard
+        const adminC = ids('dashboard-admin-controls'); if (adminC) adminC.style.display = 'none';
+        const treeC = ids('tree-card'); if (treeC) treeC.style.display = 'none';
       } else if (role === 'owner') {
         if (dashboardAdmin) dashboardAdmin.classList.remove('hidden');
         loadOwnerDashboard();
@@ -7635,6 +7637,11 @@
               ${kpiCard('Activos totales', String(totalActive), '#2e8b57')}
               ${kpiCard('Umbral', (data.threshold || 15) + ' días', '#2f6fa3')}
             </div>
+            <div class="row" style="margin-bottom:10px;">
+              <button class="btn alt" id="ai-explain-churn" type="button">🤖 Explicar este reporte</button>
+              <span class="muted" style="font-size:12px;">La IA interpreta estos números (calculados por el sistema).</span>
+            </div>
+            <div id="ai-explain-churn-out" style="display:none;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;line-height:1.5;"></div>
             <div class="card" style="padding:10px;">
               <h4 style="margin:0 0 8px;">Estudiantes en riesgo de abandono</h4>
               <table style="${tblStyles()}"><thead><tr>
@@ -7645,6 +7652,13 @@
             </div>`;
         }
         ids('reports-output').textContent = JSON.stringify(result, null, 2);
+        // Fase 3: botón "Explicar este reporte" (la IA interpreta; el sistema calculó)
+        const expBtn = ids('ai-explain-churn');
+        if (expBtn) {
+          expBtn.addEventListener('click', function () {
+            window.aiExplainReport('churn', { churnRate: churnRate, atRiskCount: atRiskCount, totalActive: totalActive, threshold: data.threshold || 15 }, 'ai-explain-churn-out');
+          });
+        }
       } catch (err) {
         ids('reports-output').textContent = err.message;
       }
@@ -11321,11 +11335,13 @@
     }
     async function aiCheckStatus() {
       const card = ids('ai-assistant-card');
+      const userCard = ids('ai-user-info-card');
       const statusLine = ids('ai-status-line');
       const billingBlock = ids('ai-billing-block');
       const rolePill = ids('ai-role-pill');
       if (!state.accessToken) {
         if (card) card.style.display = 'none';
+        if (userCard) userCard.style.display = 'none';
         return;
       }
       try {
@@ -11333,6 +11349,7 @@
         const r = await api('/api/ai/status' + (eid ? '?establishmentId=' + encodeURIComponent(eid) : ''));
         const d = r.data || {};
         if (card) card.style.display = '';
+        if (userCard) userCard.style.display = '';
         // Mi Información: datos del usuario (nombre, rol, accesos)
         const uname = ids('ai-user-name');
         if (uname) uname.textContent = state.profileName || state.profileId || '—';
@@ -11394,6 +11411,32 @@
         alert('🤖 La IA pregunta: ' + d.question);
       }
       return d;
+    };
+    // Fase 3: explicar reportes en lenguaje natural (números calculados por el sistema)
+    window.aiExplainReport = async function (reportType, data, outputId) {
+      const out = ids(outputId || 'ai-explain-output');
+      if (!out) return;
+      out.style.display = 'block';
+      out.innerHTML = '⏳ Analizando el reporte...';
+      try {
+        const r = await api('/api/ai/explain', {
+          method: 'POST',
+          body: JSON.stringify({
+            reportType: reportType,
+            data: data || {},
+            establishmentId: selectedEstablishmentId() || null
+          })
+        });
+        out.innerHTML = '🤖 ' + ((r.data && r.data.content) ? r.data.content : '(sin explicación)');
+      } catch (err) {
+        if (/mensualidad|vencida|billing/i.test(err.message || '')) {
+          out.innerHTML = '🚫 <strong>Mensualidad vencida.</strong> Regulariza tu pago para usar la IA.';
+        } else if (/plan no incluye|PLAN_NO/i.test(err.message || '')) {
+          out.innerHTML = '⚠️ Tu plan no incluye IA. Contacta al superadmin.';
+        } else {
+          out.innerHTML = '❌ ' + err.message;
+        }
+      }
     };
     function aiWireUI() {
       const saveBtn = ids('ai-config-save');

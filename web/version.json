@@ -1,16 +1,14 @@
 {
-  "version": "2.7.0",
-  "buildNumber": 12,
-  "message": "Fase 4 IA: migración asistida — la IA propone el mapeo de columnas al importar datos de otro sistema.",
+  "version": "2.7.1",
+  "buildNumber": 13,
+  "message": "API key de la IA visible en la tarjeta del Buscador + tarjeta Configuración aparece tras el login, con botones Guardar/Probar.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.7.0.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.7.1.apk",
   "releaseDate": "2026-09-10",
   "changelog": [
-    "Módulo '🤖 Migración asistida por IA' en Administración → Cargas Masivas",
-    "Sube un archivo Excel/CSV de otro sistema y la IA propone el mapeo columna → campo de MartialSystem",
-    "Tabla de mapeo editable con % de confianza y notas de normalización",
-    "La IA pregunta si falta información para decidir el mapeo",
-    "Exporta CSV mapeado para revisarlo/cargarlo; la escritura final la hace el importador normal",
-    "Endpoint /api/ai/mapping con contexto por rol y gating por plan"
+    "Campo '🔑 API Key' visible directamente en la tarjeta del Buscador del sistema",
+    "La tarjeta 'Asistente IA (Configuración)' ahora aparece tras iniciar sesión como superadmin",
+    "Botones 'Guardar key' y 'Probar IA' conectados",
+    "La key se persiste en el servidor para que la IA siempre quede activa"
   ]
 }

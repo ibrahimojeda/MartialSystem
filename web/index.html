@@ -1011,6 +1011,15 @@
         <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🔍 Buscador del sistema — escribe tu consulta</label>
         <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
       </div>
+      <div id="ai-key-row" style="display:none;margin-bottom:10px;border:1px dashed var(--brand-2);border-radius:10px;padding:10px 12px;background:rgba(201,162,39,.05);">
+        <label style="margin:0 0 4px;font-size:12px;color:var(--text);">🔑 <strong>API Key de la IA</strong> <span style="color:var(--muted);font-weight:400;">(se guarda solo en el servidor)</span></label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input id="ai-key-inline" type="password" placeholder="sk-..." style="flex:1;min-width:220px;" autocomplete="off">
+          <button class="btn" id="ai-key-save" type="button">Guardar key</button>
+          <button class="btn alt" id="ai-key-test" type="button">Probar IA</button>
+        </div>
+        <div class="muted" id="ai-key-status" style="font-size:11px;margin-top:4px;"></div>
+      </div>
       <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
         <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
       </div>
@@ -11379,6 +11388,22 @@
         const d = r.data || {};
         if (card) card.style.display = '';
         if (userCard) userCard.style.display = '';
+        // Mostrar/ocultar la tarjeta de configuración IA según rol (aparece tras el login)
+        const cfgCardV = ids('ai-config-card');
+        if (window.aiIsSuperadmin()) {
+          if (cfgCardV) cfgCardV.style.display = '';
+          aiLoadConfig();
+        } else {
+          if (cfgCardV) cfgCardV.style.display = 'none';
+        }
+        // Mostrar fila de configuración de API key (si hay sesión)
+        const keyRow = ids('ai-key-row');
+        if (keyRow) keyRow.style.display = '';
+        const keyStatus = ids('ai-key-status');
+        if (keyStatus) {
+          if (d.hasKey) keyStatus.textContent = '✅ Key registrada (…' + (d.apiKeyHint || '') + '). La IA está activa.';
+          else keyStatus.textContent = '⚠️ Sin key aún: pega tu API key arriba y pulsa "Guardar key".';
+        }
         // Mi Información: datos del usuario (nombre, rol, accesos)
         const uname = ids('ai-user-name');
         if (uname) uname.textContent = state.profileName || state.profileId || '—';
@@ -11401,6 +11426,39 @@
         aiLoadMemoryCount(eid);
       } catch (err) {
         if (statusLine) statusLine.textContent = 'Estado IA: ' + err.message;
+      }
+    }
+    async function aiSaveKey() {
+      const inp = ids('ai-key-inline');
+      const st = ids('ai-key-status');
+      const key = (inp && inp.value) ? inp.value.trim() : '';
+      if (!key) { if (st) st.textContent = '⚠️ Escribe el API key primero.'; return; }
+      if (st) st.textContent = '⏳ Guardando...';
+      try {
+        const r = await api('/api/ai/config', {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey: key })
+        });
+        if (inp) inp.value = '';
+        if (st) st.textContent = r.data && r.data.hasKey ? ('✅ Key guardada (…' + (r.data.apiKeyHint || '') + '). La IA está activa.') : '⚠️ No se pudo registrar la key (¿tienes permisos de superadmin?).';
+        aiCheckStatus();
+      } catch (err) {
+        if (st) st.textContent = 'Error: ' + err.message;
+      }
+    }
+    async function aiTestKey() {
+      const st = ids('ai-key-status');
+      if (st) st.textContent = '⏳ Probando conexión con el proveedor...';
+      try {
+        const r = await api('/api/ai/status');
+        const d = r.data || {};
+        if (st) {
+          if (!d.hasKey) st.textContent = '⚠️ No hay key configurada. Pégala arriba y guarda.';
+          else if (!d.enabled) st.textContent = '⚠️ La key está registrada pero la IA está desactivada.';
+          else st.textContent = '✅ IA lista. Prueba escribiendo una consulta arriba.';
+        }
+      } catch (err) {
+        if (st) st.textContent = 'Error al probar: ' + err.message;
       }
     }
     async function aiSendPrompt() {
@@ -11600,6 +11658,11 @@
       if (saveBtn) saveBtn.addEventListener('click', aiSaveConfig);
       const loadBtn = ids('ai-config-load');
       if (loadBtn) loadBtn.addEventListener('click', aiLoadConfig);
+      // Botones del campo de API key visible en el Buscador
+      const keySave = ids('ai-key-save');
+      if (keySave) keySave.addEventListener('click', aiSaveKey);
+      const keyTest = ids('ai-key-test');
+      if (keyTest) keyTest.addEventListener('click', aiTestKey);
       const sendBtn = ids('ai-send');
       if (sendBtn) sendBtn.addEventListener('click', aiSendPrompt);
       const promptInput = ids('ai-prompt');

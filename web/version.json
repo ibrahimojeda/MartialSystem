@@ -1,15 +1,16 @@
 {
-  "version": "2.6.0",
-  "buildNumber": 11,
-  "message": "Dashboard global 'Mi Información + Buscador IA' para todos los roles; superadmin sin herramientas admin ni árbol; Fase 3 explica reportes.",
+  "version": "2.7.0",
+  "buildNumber": 12,
+  "message": "Fase 4 IA: migración asistida — la IA propone el mapeo de columnas al importar datos de otro sistema.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.6.0.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.7.0.apk",
   "releaseDate": "2026-09-10",
   "changelog": [
-    "Dashboard unificado para todos los roles: Mi Información (usuario, rol, accesos) + Buscador IA",
-    "La IA actúa como motor de búsqueda del sistema (alumnos, pagos, clases, reportes según rol)",
-    "Superadmin: se ocultan 'Herramientas de Administración' y 'Arbol de Distribución' del dashboard",
-    "Fase 3: botón '🤖 Explicar este reporte' en el reporte Churn (la IA interpreta números reales del sistema)",
-    "Endpoint /api/ai/explain con contexto por rol y gating por plan"
+    "Módulo '🤖 Migración asistida por IA' en Administración → Cargas Masivas",
+    "Sube un archivo Excel/CSV de otro sistema y la IA propone el mapeo columna → campo de MartialSystem",
+    "Tabla de mapeo editable con % de confianza y notas de normalización",
+    "La IA pregunta si falta información para decidir el mapeo",
+    "Exporta CSV mapeado para revisarlo/cargarlo; la escritura final la hace el importador normal",
+    "Endpoint /api/ai/mapping con contexto por rol y gating por plan"
   ]
 }

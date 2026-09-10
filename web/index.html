@@ -2301,6 +2301,35 @@
         <pre id="bulk-output">Sin datos</pre>
       </article>
 
+      <article class="card full" id="ai-migrate-card">
+        <h3>🤖 Migración asistida por IA</h3>
+        <p class="muted">Sube un archivo (Excel/CSV) de tu sistema anterior y la IA propondrá el mapeo de columnas hacia el esquema de MartialSystem. Tú revisas y confirmas; la carga final la hace el importador normal.</p>
+        <div class="row" style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--muted);margin-right:4px;">Tabla destino:</label>
+          <select id="ai-mig-target" style="min-width:160px;">
+            <option value="students">Alumnos</option>
+            <option value="classes">Clases</option>
+            <option value="payments">Pagos</option>
+          </select>
+          <button class="btn alt" id="ai-mig-file-btn" type="button">📄 Subir archivo del sistema anterior</button>
+          <input id="ai-mig-file" type="file" accept=".xlsx,.xls,.csv" style="display:none;">
+          <button class="btn" id="ai-mig-map" type="button" disabled>✨ Mapear con IA</button>
+        </div>
+        <div class="muted" id="ai-mig-file-info" style="font-size:12px;margin-bottom:8px;">Sin archivo cargado.</div>
+        <div id="ai-mig-proposal" style="display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <span style="font-size:12px;color:var(--muted);">Propuesta de mapeo (revísala y ajústala antes de continuar):</span>
+            <button class="btn alt" id="ai-mig-remap" type="button">↻ Regenerar propuesta</button>
+          </div>
+          <div id="ai-mig-table" style="overflow-x:auto;"></div>
+          <div id="ai-mig-question" style="display:none;background:rgba(201,162,39,.1);border:1px solid var(--brand-2);border-radius:10px;padding:10px 14px;margin-top:8px;font-size:13px;"></div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="ai-mig-confirm" type="button">✓ Confirmar mapeo y exportar CSV mapeado</button>
+            <span class="muted" style="font-size:12px;">El archivo resultante usa los nombres de campo de MartialSystem (puedes cargarlo en "Cargar archivo Excel" o revisarlo).</span>
+          </div>
+        </div>
+      </article>
+
       <article class="card full">
         <h3>Respaldo y Banco Teorico</h3>
         <div class="row" style="margin-bottom:10px;">
@@ -11438,6 +11467,134 @@
         }
       }
     };
+    // Fase 4: Migración asistida por IA (mapeo de columnas)
+    let _aiMig = { columns: [], rows: [], mappings: [] };
+    function aiMigReadFile(file) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+          try {
+            const name = (file.name || '').toLowerCase();
+            if (name.endsWith('.csv')) {
+              const text = String(ev.target.result || '');
+              const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+              if (!lines.length) return reject(new Error('Archivo vacío'));
+              const cols = lines[0].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+              const rows = lines.slice(1, 6).map(l => {
+                const vals = l.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+                const o = {}; cols.forEach((c, i) => { o[c] = vals[i] || ''; }); return o;
+              });
+              resolve({ columns: cols, rows: rows });
+            } else {
+              if (!window.XLSX) return reject(new Error('Librería XLSX no cargada'));
+              const wb = XLSX.read(ev.target.result, { type: 'array' });
+              const sheetName = wb.SheetNames[0];
+              const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+              if (!aoa.length) return reject(new Error('Hoja vacía'));
+              const cols = (aoa[0] || []).map(c => String(c).trim());
+              const rows = aoa.slice(1, 6).map(r => { const o = {}; cols.forEach((c, i) => { o[c] = String(r[i] || '').trim(); }); return o; });
+              resolve({ columns: cols, rows: rows });
+            }
+          } catch (e) { reject(e); }
+        };
+        reader.onerror = function () { reject(new Error('No se pudo leer el archivo')); };
+        if ((file.name || '').toLowerCase().endsWith('.csv')) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+      });
+    }
+    function aiMigRenderTable() {
+      const wrap = ids('ai-mig-table');
+      if (!wrap) return;
+      const targets = ['full_name', 'email', 'phone', 'birth_date', 'current_rank', 'discipline_code', 'joined_at', 'status', 'establishment_id', 'instructor_profile_ids', 'tutor_profile_id', 'title', 'start_time', 'scheduled_date', 'instructor_profile_id', 'amount', 'currency', 'method', 'concept', 'paid_at', 'student_id', '__ignore__'];
+      const rowsHtml = _aiMig.mappings.map(function (m, idx) {
+        const opts = targets.map(function (t) {
+          const label = t === '__ignore__' ? '— ignorar —' : t;
+          return '<option value="' + t + '"' + (m.target === t ? ' selected' : '') + '>' + label + '</option>';
+        }).join('');
+        const pct = Math.round((m.confidence || 0) * 100);
+        const color = pct >= 85 ? 'var(--ok)' : pct >= 60 ? 'var(--warn)' : 'var(--danger)';
+        return '<tr style="border-bottom:1px solid var(--line);">' +
+          '<td style="padding:8px;">' + (m.source || '') + '</td>' +
+          '<td style="padding:8px;"><select data-mig-idx="' + idx + '" style="min-width:180px;">' + opts + '</select></td>' +
+          '<td style="padding:8px;color:' + color + ';font-weight:700;">' + pct + '%</td>' +
+          '<td style="padding:8px;font-size:11px;color:var(--muted);">' + (m.note || '') + '</td>' +
+          '</tr>';
+      }).join('');
+      wrap.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--panel-2);border-bottom:2px solid var(--line);">' +
+        '<th style="padding:8px;text-align:left;">Columna origen</th><th style="padding:8px;text-align:left;">Campo destino</th><th style="padding:8px;text-align:left;">Confianza</th><th style="padding:8px;text-align:left;">Nota</th>' +
+        '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+      wrap.querySelectorAll('select[data-mig-idx]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          const idx = Number(sel.getAttribute('data-mig-idx'));
+          if (_aiMig.mappings[idx]) _aiMig.mappings[idx].target = sel.value === '__ignore__' ? null : sel.value;
+        });
+      });
+    }
+    async function aiMigMap() {
+      const btn = ids('ai-mig-map');
+      const proposal = ids('ai-mig-proposal');
+      const questionEl = ids('ai-mig-question');
+      try {
+        btn.disabled = true; btn.textContent = '✨ Mapeando...';
+        const targetTable = ids('ai-mig-target').value;
+        const r = await api('/api/ai/mapping', {
+          method: 'POST',
+          body: JSON.stringify({ targetTable: targetTable, columns: _aiMig.columns, sampleRows: _aiMig.rows, establishmentId: selectedEstablishmentId() || null })
+        });
+        const d = r.data || {};
+        _aiMig.mappings = Array.isArray(d.mappings) ? d.mappings : [];
+        if (proposal) proposal.style.display = 'block';
+        aiMigRenderTable();
+        if (questionEl) {
+          if (d.question) { questionEl.style.display = 'block'; questionEl.textContent = '❓ La IA pregunta: ' + d.question; }
+          else questionEl.style.display = 'none';
+        }
+      } catch (err) {
+        alert('⚠️ ' + err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = '✨ Mapear con IA';
+      }
+    }
+    function aiMigExport() {
+      const header = _aiMig.columns.map(function (c) {
+        const m = _aiMig.mappings.find(x => x.source === c);
+        return (m && m.target) ? m.target : '';
+      });
+      const rows = _aiMig.rows.map(function (r) { return _aiMig.columns.map(function (c) { return r[c] || ''; }); });
+      const aoa = [header].concat(rows);
+      if (window.XLSX) {
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Mapeado');
+        XLSX.writeFile(wb, 'mapeo_ia_' + new Date().toISOString().slice(0, 10) + '.csv', { bookType: 'csv' });
+      } else {
+        const csv = aoa.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mapeo_ia.csv'; a.click();
+      }
+    }
+    function aiMigWire() {
+      const fileBtn = ids('ai-mig-file-btn');
+      const fileInput = ids('ai-mig-file');
+      if (fileBtn && fileInput) {
+        fileBtn.addEventListener('click', function () { fileInput.click(); });
+        fileInput.addEventListener('change', async function () {
+          const f = fileInput.files && fileInput.files[0];
+          if (!f) return;
+          try {
+            const res = await aiMigReadFile(f);
+            _aiMig.columns = res.columns; _aiMig.rows = res.rows;
+            const info = ids('ai-mig-file-info');
+            if (info) info.textContent = 'Archivo: ' + f.name + ' · ' + res.columns.length + ' columnas detectadas: ' + res.columns.join(', ');
+            const mapBtn = ids('ai-mig-map'); if (mapBtn) mapBtn.disabled = false;
+          } catch (err) {
+            const info = ids('ai-mig-file-info'); if (info) info.textContent = 'Error: ' + err.message;
+          }
+        });
+      }
+      const mapBtn = ids('ai-mig-map'); if (mapBtn) mapBtn.addEventListener('click', aiMigMap);
+      const remapBtn = ids('ai-mig-remap'); if (remapBtn) remapBtn.addEventListener('click', aiMigMap);
+      const confirmBtn = ids('ai-mig-confirm'); if (confirmBtn) confirmBtn.addEventListener('click', aiMigExport);
+    }
     function aiWireUI() {
       const saveBtn = ids('ai-config-save');
       if (saveBtn) saveBtn.addEventListener('click', aiSaveConfig);
@@ -11467,6 +11624,7 @@
     }
     document.addEventListener('DOMContentLoaded', function () {
       aiWireUI();
+      aiMigWire();
       const cfgCard = ids('ai-config-card');
       if (window.aiIsSuperadmin()) {
         if (cfgCard) cfgCard.style.display = '';

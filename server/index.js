@@ -8070,6 +8070,89 @@ app.post('/api/ai/explain', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/ai/mapping — Fase 4: migración asistida. Propone el mapeo de columnas
+// de un archivo externo hacia los campos reales del esquema.
+app.post('/api/ai/mapping', requireAuth, async (req, res) => {
+  try {
+    const cfg = await getAIConfig();
+    const apiKey = getAIEffectiveKey(cfg);
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
+
+    const { targetTable, columns, sampleRows, establishmentId } = req.body || {};
+    if (!targetTable || !Array.isArray(columns) || !columns.length) {
+      return res.status(400).json({ ok: false, error: 'targetTable y columns son requeridos' });
+    }
+    if (!req.isSuperadmin && establishmentId) {
+      const planOk = await hasAIFeature(establishmentId);
+      if (!planOk) return res.status(403).json({ ok: false, error: 'Tu plan no incluye IA. Contacta al superadmin.', code: 'PLAN_NO_IA' });
+    }
+
+    const schemaRef = {
+      students: ['full_name', 'email', 'phone', 'birth_date', 'current_rank', 'discipline_code', 'joined_at', 'status', 'establishment_id', 'instructor_profile_ids', 'tutor_profile_id'],
+      classes: ['title', 'start_time', 'scheduled_date', 'discipline_code', 'instructor_profile_id', 'establishment_id'],
+      payments: ['amount', 'currency', 'method', 'concept', 'paid_at', 'student_id', 'establishment_id']
+    };
+    const targets = schemaRef[targetTable] || schemaRef.students;
+
+    const systemPrompt = await buildAIContext(req, establishmentId);
+    const userPrompt = [
+      'Eres experto en migración de datos para MartialSystem, sistema de gestión de artes marciales.',
+      'Tu tarea: proponer el mapeo de CADA columna de un archivo externo hacia un campo del esquema destino.',
+      'Campos destino disponibles para la tabla "' + targetTable + '": ' + targets.join(', '),
+      'Columnas del archivo del sistema anterior: ' + columns.join(' | '),
+      'Muestras de datos (primeras filas): ' + JSON.stringify(sampleRows || []),
+      'Responde ÚNICAMENTE con JSON válido: {"mappings":[{"source":"columna original","target":"campo destino o null para ignorar","confidence":0.95,"note":"opcional"}],"question":null}',
+      'Reglas:',
+      '- Si una columna no tiene equivalente útil, target=null (ignorar).',
+      '- Normaliza: "F. Nacimiento" → birth_date; "Kick Box"/"kick boxing" → kickboxing (indícalo en note).',
+      '- confidence ≥0.85 si es directo; menor si es ambiguo.',
+      '- Solo usa campos de la lista destino; no inventes otros.',
+      '- Si te falta información esencial para decidir el mapeo, pon "question" (pregunta corta en español) y mappings mínimos.'
+    ].join('\n');
+
+    const baseUrl = getAIBaseUrl(cfg);
+    const model = getAIModel(cfg);
+    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+        temperature: 0.3,
+        max_tokens: 800
+      })
+    });
+    const aiJson = await aiRes.json().catch(() => ({}));
+    if (!aiRes.ok) {
+      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
+      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+    }
+    let raw = aiJson?.choices?.[0]?.message?.content || '';
+    raw = raw.replace(/```(json)?/gi, '').trim();
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch (_) {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) { try { parsed = JSON.parse(m[0]); } catch (_e) { parsed = null; } }
+    }
+    if (!parsed || !Array.isArray(parsed.mappings)) {
+      return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió un mapeo inválido.', raw });
+    }
+    const mappings = parsed.mappings
+      .filter(m => m && typeof m.source === 'string')
+      .map(m => ({
+        source: m.source,
+        target: m.target || null,
+        confidence: Math.max(0, Math.min(1, Number(m.confidence) || 0)),
+        note: m.note || ''
+      }));
+    const question = parsed.question ? String(parsed.question) : null;
+    return res.json({ ok: true, data: { mappings, question } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'AI mapping failed' });
+  }
+});
+
 app.get('/api/ai/memory', requireAuth, async (req, res) => {
   try {
     const profileId = req.authUser.id;

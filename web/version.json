@@ -1,15 +1,15 @@
 {
-  "version": "2.3.0",
-  "buildNumber": 8,
-  "message": "Fase 0 IA: Asistente IA (solo superadmin), configuración de API key en Configuración, verificación de mensualidad y IA en todos los planes.",
+  "version": "2.4.0",
+  "buildNumber": 9,
+  "message": "Fase 1 IA: Asistente IA para todos los roles con contexto filtrado por rol/establecimiento y memoria por usuario.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.3.0.apk",
-  "releaseDate": "2026-09-09",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.4.0.apk",
+  "releaseDate": "2026-09-10",
   "changelog": [
-    "Nuevo Asistente IA (Fase 0) disponible solo para superadmin",
-    "Configuración de IA en Configuración: proveedor (OpenAI/DeepSeek/Gemini/Custom), modelo y API key",
-    "La IA verifica la mensualidad del establecimiento y bloquea el uso si está severamente vencida",
-    "IA habilitada en todas las modalidades de pago (Bushido, Starter, Professional, Elite)",
-    "Endpoint proxy /api/ai/chat con la API key guardada solo en el servidor"
+    "Asistente IA disponible para TODOS los roles (owner, sensei, instructor, estudiante, guardián)",
+    "Contexto filtrado por rol y establecimiento: cada usuario ve solo lo que su rol permite",
+    "Memoria por usuario: la IA recuerda las conversaciones (tabla ai_memory con RLS)",
+    "Panel IA en un solo recuadro para todos los roles con indicador de alcance y memoria",
+    "Gating por plan: solo establecimientos cuyo plan incluya ia_features"
   ]
 }

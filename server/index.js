@@ -7670,6 +7670,116 @@ const getAIEffectiveKey = (cfg) => String(cfg.apiKey || process.env.AI_API_KEY |
 const getAIBaseUrl = (cfg) => String(cfg.baseUrl || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].baseUrl) || AI_PROVIDERS.openai.baseUrl).trim();
 const getAIModel = (cfg) => String(cfg.model || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].defaultModel) || AI_PROVIDERS.openai.defaultModel).trim();
 
+// Verifica si el plan del establecimiento incluye IA (Fase 1: gating por plan).
+const hasAIFeature = async (establishmentId) => {
+  if (!establishmentId || establishmentId === 'superadmin') return true; // superadmin siempre autorizado
+  try {
+    const { data: ep } = await supabaseAdmin
+      .from('establishment_plans')
+      .select('plan_code')
+      .eq('establishment_id', establishmentId)
+      .maybeSingle();
+    if (!ep || !ep.plan_code) return true; // sin plan asignado: permisivo
+    const { data: sp } = await supabaseAdmin
+      .from('system_plans')
+      .select('features')
+      .eq('code', ep.plan_code)
+      .maybeSingle();
+    const feats = sp?.features || [];
+    return Array.isArray(feats) && feats.includes('ia_features');
+  } catch (_) { return true; } // ante fallo, permisivo
+};
+
+// Indica el rol real del usuario en el establecimiento activo.
+const getAIContextRole = async (req, establishmentId) => {
+  if (req.isSuperadmin) return 'superadmin';
+  if (establishmentId) {
+    const m = await getMembership(req.authUser.id, establishmentId);
+    if (m && m.role) return m.role;
+  }
+  return 'user';
+};
+
+// Constructor de contexto Fase 1: datos REALES y acotados según rol/establecimiento.
+// La regla de oro: la IA solo recibe datos que el rol puede ver.
+async function buildAIContext(req, establishmentId) {
+  const profileId = req.authUser.id;
+  const role = await getAIContextRole(req, establishmentId);
+  const lines = [
+    'Eres el Asistente IA de MartialSystem, sistema de gestión de escuelas de artes marciales (Karate, Judo, BJJ, Taekwondo, Kickboxing, etc.).',
+    'Responde en español, de forma clara y concisa. Si necesitas un dato numérico y no lo tienes, indícalo y sugiere dónde encontrarlo en el sistema.',
+    'NO inventes cifras, alumnos, pagos ni reportes. Con texto entre [DATOS_DISPONIBLES] tienes exactamente lo que el sistema permite ver a este rol.',
+    `Rol del usuario actual: ${role}.`
+  ];
+  if (establishmentId) lines.push(`Establecimiento en contexto: ${establishmentId}.`);
+
+  try {
+    const day30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    if (role === 'superadmin') {
+      const [{ count: estabTotal }, { count: studentsTotal }] = await Promise.all([
+        supabaseAdmin.from('establishments').select('id', { count: 'exact', head: true }),
+        supabaseAdmin.from('students').select('id', { count: 'exact', head: true })
+      ]);
+      const payRes = await supabaseAdmin.from('payments').select('amount, paid_at, establishment_id').order('paid_at', { ascending: false }).limit(5);
+      const pay = payRes.data || [];
+      lines.push('[DATOS_DISPONIBLES] Superadmin global: ' + (estabTotal || 0) + ' establecimientos, ' + (studentsTotal || 0) + ' alumnos.');
+      if (pay && pay.length) lines.push('Últimos pagos registrados: ' + pay.map(p => '$' + Number(p.amount || 0).toLocaleString() + ' (' + (p.paid_at || '').slice(0, 10) + ')').join(' · '));
+    } else if ((role === 'owner' || role === 'admin') && establishmentId) {
+      const stRes = await supabaseAdmin.from('students').select('id', { count: 'exact', head: true }).eq('establishment_id', establishmentId);
+      const discRes = await supabaseAdmin.from('students').select('discipline_code').eq('establishment_id', establishmentId).limit(500);
+      const payRes = await supabaseAdmin.from('payments').select('amount').eq('establishment_id', establishmentId).gte('paid_at', day30).limit(1000);
+      const clsRes = await supabaseAdmin.from('classes').select('id').eq('establishment_id', establishmentId).gte('scheduled_date', new Date().toISOString().slice(0, 10)).limit(20);
+      const disc = discRes.data || [];
+      const byDisc = {};
+      disc.forEach(s => { byDisc[s.discipline_code] = (byDisc[s.discipline_code] || 0) + 1; });
+      const discTop = Object.entries(byDisc).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([d, n]) => d + ': ' + n).join(' · ');
+      const pay = payRes.data || [];
+      const totalMes = pay.reduce((s, x) => s + Number(x.amount || 0), 0);
+      lines.push('[DATOS_DISPONIBLES] Dojo ' + establishmentId + ': ' + (stRes.count || 0) + ' alumnos.');
+      if (discTop) lines.push('Alumnos por disciplina: ' + discTop + '.');
+      if (totalMes) lines.push('Pagos últimos 30 días: $' + totalMes.toLocaleString() + ' (' + pay.length + ' movimientos).');
+      lines.push('Clases programadas hoy o próximas: ' + ((clsRes.data || []).length) + '.');
+    } else if ((role === 'sensei' || role === 'instructor') && establishmentId) {
+      const discRes = await supabaseAdmin.from('instructor_disciplines').select('discipline_code, discipline:disciplines(name)').eq('establishment_id', establishmentId).eq('instructor_profile_id', profileId).limit(50);
+      const stuRes = await supabaseAdmin.from('students').select('discipline_code').eq('establishment_id', establishmentId).overlaps('instructor_profile_ids', [profileId]).limit(500);
+      const clsRes = await supabaseAdmin.from('classes').select('scheduled_date, start_time, discipline_code').eq('establishment_id', establishmentId).eq('instructor_profile_id', profileId).gte('scheduled_date', new Date().toISOString().slice(0, 10)).limit(10);
+      const disc = discRes.data || [];
+      const dNames = disc.map(d => d.discipline?.name || d.discipline_code).filter(Boolean);
+      if (dNames.length) lines.push('[DATOS_DISPONIBLES] Tus disciplinas: ' + dNames.join(', ') + '.');
+      if (stuRes.data) lines.push('Alumnos a tu cargo: ' + stuRes.data.length + '.');
+      if (clsRes.data && clsRes.data.length) lines.push('Próximas clases tuyas: ' + clsRes.data.map(c => c.scheduled_date + ' ' + (c.start_time || '') + ' ' + (c.discipline_code || '')).join(' · '));
+    } else if (role === 'student' || role === 'guardian') {
+      const profRes = await supabaseAdmin.from('profiles').select('full_name').eq('id', profileId).maybeSingle();
+      const prof = profRes.data;
+      if (establishmentId) {
+        const encRes = await supabaseAdmin.from('students').select('discipline_code, discipline:disciplines(name), current_rank').eq('establishment_id', establishmentId).eq('profile_id', profileId).limit(10);
+        const attRes = await supabaseAdmin.from('attendance').select('status').eq('student_id', profileId).limit(500);
+        const paysRes = await supabaseAdmin.from('payments').select('amount, concept').eq('student_id', profileId).order('paid_at', { ascending: false }).limit(5);
+        const enc = encRes.data || [];
+        const encData = enc.map(e => (e.discipline?.name || e.discipline_code || '') + (e.current_rank ? ' (' + e.current_rank + ')' : ''));
+        if (encData.length) lines.push('[DATOS_DISPONIBLES] Tus inscripciones: ' + encData.join(', ') + '.');
+        const att = attRes.data || [];
+        const present = att.filter(a => a.status === 'present' || a.status === 'late').length;
+        if (att.length) lines.push('Asistencia: ' + present + ' de ' + att.length + ' registros.');
+        const pays = paysRes.data || [];
+        if (pays.length) lines.push('Tus últimos pagos: ' + pays.map(p => '$' + Number(p.amount || 0).toLocaleString() + (p.concept ? ' (' + p.concept + ')' : '')).join(' · '));
+      } else if (prof) {
+        lines.push('[DATOS_DISPONIBLES] Perfil: ' + (prof.full_name || profileId) + '.');
+      }
+    } else {
+      lines.push('[DATOS_DISPONIBLES] Sin datos adicionales de rol definido.');
+    }
+  } catch (err) {
+    lines.push('[DATOS_DISPONIBLES] No se pudieron cargar datos de contexto (' + err.message + '). Responde sin inventar.');
+  }
+
+  lines.push('Si te piden crear o insertar datos en formularios, propón el contenido; nunca simulés haberlo guardado.');
+  return lines.join('\n');
+}
+
+/* AI_CHAT_200 */
+
 // GET /api/ai/config — Superadmin lee la config de IA (nunca devuelve la key completa)
 app.get('/api/ai/config', requireAuth, async (req, res) => {
   if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
@@ -7705,12 +7815,14 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// GET /api/ai/status — Roles + verificación de mensualidad (billing)
+// GET /api/ai/status — Fase 1: todos los roles. Devuelve si puede usar IA, su rol y billing.
 app.get('/api/ai/status', requireAuth, async (req, res) => {
   try {
     const cfg = await getAIConfig();
-    const allowed = Boolean(req.isSuperadmin);
     const establishmentId = req.query.establishmentId || '';
+    const role = await getAIContextRole(req, establishmentId);
+    let planOk = true;
+    if (!req.isSuperadmin && establishmentId) planOk = await hasAIFeature(establishmentId);
     let billing = { hasBill: false, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 };
     if (establishmentId && !req.isSuperadmin) {
       const membership = await getMembership(req.authUser.id, establishmentId);
@@ -7730,21 +7842,30 @@ app.get('/api/ai/status', requireAuth, async (req, res) => {
         }
       }
     }
-    return res.json({ ok: true, data: { allowed, enabled: Boolean(cfg.enabled), hasKey: Boolean(getAIEffectiveKey(cfg)), billing } });
+    const enabled = Boolean(cfg.enabled);
+    const hasKey = Boolean(getAIEffectiveKey(cfg));
+    const allowed = enabled && hasKey && planOk && !billing.severeOverdue;
+    return res.json({ ok: true, data: { allowed, enabled, hasKey, planOk, role, establishmentId, billing } });
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ai/chat — Superadmin only: proxy al proveedor IA con verificación de mensualidad
+// POST /api/ai/chat — Fase 1: todos los roles. Proxy al proveedor IA con contexto por rol y memoria.
 app.post('/api/ai/chat', requireAuth, async (req, res) => {
-  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
   try {
+    const profileId = req.authUser.id;
     const cfg = await getAIConfig();
     const apiKey = getAIEffectiveKey(cfg);
-    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. Coloca el API key en Configuración → IA (solo superadmin).' });
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
     if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
 
     const { message, establishmentId } = req.body || {};
     if (!message || !String(message).trim()) return res.status(400).json({ ok: false, error: 'message is required' });
+
+    // Gating por plan (Fase 1): el establecimiento debe incluir ia_features en su plan.
+    if (!req.isSuperadmin && establishmentId) {
+      const planOk = await hasAIFeature(establishmentId);
+      if (!planOk) return res.status(403).json({ ok: false, error: 'Tu plan no incluye IA. Contacta al superadmin para activarla.', code: 'PLAN_NO_IA' });
+    }
 
     // Verificación de mensualidad: si el establecimiento tiene factura severamente vencida, bloquear
     if (establishmentId) {
@@ -7765,45 +7886,94 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
 
     const baseUrl = getAIBaseUrl(cfg);
     const model = getAIModel(cfg);
-    const systemPrompt = buildAIContext(req, establishmentId);
+    const systemPrompt = await buildAIContext(req, establishmentId);
+    const aiRole = await getAIContextRole(req, establishmentId);
+
+    // Cargar memoria reciente del usuario (Fase 1)
+    let messages = [{ role: 'system', content: systemPrompt }];
+    try {
+      const memQuery = supabaseAdmin.from('ai_memory')
+        .select('user_message, ai_response')
+        .eq('profile_id', profileId)
+        .order('created_at', { ascending: false })
+        .limit(6);
+      if (establishmentId) memQuery.eq('establishment_id', establishmentId);
+      const { data: mem } = await memQuery;
+      const history = (mem || []).slice().reverse(); // antiguo → reciente
+      history.forEach(h => {
+        if (h && h.user_message) messages.push({ role: 'user', content: h.user_message });
+        if (h && h.ai_response) messages.push({ role: 'assistant', content: h.ai_response });
+      });
+    } catch (_) { /* sin memoria */ }
+    messages.push({ role: 'user', content: String(message) });
 
     const aiRes = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: String(message) }
-        ],
+        messages,
         temperature: 0.4,
         max_tokens: 1024
       })
     });
     const aiJson = await aiRes.json().catch(() => ({}));
     if (!aiRes.ok) {
-      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiJson?.error?.message || aiRes.statusText || 'unknown'}` });
+      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
+      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
     }
     const content = aiJson?.choices?.[0]?.message?.content || '';
-    return res.json({ ok: true, data: { content, model } });
+    if (!content) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
+
+    // Guardar en la memoria del usuario (Fase 1)
+    try {
+      await supabaseAdmin.from('ai_memory').insert({
+        profile_id: profileId,
+        establishment_id: establishmentId || null,
+        role: aiRole,
+        user_message: String(message),
+        ai_response: content
+      });
+    } catch (_) { /* best-effort */ }
+
+    return res.json({ ok: true, data: { content, model, memorySaved: true } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'AI request failed' });
   }
 });
 
-// buildAIContext — Fase 0: superadmin global. Fase 1: scope por rol/establecimiento.
-function buildAIContext(req, establishmentId) {
-  const role = req.isSuperadmin ? 'superadmin' : (req.authUser?.role || 'user');
-  const lines = [
-    'Eres el Asistente IA de MartialSystem, un sistema de gestión de escuelas de artes marciales (Karate, Judo, BJJ, Taekwondo, Kickboxing, etc.).',
-    'Responde en español, de forma clara y concisa.',
-    'Si te piden datos numéricos que no tienes, indícalo y sugiere dónde consultarlos en el sistema.',
-    `Rol del usuario actual: ${role}.`,
-    'Fase 0: solo el superadmin tiene acceso a la IA. No inventes datos de alumnos, pagos o reportes; si no los conoces, dilo.'
-  ];
-  if (establishmentId) lines.push(`Establecimiento en contexto: ${establishmentId}.`);
-  return lines.join('\n');
-}
+// GET /api/ai/memory — Historial de conversaciones del usuario (acotado)
+app.get('/api/ai/memory', requireAuth, async (req, res) => {
+  try {
+    const profileId = req.authUser.id;
+    const { establishmentId, limit: lim } = req.query;
+    const query = supabaseAdmin.from('ai_memory')
+      .select('id, establishment_id, role, user_message, ai_response, created_at')
+      .eq('profile_id', profileId)
+      .order('created_at', { ascending: false })
+      .limit(Math.min(parseInt(String(lim), 10) || 8, 20));
+    if (establishmentId) query.eq('establishment_id', establishmentId);
+    const { data, error } = await query;
+    // Tolerante: si la tabla aún no existe (migración 017 pendiente), devolver vacío.
+    if (error) return res.json({ ok: true, data: [], note: error.message });
+    return res.json({ ok: true, data: data || [] });
+  } catch (err) { return res.json({ ok: true, data: [] }); }
+});
+
+// DELETE /api/ai/memory — Borra el historial del usuario (opcional, por privacidad)
+app.delete('/api/ai/memory', requireAuth, async (req, res) => {
+  try {
+    const profileId = req.authUser.id;
+    const { establishmentId } = req.query;
+    let query = supabaseAdmin.from('ai_memory').delete().eq('profile_id', profileId);
+    if (establishmentId) query = query.eq('establishment_id', establishmentId);
+    const { error } = await query;
+    if (error) return res.json({ ok: true, data: { cleared: true, note: error.message } });
+    return res.json({ ok: true, data: { cleared: true } });
+  } catch (err) { return res.json({ ok: true, data: { cleared: true } }); }
+});
+
+// buildAIContext (async, Fase 1) está definida más arriba con datos por rol.
 
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));

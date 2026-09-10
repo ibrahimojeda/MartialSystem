@@ -1307,22 +1307,6 @@
           </div>
         </article>
 
-        <!-- Asistente IA (Fase 0 — solo superadmin) -->
-        <article class="card" style="grid-column: 1 / -1; border: 1px solid #3f6f52;" id="ai-assistant-card">
-          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-            <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
-            <span class="pill">🔒 Solo superadmin</span>
-          </div>
-          <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
-            <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
-          </div>
-          <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
-          <div style="display:flex;gap:8px;align-items:flex-start;">
-            <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
-            <button class="btn" id="ai-send" type="button">Enviar ➤</button>
-          </div>
-          <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
-        </article>
       </div>
 
             <!-- Fallback: Controles de administración (oculto por defecto) -->
@@ -1338,6 +1322,26 @@
           </div>
         </article>
       </div>
+
+      <article class="card full" id="ai-assistant-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
+          <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
+        </div>
+        <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
+          <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
+        </div>
+        <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
+          <button class="btn" id="ai-send" type="button">Enviar ➤</button>
+        </div>
+        <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
+        <div class="footnote" style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
+          <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
+          <span>⚠️ La IA puede equivocarse · verifica los datos</span>
+        </div>
+      </article>
 
       <article class="card full">
         <h3>Arbol de Distribucion por Local/Academia</h3>
@@ -11307,11 +11311,15 @@
       }
     };
 
-    // ═══ ASISTENTE IA (Fase 0 — solo superadmin) ═══
+    // ═══ ASISTENTE IA (Fase 1 — todos los roles) ═══
     window.aiIsSuperadmin = function () {
       const role = (typeof currentMembershipRole === 'function' ? currentMembershipRole() : '') || state.profileRole || '';
       return role === 'superadmin';
     };
+    function aiRoleLabel(role) {
+      const map = { superadmin: 'todo el sistema', owner: 'tu dojo (alumnos, pagos, clases)', admin: 'tu dojo', sensei: 'tus disciplinas y alumnos', instructor: 'tus alumnos y clases', student: 'tu progreso y asistencias', guardian: 'tu(s) estudiante(s)' };
+      return map[role] || 'tus datos según tu rol';
+    }
     async function aiLoadConfig() {
       try {
         const r = await api('/api/ai/config');
@@ -11348,26 +11356,38 @@
         if (st) st.textContent = 'Error: ' + err.message;
       }
     }
+    async function aiLoadMemoryCount(eid) {
+      try {
+        const r = await api('/api/ai/memory' + (eid ? '?establishmentId=' + encodeURIComponent(eid) : ''));
+        const data = Array.isArray(r.data) ? r.data : [];
+        const mc = ids('ai-memory-count');
+        if (mc) mc.textContent = '🧠 Memoria: ' + data.length + (data.length === 1 ? ' conversación' : ' conversaciones');
+      } catch (_) { /* sin memoria */ }
+    }
     async function aiCheckStatus() {
       const card = ids('ai-assistant-card');
       const statusLine = ids('ai-status-line');
       const billingBlock = ids('ai-billing-block');
-      if (!state.accessToken || !window.aiIsSuperadmin()) {
-        return; // la visibilidad de la tarjeta la controla la seccion dashboard-superadmin
+      const rolePill = ids('ai-role-pill');
+      if (!state.accessToken) {
+        if (card) card.style.display = 'none';
+        return;
       }
       try {
         const eid = ids('tree-establishment')?.value || '';
         const r = await api('/api/ai/status' + (eid ? '?establishmentId=' + encodeURIComponent(eid) : ''));
         const d = r.data || {};
         if (card) card.style.display = '';
-        if (statusLine) {
-          if (!d.allowed) statusLine.textContent = '🔒 La IA está restringida al superadmin.';
-          else if (!d.enabled) statusLine.textContent = '⚠️ IA desactivada. Actívala en Configuración → IA.';
-          else if (!d.hasKey) statusLine.textContent = '⚠️ Sin API key. Colócala en Configuración → IA para usar el asistente.';
-          else if (d.billing && d.billing.severeOverdue) statusLine.textContent = '🚫 Mensualidad vencida (' + d.billing.daysOverdue + ' días). El asistente está bloqueado.';
-          else statusLine.textContent = '✅ Asistente listo. Solo tú (superadmin) puedes usarlo.';
-        }
+        if (rolePill) rolePill.textContent = '🔒 Visible: ' + aiRoleLabel(d.role);
         if (billingBlock) billingBlock.style.display = (d.billing && d.billing.severeOverdue) ? '' : 'none';
+        if (statusLine) {
+          if (!d.enabled) statusLine.textContent = '⚠️ La IA está desactivada por el superadmin.';
+          else if (!d.hasKey) statusLine.textContent = '⚠️ La IA aún no tiene API key configurada. Avísale al superadmin.';
+          else if (!d.planOk) statusLine.textContent = '⚠️ Tu plan no incluye IA. Contacta al superadmin para activarla.';
+          else if (d.billing && d.billing.severeOverdue) statusLine.textContent = '🚫 Mensualidad vencida (' + d.billing.daysOverdue + ' días). La IA está bloqueada.';
+          else statusLine.textContent = '✅ Listo. Puedo ayudarte con ' + aiRoleLabel(d.role) + '.';
+        }
+        aiLoadMemoryCount(eid);
       } catch (err) {
         if (statusLine) statusLine.textContent = 'Estado IA: ' + err.message;
       }
@@ -11407,12 +11427,12 @@
     document.addEventListener('DOMContentLoaded', function () {
       aiWireUI();
       const cfgCard = ids('ai-config-card');
-      if (!window.aiIsSuperadmin()) {
+      if (window.aiIsSuperadmin()) {
+        if (cfgCard) cfgCard.style.display = '';
+        aiLoadConfig();
+      } else {
         if (cfgCard) cfgCard.style.display = 'none';
-        return;
       }
-      if (cfgCard) cfgCard.style.display = '';
-      aiLoadConfig();
       aiCheckStatus();
     });
   </script>

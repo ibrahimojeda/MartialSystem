@@ -1323,26 +1323,6 @@
         </article>
       </div>
 
-      <article class="card full" id="ai-assistant-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-          <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
-          <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
-        </div>
-        <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
-          <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
-        </div>
-        <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
-        <div style="display:flex;gap:8px;align-items:flex-start;">
-          <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
-          <button class="btn" id="ai-send" type="button">Enviar ➤</button>
-        </div>
-        <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
-        <div class="footnote" style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
-          <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
-          <span>⚠️ La IA puede equivocarse · verifica los datos</span>
-        </div>
-      </article>
-
       <article class="card full">
         <h3>Arbol de Distribucion por Local/Academia</h3>
         <p class="muted">Selecciona el local y carga el arbol para ver disciplinas y distribucion operativa.</p>
@@ -2696,6 +2676,25 @@
         <pre id="disciplines">cargando...</pre>
       </article>
     </section>
+  <article class="card full" id="ai-assistant-card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✨ Asistente IA — escribe tu consulta</label>
+        <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
+      </div>
+      <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
+        <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
+      </div>
+      <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos están en riesgo de abandonar este mes?">
+        <button class="btn" id="ai-send" type="button">Enviar ➤</button>
+      </div>
+      <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
+        <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
+        <span>⚠️ La IA puede equivocarse · verifica los datos</span>
+      </div>
+    </article>
   </main>
 
   <!-- Panel flotante de diagnóstico de carga del Dashboard -->

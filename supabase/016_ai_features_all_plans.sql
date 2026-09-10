@@ -1,38 +1,39 @@
 -- MartialSystem - Fase 0: Habilitar IA en todas las modalidades de pago
 -- Ejecutar en Supabase SQL Editor.
--- Habilita 'ia_features' en TODOS los planes (system_plans y plans por establecimiento).
+-- Habilita 'ia_features' en TODOS los planes (desde Bushido hasta Elite).
+-- El script es defensivo: solo toca las tablas que existan
+-- (system_plans = esquema unificado actual; plans = tabla legacy opcional).
 
--- ===== system_plans (planes globales) =====
+-- ============================================================
+-- 1) system_plans (planes globales del esquema unificado)
+--    Solo se ejecuta si la tabla existe.
+-- ============================================================
 do $$
-declare
-  p record;
-  feats jsonb;
 begin
-  for p in select * from system_plans loop
-    feats := coalesce(p.features, '[]'::jsonb);
-    if not (feats ? 'ia_features') then
-      feats := feats || '["ia_features"]'::jsonb;
-      update system_plans set features = feats where id = p.id;
-    end if;
-  end loop;
+  if to_regclass('public.system_plans') is not null then
+    update system_plans
+    set features = coalesce(features, '[]'::jsonb) || '["ia_features"]'::jsonb
+    where not (coalesce(features, '[]'::jsonb) ? 'ia_features');
+  end if;
 end $$;
 
--- ===== plans (planes por establecimiento) =====
+-- ============================================================
+-- 2) plans (tabla legacy por establecimiento, opcional)
+--    Solo se ejecuta si la tabla existe.
+-- ============================================================
 do $$
-declare
-  p record;
-  feats jsonb;
 begin
-  for p in select * from plans loop
-    feats := coalesce(p.features, '[]'::jsonb);
-    if not (feats ? 'ia_features') then
-      feats := feats || '["ia_features"]'::jsonb;
-      update plans set features = feats where id = p.id;
-    end if;
-  end loop;
+  if to_regclass('public.plans') is not null then
+    update plans
+    set features = coalesce(features, '[]'::jsonb) || '["ia_features"]'::jsonb
+    where not (coalesce(features, '[]'::jsonb) ? 'ia_features');
+  end if;
 end $$;
 
--- ===== Inserts/upserts para planes nuevos con ia_features en todas las modalidades =====
+-- ============================================================
+-- 3) Upsert de todos los planes con ia_features desde Bushido
+--    hasta Elite (solo en system_plans).
+-- ============================================================
 insert into system_plans (code, name, price_usd, max_dojos, max_students, features, sort_order)
 values
   ('bushido', 'Bushido', 29.00, 1, 20, '["gestion_alumnos","asistencia","rangos","portal_alumno","ia_features"]'::jsonb, 0),
@@ -44,13 +45,16 @@ on conflict (code) do update
       name = excluded.name,
       sort_order = excluded.sort_order;
 
--- ===== Nota: 'plans' por establecimiento puede no existir si el esquema es nuevo =====
--- Solo se actualiza si la tabla 'plans' existe.
+-- ============================================================
+-- 4) Ajuste defensivo: si un establecimiento ya tiene un plan
+--    en 'plans' con features, garantizar ia_features también ahí.
+--    (Ya cubierto en el punto 2; se deja este extra solo si existe.)
+-- ============================================================
 do $$
 begin
   if to_regclass('public.plans') is not null then
     update plans
-    set features = features || '["ia_features"]'::jsonb
-    where not (features ? 'ia_features');
+    set features = coalesce(features, '[]'::jsonb) || '["ia_features"]'::jsonb
+    where not (coalesce(features, '[]'::jsonb) ? 'ia_features');
   end if;
 end $$;

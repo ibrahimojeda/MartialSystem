@@ -1,15 +1,15 @@
 {
-  "version": "2.8.0",
-  "buildNumber": 14,
-  "message": "FASE A: la IA ahora actúa como buscador real del sistema con herramientas que leen la base según el rol, propone alta/edición de alumnos, clases, pagos y notificaciones (prellenando el formulario real para que tú guardes), y propone borrados con confirmación.",
+  "version": "2.9.0",
+  "buildNumber": 15,
+  "message": "OPCIÓN B: al iniciar sesión la IA contesta automáticamente con el resumen del usuario (datos + pagos + mensajes de comunicación). Para el superadmin, la IA redacta el resumen global con los datos reales del antiguo dashboard. El Dashboard clásico se sustituye por el cuadro del Asistente IA.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.8.0.apk",
-  "releaseDate": "2026-09-10",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.9.0.apk",
+  "releaseDate": "2026-09-13",
   "changelog": [
-    "La IA puede BUSCAR datos reales de alumnos, clases, pagos y notificaciones según tu rol (nada inventado)",
-    "Para CREAR/EDITAR: la IA propone los valores, los valida contra el formulario real y los prellena para que tú confirmes el guardado con el código normal",
-    "Para BORRAR: la IA propone la eliminación y pide tu confirmación antes de ejecutarla (solo si tu rol lo permite)",
-    "La IA nunca escribe ni borra directamente por sí sola: siempre pasa por los formularios y confirmaciones del sistema",
-    "Endpoints nuevos de borrado seguro para alumnos, clases y pagos según rol"
+    "Resumen de bienvenida automático de la IA al iniciar sesión (Opción B)",
+    "Roles normales: el servidor prepara el resumen (perfil + pagos + mensajes) con tono de la IA",
+    "Superadmin: la IA redacta el resumen global con los datos reales del antiguo dashboard",
+    "Los mensajes del módulo de comunicación se muestran al inicio; se responden en Comunidad o vía la IA",
+    "El Dashboard clásico se reemplaza por el cuadro del Asistente IA; los módulos siguen en la barra lateral"
   ]
 }

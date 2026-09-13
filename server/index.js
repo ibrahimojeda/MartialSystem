@@ -8438,6 +8438,245 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// POST /api/ai/welcome — Resumen inicial al iniciar sesión (Opción B).
+// - Roles normales: el SERVIDOR arma el resumen (perfil + pagos + notificaciones)
+//   con tono de asistente IA (gratis e instantáneo, sin llamar al proveedor).
+// - Superadmin: recolecta los datos GLOBALES del antiguo dashboard y la IA redacta
+//   el resumen con esos números reales (nunca inventa).
+// ══════════════════════════════════════════════════════════════
+
+// Devuelve el perfil del usuario (nombre/rol) según su sesión.
+async function aiWelcomeProfile(req, establishmentId) {
+  const role = await getAIContextRole(req, establishmentId);
+  let fullName = '';
+  try {
+    const { data: prof } = await supabaseAdmin.from('profiles').select('full_name').eq('id', req.authUser.id).maybeSingle();
+    fullName = (prof && prof.full_name) || '';
+  } catch (_) { /* sin perfil */ }
+  if (!fullName && req.authUser.username) fullName = req.authUser.username;
+  if (!fullName) fullName = req.authUser.id || '';
+  return { role, fullName };
+}
+
+// Recolecta datos del welcome para roles NORMALES (owner, sensei, instructor, student, guardian…).
+// Devuelve un objeto con etiquetas legibles para que el servidor redacte el resumen.
+async function aiCollectWelcomeData(req, establishmentId) {
+  const profileId = req.authUser.id;
+  const role = await getAIContextRole(req, establishmentId);
+  const { fullName } = await aiWelcomeProfile(req, establishmentId);
+  const out = { role, fullName, payments: [], notifications: [] };
+
+  if (!establishmentId) {
+    out.note = 'Sin establecimiento en contexto.';
+    return out;
+  }
+  const estId = establishmentId;
+
+  // Pagos según rol
+  try {
+    let q = supabaseAdmin.from('payments')
+      .select('id,student_id,amount,currency,concept,paid_at,status,establishment_id')
+      .order('paid_at', { ascending: false })
+      .limit(10);
+    if (role === 'student' || role === 'guardian') {
+      q = q.eq('student_id', profileId);
+    } else if (estId) {
+      q = q.eq('establishment_id', estId);
+    }
+    const { data } = await q;
+    out.payments = (data || []).map(p => ({ amount: p.amount, currency: p.currency || 'USD', concept: p.concept || 'Pago', paid_at: p.paid_at, status: p.status }));
+  } catch (_) { /* sin pagos */ }
+
+  // Notificaciones / mensajes del módulo de comunicación (las que le corresponden)
+  try {
+    let q = supabaseAdmin.from('notifications')
+      .select('id,title,body,audience_role,recipient_profile_id,is_read,created_at,establishment_id')
+      .eq('establishment_id', estId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const { data } = await q;
+    const rows = (data || []).filter(n => {
+      if (n.recipient_profile_id) return String(n.recipient_profile_id) === String(profileId);
+      if (n.audience_role) {
+        if (n.audience_role === 'all') return true;
+        if (n.audience_role === 'student' && (role === 'student' || role === 'guardian')) return true;
+      }
+      return false;
+    });
+    out.notifications = rows.map(n => ({ id: n.id, title: n.title, body: n.body, is_read: !!n.is_read, created_at: n.created_at }));
+  } catch (_) { /* sin notificaciones */ }
+
+  return out;
+}
+
+// Recolecta los datos GLOBALES del antiguo dashboard /api/dashboard/stats (superadmin).
+async function aiCollectSuperadminData() {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const [estRes, memberRes, discRes, studentRes, newMemRes, estDiscRes, attRes, attPresRes] = await Promise.all([
+    supabaseAdmin.from('establishments').select('id,name,is_active,created_at').limit(500),
+    supabaseAdmin.from('establishment_members').select('role,establishment_id,created_at').limit(5000),
+    supabaseAdmin.from('disciplines').select('id,name,is_active').limit(200),
+    supabaseAdmin.from('students').select('id,establishment_id').limit(10000),
+    supabaseAdmin.from('establishment_members').select('id').gte('created_at', weekAgo).limit(500),
+    supabaseAdmin.from('establishment_disciplines').select('establishment_id,discipline_id').limit(2000),
+    supabaseAdmin.from('class_attendance_records').select('id').limit(10000),
+    supabaseAdmin.from('class_attendance_records').select('id').eq('status', 'present').limit(10000)
+  ]);
+  let payments = [];
+  try {
+    const { data: payData } = await supabaseAdmin.from('payments').select('amount,paid_at,establishment_id').order('paid_at', { ascending: false }).limit(20);
+    if (payData) payments = payData;
+  } catch (_) { /* tabla payments puede no existir aún */ }
+
+  const establs = estRes.data || [];
+  const members = memberRes.data || [];
+  const disciplines = discRes.data || [];
+  const students = studentRes.data || [];
+  const estDisciplines = estDiscRes.data || [];
+
+  const totalEstabs = establs.length;
+  const activeEstabs = establs.filter(e => e.is_active).length;
+  const membersByRole = members.reduce((acc, m) => { acc[m.role] = (acc[m.role] || 0) + 1; return acc; }, {});
+  const totalUsers = members.length;
+  const totalDisciplines = disciplines.filter(d => d.is_active).length;
+  const newThisWeek = (newMemRes.data || []).length;
+
+  const studPerEstab = students.reduce((acc, s) => { acc[s.establishment_id] = (acc[s.establishment_id] || 0) + 1; return acc; }, {});
+  const topEstabs = establs.map(e => ({ name: e.name, students: studPerEstab[e.id] || 0, active: !!e.is_active })).sort((a, b) => b.students - a.students).slice(0, 5);
+
+  const discUsage = estDisciplines.reduce((acc, ed) => { acc[ed.discipline_id] = (acc[ed.discipline_id] || 0) + 1; return acc; }, {});
+  const discMap = disciplines.reduce((acc, d) => { acc[d.id] = d.name; return acc; }, {});
+  const topDisciplines = Object.entries(discUsage).map(([id, count]) => ({ name: discMap[id] || id, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+
+  const totalAttendance = (attRes.data || []).length;
+  const presentCount = (attPresRes.data || []).length;
+  const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : null;
+
+  const weekPayments = payments.filter(p => p.paid_at && p.paid_at >= weekAgo);
+  const ingresosSemana = weekPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+
+  return {
+    totalEstabs, activeEstabs,
+    totalUsers, membersByRole,
+    totalDisciplines, newThisWeek,
+    totalStudents: students.length,
+    attendanceRate,
+    ingresosSemana, totalPayments: payments.length,
+    topEstabs, topDisciplines
+  };
+}
+
+// POST /api/ai/welcome — Opción B: resumen inicial al iniciar sesión.
+// Roles normales → servidor redacta con tono de IA (sin llamar al proveedor).
+// Superadmin → datos del antiguo dashboard global y la IA redacta con números reales.
+app.post('/api/ai/welcome', requireAuth, async (req, res) => {
+  try {
+    const { establishmentId } = req.body || {};
+    const role = await getAIContextRole(req, establishmentId);
+    const { fullName } = await aiWelcomeProfile(req, establishmentId);
+
+    // ── SUPERADMIN: datos globales del antiguo dashboard + redactado por IA ──
+    if (role === 'superadmin') {
+      const stats = await aiCollectSuperadminData();
+      const cfg = await getAIConfig();
+      const apiKey = getAIEffectiveKey(cfg);
+
+      if (apiKey && cfg.enabled) {
+        // La IA redacta con los números REALES recolectados (nunca inventa).
+        const system = [
+          'Eres el asistente de MartialSystem. Responde el resumen de bienvenida para un superadministrador.',
+          'Usa SOLO los datos que te paso entre corchetes; NO inventes cifras.',
+          'Formato: saludo corto, luego los datos clave en viñetas, luego los top 5. En español, claro y profesional.'
+        ].join('\n');
+        const user = [
+          'DATOS REALES DEL SISTEMA (global):',
+          `Establecimientos: ${stats.totalEstabs} (${stats.activeEstabs} activos).`,
+          `Usuarios totales: ${stats.totalUsers}. Por rol: ${JSON.stringify(stats.membersByRole)}.`,
+          `Alumnos: ${stats.totalStudents}. Disciplinas activas: ${stats.totalDisciplines}.`,
+          `Nuevos miembros esta semana: ${stats.newThisWeek}. Tasa de asistencia: ${stats.attendanceRate === null ? 'sin datos' : stats.attendanceRate + '%'}.`,
+          `Ingresos últimos 7 días: $${Number(stats.ingresosSemana || 0).toLocaleString()}. Pagos recientes: ${stats.totalPayments}.`,
+          `Top establecimientos: ${stats.topEstabs.map(e => e.name + ' (' + e.students + ' alumnos)').join(', ') || '—'}.`,
+          `Top disciplinas: ${stats.topDisciplines.map(d => d.name + ' (' + d.count + ')').join(', ') || '—'}.`
+        ].join('\n');
+        let content = '';
+        try {
+          content = await aiCallLLM(cfg, apiKey, [{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.4, max_tokens: 700 });
+        } catch (_) {
+          content = '';
+        }
+        if (content) {
+          return res.json({ ok: true, data: {
+            content,
+            role,
+            fullName,
+            kind: 'ai-superadmin',
+            stats: { ...stats, membersByRole: undefined },
+            membersByRole: stats.membersByRole
+          }});
+        }
+      }
+      // Fallback sin IA: resumen servidor (con los mismos datos).
+      const nl = (n) => Number(n || 0).toLocaleString();
+      const roleSum = Object.entries(stats.membersByRole || {}).map(([k, v]) => k + ': ' + v).join(', ');
+      const content = [
+        '👋 ¡Hola, ' + fullName + '!',
+        '',
+        'Resumen global del sistema:',
+        '· 🏢 **' + nl(stats.totalEstabs) + '** establecimientos (' + stats.activeEstabs + ' activos).',
+        '· 👥 **' + nl(stats.totalUsers) + '** usuarios (por rol: ' + (roleSum || 's/d') + ').',
+        '· 🧑‍🎓 **' + nl(stats.totalStudents) + '** alumnos · ' + nl(stats.totalDisciplines) + ' disciplinas.',
+        '· 🆕 **' + nl(stats.newThisWeek) + '** nuevos miembros esta semana · Asistencia: ' + (stats.attendanceRate === null ? 's/d' : stats.attendanceRate + '%') + '.',
+        '· 💰 Ingresos 7 días: $**' + nl(stats.ingresosSemana) + '** (' + stats.totalPayments + ' pagos).',
+        '',
+        'Top establecimientos:',
+        stats.topEstabs.map(e => '  · ' + e.name + ' — ' + nl(e.students) + ' alumnos').join('\n') || '  s/d',
+        '',
+        'Top disciplinas:',
+        stats.topDisciplines.map(d => '  · ' + d.name + ' — usado en ' + nl(d.count) + ' establecimientos').join('\n') || '  s/d'
+      ].join('\n');
+      return res.json({ ok: true, data: { content, role, fullName, kind: 'server-superadmin', stats, membersByRole: stats.membersByRole } });
+    }
+
+    // ── ROLES NORMALES: servidor redacta (tono de IA), gratis e instantáneo ──
+    const data = await aiCollectWelcomeData(req, establishmentId);
+
+    const lines = [
+      '👋 ¡Hola, ' + (data.fullName || '!') + '!',
+      '',
+      'Este es tu resumen con lo que puedes ver según tu rol (' + data.role + '):'
+    ];
+    if (data.note) lines.push('', 'ℹ️ ' + data.note);
+
+    if (Array.isArray(data.payments) && data.payments.length) {
+      lines.push('', '💳 Tus pagos recientes:');
+      data.payments.slice(0, 5).forEach(p => {
+        const d = p.paid_at ? String(p.paid_at).slice(0, 10) : '—';
+        lines.push('  · $' + Number(p.amount || 0).toLocaleString() + ' — ' + (p.concept || 'Pago') + ' (' + d + (p.status ? ', ' + p.status : '') + ')');
+      });
+    } else {
+      lines.push('', '💳 No tienes pagos recientes registrados.');
+    }
+
+    if (Array.isArray(data.notifications) && data.notifications.length) {
+      lines.push('', '💬 Mensajes del módulo de comunicación:');
+      data.notifications.slice(0, 5).forEach(n => {
+        lines.push('  · **' + (n.title || 'Mensaje') + '**: ' + (n.body || '') + (n.is_read ? '' : ' (nuevo)'));
+      });
+      lines.push('', 'Para responder, ve al módulo 💬 Comunidad o escríbeme aquí y lo redacto por ti.');
+    } else {
+      lines.push('', '💬 No tienes mensajes nuevos.');
+    }
+
+    return res.json({
+      ok: true,
+      data: { content: lines.join('\n'), role, fullName: data.fullName, kind: 'server', payments: data.payments.slice(0, 5), notifications: data.notifications.slice(0, 5) }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'AI welcome failed' });
+  }
+});
+
 // POST /api/ai/draft — Fase 2: genera borrador editable para un formulario según rol.
 // NUNCA inserta en la base: solo propone valores (y pregunta si falta algo obligatorio).
 app.post('/api/ai/draft', requireAuth, async (req, res) => {

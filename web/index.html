@@ -4120,42 +4120,32 @@
     function showOperacionDashboard() {
       applyDashboardCopy(document.body.classList.contains('theme-clean') ? 'clean' : 'dojo');
 
+      // ── Opción B: El Dashboard clásico se reemplaza por el panel del Asistente IA.
+      // La IA recibe los datos del usuario/pagos/notificaciones al iniciar sesión y
+      // contesta en el cuadro principal. Los módulos siguen en la barra lateral.
       const role = currentMembershipRole() || state.profileRole || '';
       const dashboardStudent = ids('dashboard-student-guardian');
       const dashboardSensei = ids('dashboard-sensei');
       const dashboardSuperadmin = ids('dashboard-superadmin');
       const dashboardAdmin = ids('dashboard-admin-controls');
 
-      // Restaurar todas las cards antes de cambiar de rol
-      resetAllDashboardCards();
-
-      // Ocultar todos
+      // Ocultar todos los widgets clásicos (la IA es la pantalla de inicio)
       if (dashboardStudent) dashboardStudent.classList.add('hidden');
       if (dashboardSensei) dashboardSensei.classList.add('hidden');
       if (dashboardSuperadmin) dashboardSuperadmin.classList.add('hidden');
       if (dashboardAdmin) dashboardAdmin.classList.add('hidden');
 
-      // Mostrar segÃºn rol
-      if (role === 'student' || role === 'guardian') {
-        if (dashboardStudent) dashboardStudent.classList.remove('hidden');
-        loadStudentDashboard();
-      } else if (role === 'sensei' || role === 'instructor') {
-        if (dashboardSensei) dashboardSensei.classList.remove('hidden');
-        loadSenseiDashboard();
-      } else if (role === 'superadmin') {
-        if (dashboardSuperadmin) dashboardSuperadmin.classList.remove('hidden');
-        loadSuperadminDashboard();
-        // Superadmin: ocultar herramientas administrativas y arbol de distribucion del dashboard
-        const adminC = ids('dashboard-admin-controls'); if (adminC) adminC.style.display = 'none';
-        const treeC = ids('tree-card'); if (treeC) treeC.style.display = 'none';
-      } else if (role === 'owner') {
-        if (dashboardAdmin) dashboardAdmin.classList.remove('hidden');
-        loadOwnerDashboard();
+      // Asegurar que el asistente IA esté visible (el welcome se lanza en setAuthenticated)
+      const aiCard = ids('ai-assistant-card');
+      if (aiCard && state.accessToken) aiCard.style.display = '';
+      const userCard = ids('ai-user-info-card');
+      if (userCard && state.accessToken) userCard.style.display = '';
+
+      // Owner/superadmin: mantener el check de mensualidad (aviso)
+      if ((role === 'owner' || role === 'superadmin') && typeof checkSystemBillingOverlay === 'function') {
         checkSystemBillingOverlay();
-      } else if (role === 'admin') {
-        if (dashboardAdmin) dashboardAdmin.classList.remove('hidden');
       }
-      
+
       // Add mobile quick actions bar
       renderMobileQuickActions();
     }
@@ -4175,8 +4165,9 @@
       if (bottomNav) {
         bottomNav.style.display = auth ? '' : 'none';
       }
-      // Actualizar estado del Asistente IA tras autenticarse (superadmin)
+      // Actualizar estado del Asistente IA tras autenticarse + lanzar resumen de bienvenida (Opción B)
       if (auth) setTimeout(function () { try { if (window.aiCheckStatus) window.aiCheckStatus(); } catch (e) {} }, 300);
+      if (auth) setTimeout(function () { try { if (window.aiSendWelcome) window.aiSendWelcome(); } catch (e) {} }, 600);
     }
 
     // ─── Mobile Bottom Navigation ────────────────────────────────────
@@ -11508,6 +11499,40 @@
       else if (action.action === 'prefill') aiRenderPrefill(action, out);
       else if (action.action === 'delete') aiRenderDeleteConfirm(action, out);
     }
+
+    // Opción B: resumen de bienvenida al iniciar sesión (la IA contesta al entrar).
+    window.aiSendWelcome = async function () {
+      const out = ids('ai-output');
+      if (!out) return;
+      const eid = ids('tree-establishment')?.value || '';
+      out.style.display = 'block';
+      out.innerHTML = '⏳ Preparando tu resumen...';
+      try {
+        const r = await api('/api/ai/welcome', {
+          method: 'POST',
+          body: JSON.stringify({ establishmentId: eid || null })
+        });
+        const d = r.data || {};
+        out.innerHTML = '';
+        const p = document.createElement('div');
+        p.innerHTML = (d.content || '(sin resumen)').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+        out.appendChild(p);
+        // Mensajes de comunicación: se muestran, pero responder se hace en Comunidad o vía la IA
+        if (Array.isArray(d.notifications) && d.notifications.length) {
+          const msgBox = document.createElement('div');
+          msgBox.style.cssText = 'margin-top:10px;border:1px solid var(--brand-2);border-radius:8px;padding:10px;background:rgba(201,162,39,.06);';
+          msgBox.innerHTML = '<strong>💬 Mensajes de comunicación (' + d.notifications.length + ')</strong><br><span style="font-size:12px;">Para <b>contestar</b>, abre el módulo 💬 Comunidad de la barra lateral, o pídeme aquí abajo que redacte una respuesta por ti.</span>';
+          out.appendChild(msgBox);
+        } else if (Array.isArray(d.notifications)) {
+          const msgBox = document.createElement('div');
+          msgBox.style.cssText = 'margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px;';
+          msgBox.innerHTML = '<strong>💬 Comunicación</strong><br><span style="font-size:12px;" class="muted">No tienes mensajes nuevos. Ve al módulo 💬 Comunidad para ver historial.</span>';
+          out.appendChild(msgBox);
+        }
+      } catch (err) {
+        out.innerHTML = '❌ No pude preparar el resumen: ' + err.message;
+      }
+    };
 
     // BÚSQUEDA: muestra las filas reales encontradas en un formato ordenado.
     function aiRenderSearchResults(action, out) {

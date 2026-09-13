@@ -11440,12 +11440,18 @@
       if (!key) { if (st) st.textContent = '⚠️ Escribe el API key primero.'; return; }
       if (st) st.textContent = '⏳ Guardando...';
       try {
+        // Guardar la key y activar la IA automáticamente (enabled=true) para que quede lista
         const r = await api('/api/ai/config', {
           method: 'PUT',
-          body: JSON.stringify({ apiKey: key })
+          body: JSON.stringify({
+            apiKey: key,
+            enabled: true,
+            provider: ids('ai-provider') ? ids('ai-provider').value : 'openai',
+            model: ids('ai-model') ? ids('ai-model').value.trim() : 'gpt-4o-mini'
+          })
         });
         if (inp) inp.value = '';
-        if (st) st.textContent = r.data && r.data.hasKey ? ('✅ Key guardada (…' + (r.data.apiKeyHint || '') + '). La IA está activa.') : '⚠️ No se pudo registrar la key (¿tienes permisos de superadmin?).';
+        if (st) st.textContent = r.data && r.data.hasKey ? ('✅ Key guardada (…' + (r.data.apiKeyHint || '') + ') y la IA está ACTIVA.') : '⚠️ No se pudo registrar la key (¿tienes permisos de superadmin?).';
         aiCheckStatus();
       } catch (err) {
         if (st) st.textContent = 'Error: ' + err.message;
@@ -11479,7 +11485,13 @@
           method: 'POST',
           body: JSON.stringify({ message: msg, establishmentId: eid || null })
         });
-        out.textContent = (r.data && r.data.content) ? r.data.content : '(sin respuesta)';
+        const content = (r.data && r.data.content) ? r.data.content : '(sin respuesta)';
+        const toolAction = (r.data && r.data.tool) || null;
+        out.innerHTML = '';
+        const p = document.createElement('p');
+        p.innerHTML = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+        out.appendChild(p);
+        if (toolAction) aiApplyToolAction(toolAction, out);
       } catch (err) {
         if (/mensualidad|vencida|billing/i.test(err.message || '')) {
           out.innerHTML = '🚫 <strong>Mensualidad vencida.</strong> Regulariza tu pago para usar la IA.';
@@ -11488,6 +11500,145 @@
         }
       }
     }
+
+    // Fase A: aplica la acción que la IA devolvió (buscar / prellenar / borrar).
+    function aiApplyToolAction(action, out) {
+      if (!action) return;
+      if (action.action === 'search') aiRenderSearchResults(action, out);
+      else if (action.action === 'prefill') aiRenderPrefill(action, out);
+      else if (action.action === 'delete') aiRenderDeleteConfirm(action, out);
+    }
+
+    // BÚSQUEDA: muestra las filas reales encontradas en un formato ordenado.
+    function aiRenderSearchResults(action, out) {
+      const rows = Array.isArray(action.rows) ? action.rows : [];
+      if (!rows.length) return;
+      const box = document.createElement('div');
+      box.style.cssText = 'margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;';
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+      const cols = Object.keys(rows[0] || {}).filter(k => {
+        return !['establishment_id', 'created_at', 'notes', 'id'].includes(k) && rows[0][k] !== null && rows[0][k] !== undefined;
+      }).slice(0, 7);
+      const thead = document.createElement('thead');
+      thead.style.cssText = 'background:var(--bg-tertiary);color:var(--muted);text-align:left;';
+      thead.innerHTML = '<tr>' + cols.map(c => '<th style="padding:8px;">' + c.replace(/_/g, ' ') + '</th>').join('') + '</tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.style.cssText = 'border-top:1px solid var(--line);';
+        tr.innerHTML = cols.map(c => '<td style="padding:8px;">' + String(row[c] === null || row[c] === undefined ? '—' : row[c]) + '</td>').join('');
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      box.appendChild(table);
+      out.appendChild(box);
+      const count = action.meta && action.meta.count;
+      const note = document.createElement('div');
+      note.style.cssText = 'margin-top:8px;font-size:12px;color:var(--muted);';
+      note.textContent = '📊 ' + (count !== undefined ? count + ' resultado(s) real(es).' : '') + (action.meta && action.meta.note ? ' ' + action.meta.note : '');
+      out.appendChild(note);
+    }
+
+    // PREFILL (CREAR/EDITAR): muestra la propuesta y permite abrir el formulario real.
+    function aiRenderPrefill(action, out) {
+      const values = action.values || {};
+      const missing = Array.isArray(action.missing) ? action.missing : [];
+      const step = document.createElement('div');
+      step.style.cssText = 'margin-top:12px;padding:12px;border:1px solid var(--primary);border-radius:8px;background:rgba(198,72,52,0.08);';
+      if (missing.length) {
+        step.innerHTML = '<strong>⚠️ Faltan datos:</strong> ' + missing.join(', ') + '. <span class="muted">Dámelos y volveré a prepararlo.</span>';
+      } else {
+        const keys = Object.keys(values).filter(k => values[k] !== '' && values[k] !== null && values[k] !== undefined);
+        step.innerHTML = '<strong>✍️ Propuesta lista para el formulario de ' + (action.tool || '') + ':</strong>' +
+          '<br><span class="muted" style="font-size:12px;">' + keys.map(k => '<b>' + k + '</b>: ' + values[k]).join(' · ') + '</span>';
+      }
+      const btnWrap = document.createElement('div');
+      btnWrap.style.cssText = 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;';
+      if (!missing.length) {
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn';
+        applyBtn.style.cssText = 'padding:6px 12px;';
+        applyBtn.textContent = '📝 Abrir formulario y prellenar';
+        applyBtn.addEventListener('click', function () { aiApplyPrefill(action.tool || '', values, action.formId); });
+        btnWrap.appendChild(applyBtn);
+      }
+      step.appendChild(btnWrap);
+      out.appendChild(step);
+    }
+
+    // Aplica los valores propuestos por la IA a los inputs REALES del formulario del módulo.
+    function aiApplyPrefill(tool, values, formId) {
+      const tabFor = { students: 'academico', classes: 'calendario', payments: 'finanzas', notifications: 'comunidad' };
+      const targetTab = tabFor[tool] || 'operacion';
+      if (typeof showTab === 'function') showTab(targetTab);
+      const mapFor = {
+        students: { fullName: 'st-name', email: 'st-email', phone: 'st-phone', birthDate: 'st-birth', currentRank: 'st-rank', disciplineCode: 'st-discipline' },
+        classes: { title: 'cl-title', disciplineCode: 'cl-discipline', scheduledDate: 'cl-date', startTime: 'cl-start', endTime: 'cl-end', location: 'cl-location', notes: 'cl-notes' },
+        payments: { studentId: 'pay-student-id', amount: 'pay-amount', currency: 'pay-currency', method: 'pay-method', concept: 'pay-concept', paidAt: 'pay-date', disciplineCode: 'pay-discipline' },
+        notifications: { title: 'nt-title', body: 'nt-body' }
+      };
+      const map = mapFor[tool] || {};
+      let filled = 0;
+      Object.keys(map).forEach(field => {
+        const id = map[field];
+        const el = ids(id);
+        const val = values[field];
+        if (el && val !== undefined && val !== null && String(val) !== '') {
+          if (id === 'st-discipline' || id === 'cl-discipline' || id === 'pay-discipline') {
+            const opt = Array.from(el.options || []).find(o => String(o.value).toLowerCase() === String(val).toLowerCase());
+            if (opt) el.value = opt.value;
+          } else {
+            el.value = String(val);
+          }
+          filled += 1;
+        }
+      });
+      const banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;padding:12px 16px;background:#1c2938;border:1px solid var(--primary);color:var(--text);border-radius:10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4);';
+      banner.innerHTML = '<strong>✍️ Formulario de ' + tool + ' prellenado por la IA (' + filled + ' campo(s)).</strong><br><span style="font-size:12px;">Revisa y guarda tú con el botón normal del formulario.</span>';
+      document.body.appendChild(banner);
+      setTimeout(function () { banner.remove(); }, 6000);
+    }
+
+    // BORRADO: solicita confirmación y ejecuta el DELETE real del sistema.
+    function aiRenderDeleteConfirm(action, out) {
+      const target = action.target || {};
+      if (!target.endpoint) return;
+      const box = document.createElement('div');
+      box.style.cssText = 'margin-top:12px;padding:12px;border:1px solid var(--danger);border-radius:8px;background:rgba(255,80,80,.08);';
+      box.innerHTML = '<strong>⚠️ Confirmación de borrado</strong><br><span style="font-size:12px;">' + (target.label || target.id) + '</span>';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn';
+      btn.style.cssText = 'margin-top:10px;padding:6px 12px;';
+      btn.textContent = '🗑️ Confirmar eliminación';
+      btn.addEventListener('click', async function () {
+        if (!window.confirm('¿Seguro que deseas eliminar permanentemente: ' + (target.label || target.id) + '?')) return;
+        btn.disabled = true;
+        btn.textContent = 'Eliminando...';
+        try {
+          const eid = ids('tree-establishment')?.value || '';
+          const res = await api(target.endpoint, {
+            method: 'DELETE',
+            body: JSON.stringify({ establishmentId: eid })
+          });
+          btn.textContent = '✅ Eliminado';
+          const okNote = document.createElement('div');
+          okNote.style.cssText = 'margin-top:8px;font-size:12px;color:var(--ok);';
+          okNote.textContent = 'Se eliminó: ' + ((res.data && (res.data.deletedId || res.data.id)) || target.id);
+          box.appendChild(okNote);
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = '❌ Error: ' + err.message;
+        }
+      });
+      box.appendChild(btn);
+      out.appendChild(box);
+    }
+
     // Fase 2: Autocompletado de formularios con IA (borrador editable; nunca guarda)
     window.aiFillForm = async function (formType, fieldIds, establishmentId) {
       const fields = {};

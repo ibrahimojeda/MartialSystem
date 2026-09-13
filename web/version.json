@@ -1,14 +1,15 @@
 {
-  "version": "2.7.1",
-  "buildNumber": 13,
-  "message": "API key de la IA visible en la tarjeta del Buscador + tarjeta Configuración aparece tras el login, con botones Guardar/Probar.",
+  "version": "2.8.0",
+  "buildNumber": 14,
+  "message": "FASE A: la IA ahora actúa como buscador real del sistema con herramientas que leen la base según el rol, propone alta/edición de alumnos, clases, pagos y notificaciones (prellenando el formulario real para que tú guardes), y propone borrados con confirmación.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.7.1.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.8.0.apk",
   "releaseDate": "2026-09-10",
   "changelog": [
-    "Campo '🔑 API Key' visible directamente en la tarjeta del Buscador del sistema",
-    "La tarjeta 'Asistente IA (Configuración)' ahora aparece tras iniciar sesión como superadmin",
-    "Botones 'Guardar key' y 'Probar IA' conectados",
-    "La key se persiste en el servidor para que la IA siempre quede activa"
+    "La IA puede BUSCAR datos reales de alumnos, clases, pagos y notificaciones según tu rol (nada inventado)",
+    "Para CREAR/EDITAR: la IA propone los valores, los valida contra el formulario real y los prellena para que tú confirmes el guardado con el código normal",
+    "Para BORRAR: la IA propone la eliminación y pide tu confirmación antes de ejecutarla (solo si tu rol lo permite)",
+    "La IA nunca escribe ni borra directamente por sí sola: siempre pasa por los formularios y confirmaciones del sistema",
+    "Endpoints nuevos de borrado seguro para alumnos, clases y pagos según rol"
   ]
 }

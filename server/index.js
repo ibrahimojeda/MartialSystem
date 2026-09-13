@@ -2014,6 +2014,53 @@ app.post('/api/students', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/students/:id — Borrar un alumno (según rol y propiedad). Fase A IA.
+app.delete('/api/students/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  try {
+    const { data: student, error: studentError } = await supabaseAdmin
+      .from('students')
+      .select('id, establishment_id, full_name')
+      .eq('id', id)
+      .single();
+    if (studentError || !student) return res.status(404).json({ ok: false, error: 'Alumno no encontrado' });
+
+    if (req.isSuperadmin) {
+      // superadmin puede borrar cualquiera
+    } else {
+      const membership = await getMembership(profileId, student.establishment_id);
+      if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+      if (![ROLE_OWNER, ROLE_ADMIN, ROLE_SENSEI].includes(membership.role)) {
+        return res.status(403).json({ ok: false, error: 'Tu rol no permite borrar alumnos' });
+      }
+    }
+
+    const { error: enrollErr } = await supabaseAdmin
+      .from('student_enrollments')
+      .delete()
+      .eq('student_id', id);
+    if (enrollErr) throw new Error(enrollErr.message);
+
+    const { error: linkErr } = await supabaseAdmin
+      .from('student_instructor_links')
+      .delete()
+      .eq('student_id', id)
+      .catch(() => ({ error: null }));
+    if (linkErr) throw new Error(linkErr.message);
+
+    const { error: delErr } = await supabaseAdmin
+      .from('students')
+      .delete()
+      .eq('id', id);
+    if (delErr) throw new Error(delErr.message);
+
+    return res.json({ ok: true, data: { deletedId: id, full_name: student.full_name } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not delete student' });
+  }
+});
+
 // GET /api/instructors - List all instructors in establishment with their disciplines
 app.get('/api/instructors', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
@@ -3356,6 +3403,47 @@ app.post('/api/classes', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/classes/:id — Borrar una clase (según rol y propiedad). Fase A IA.
+app.delete('/api/classes/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  try {
+    const { data: cls, error: classError } = await supabaseAdmin
+      .from('class_sessions')
+      .select('id, establishment_id, title')
+      .eq('id', id)
+      .single();
+    if (classError || !cls) return res.status(404).json({ ok: false, error: 'Clase no encontrada' });
+
+    if (req.isSuperadmin) {
+      // superadmin puede borrar cualquiera
+    } else {
+      const membership = await getMembership(profileId, cls.establishment_id);
+      if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+      if (![ROLE_OWNER, ROLE_ADMIN, ROLE_SENSEI].includes(membership.role)) {
+        return res.status(403).json({ ok: false, error: 'Tu rol no permite borrar clases' });
+      }
+    }
+
+    const { error: attErr } = await supabaseAdmin
+      .from('class_attendance_records')
+      .delete()
+      .eq('class_session_id', id)
+      .catch(() => ({ error: null }));
+    if (attErr) throw new Error(attErr.message);
+
+    const { error: delErr } = await supabaseAdmin
+      .from('class_sessions')
+      .delete()
+      .eq('id', id);
+    if (delErr) throw new Error(delErr.message);
+
+    return res.json({ ok: true, data: { deletedId: id, title: cls.title } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not delete class' });
+  }
+});
+
 app.get('/api/classes/:classId/attendance', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
   const { classId } = req.params;
@@ -3602,6 +3690,40 @@ app.post('/api/payments', requireAuth, async (req, res) => {
     return res.json({ ok: true, data });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not create payment' });
+  }
+});
+
+// DELETE /api/payments/:id — Borrar un pago (según rol y propiedad). Fase A IA.
+app.delete('/api/payments/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  try {
+    const { data: payment, error: paymentError } = await supabaseAdmin
+      .from('payments')
+      .select('id, establishment_id, amount, concept')
+      .eq('id', id)
+      .single();
+    if (paymentError || !payment) return res.status(404).json({ ok: false, error: 'Pago no encontrado' });
+
+    if (req.isSuperadmin) {
+      // superadmin puede borrar cualquiera
+    } else {
+      const membership = await getMembership(profileId, payment.establishment_id);
+      if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+      if (![ROLE_OWNER, ROLE_ADMIN].includes(membership.role)) {
+        return res.status(403).json({ ok: false, error: 'Tu rol no permite borrar pagos' });
+      }
+    }
+
+    const { error: delErr } = await supabaseAdmin
+      .from('payments')
+      .delete()
+      .eq('id', id);
+    if (delErr) throw new Error(delErr.message);
+
+    return res.json({ ok: true, data: { deletedId: id, amount: payment.amount, concept: payment.concept } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not delete payment' });
   }
 });
 
@@ -7633,7 +7755,15 @@ const AI_PROVIDERS = {
   custom:   { label: 'Custom (OpenAI-compatible)', baseUrl: '', defaultModel: '' }
 };
 
+const AI_CONFIG_PATH = path.join(__dirname, '..', 'data', 'ai-config.json');
+
 const getAIConfig = async () => {
+  // 1) Prioridad: archivo local del servidor (100% fiable, sin depender de Supabase)
+  try {
+    const local = readJsonStore(AI_CONFIG_PATH, null);
+    if (local && typeof local === 'object' && local.apiKey !== undefined) return local;
+  } catch (_) { /* ignorar */ }
+  // 2) Respaldo: tabla app_settings de Supabase
   try {
     const { data } = await supabaseAdmin
       .from('app_settings')
@@ -7643,6 +7773,7 @@ const getAIConfig = async () => {
       .maybeSingle();
     if (data?.settings_value && typeof data.settings_value === 'object') return data.settings_value;
   } catch (_) { /* fallback */ }
+  // 3) Último recurso: variable de entorno
   const envKey = String(process.env.AI_API_KEY || '').trim();
   if (envKey) return { provider: 'openai', model: 'gpt-4o-mini', enabled: true, apiKey: envKey, apiKeyHint: envKey.slice(-4), fromEnv: true };
   return { provider: 'openai', model: 'gpt-4o-mini', enabled: false, apiKey: '', apiKeyHint: '' };
@@ -7658,11 +7789,16 @@ const saveAIConfig = async (cfg) => {
     apiKeyHint: cfg.apiKey ? String(cfg.apiKey).slice(-4) : (cfg.apiKeyHint || ''),
     updatedAt: new Date().toISOString()
   };
-  await supabaseAdmin.from('app_settings').upsert({
-    establishment_id: null,
-    settings_key: AI_SETTINGS_KEY,
-    settings_value: value
-  }, { onConflict: 'establishment_id,settings_key' });
+  // 1) Guardar SIEMPRE en archivo local (garantiza persistencia)
+  try { writeJsonStore(AI_CONFIG_PATH, value); } catch (_) { /* best-effort */ }
+  // 2) Sincronizar a Supabase (best-effort, no bloquea si falla)
+  try {
+    await supabaseAdmin.from('app_settings').upsert({
+      establishment_id: null,
+      settings_key: AI_SETTINGS_KEY,
+      settings_value: value
+    }, { onConflict: 'establishment_id,settings_key' });
+  } catch (_) { /* best-effort */ }
   return value;
 };
 
@@ -7850,7 +7986,288 @@ app.get('/api/ai/status', requireAuth, async (req, res) => {
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// POST /api/ai/chat — Fase 1: todos los roles. Proxy al proveedor IA con contexto por rol y memoria.
+// ══════════════════════════════════════════════════════════════
+// FASE A — HERRAMIENTAS IA (lectura real, prefill validado, borrado con confirmación)
+// El usuario confirmó el modelo "mixto": la IA LEE y BORRA según rol (con OK), y para
+// CREAR/EDITAR siempre genera una propuesta validada contra el formulario existente.
+// ══════════════════════════════════════════════════════════════
+
+// Permitidos por herramienta: read = quién puede BUSCAR; write = quién puede recibir
+// prefill para CREAR/EDITAR; delete = quién puede solicitar borrado (con confirmación).
+const AI_TOOLS = {
+  students:      { label: 'Alumnos',        formId: 'student-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],  write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin'] },
+  classes:       { label: 'Clases',         formId: 'class-form',        read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin', 'sensei'] },
+  payments:      { label: 'Pagos',          formId: 'payment-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],     write: ['superadmin', 'owner', 'admin'],                             delete: ['superadmin', 'owner', 'admin'] },
+  notifications: { label: 'Notificaciones', formId: 'notification-form', read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: [] }
+};
+
+const aiToolAllowed = (tool, role, mode) => {
+  const def = AI_TOOLS[tool];
+  if (!def) return false;
+  if (mode === 'read') return def.read.includes(role);
+  if (mode === 'write') return def.write.includes(role);
+  if (mode === 'delete') return def.delete.includes(role);
+  return false;
+};
+
+// Llama a la IA con el formato de tu proveedor (OpenAI-compatible). Devuelve texto.
+async function aiCallLLM(cfg, apiKey, messages, opts) {
+  const baseUrl = getAIBaseUrl(cfg);
+  const model = getAIModel(cfg);
+  const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(Object.assign({
+      model,
+      messages,
+      temperature: 0.4,
+      max_tokens: 1024
+    }, opts || {}))
+  });
+  const aiJson = await aiRes.json().catch(() => ({}));
+  if (!aiRes.ok) {
+    const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
+    throw new Error(`Error del proveedor IA (${aiRes.status}): ${aiErr}`);
+  }
+  return aiJson?.choices?.[0]?.message?.content || '';
+}
+
+function aiParseJsonLoose(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/```(json)?/gi, '').trim();
+  try { return JSON.parse(cleaned); } catch (_) {
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch (_e) { return null; } }
+  }
+  return null;
+}
+
+// Búsqueda REAL en Supabase, acotada por rol/establecimiento. Nunca devuelve más de
+// 80 filas y solo los campos que ese rol puede ver.
+async function aiSearchTool(tool, params, ctx, establishmentId) {
+  const MAX = Math.min(parseInt((params && params.limit) || 40, 10) || 40, 80);
+  const q = String((params && (params.query || params.q || params.name || params.fullName)) || '').trim().replace(/%/g, '');
+  const disc = String((params && params.disciplineCode) || '').trim();
+  const estId = ctx.isSuperadmin && !establishmentId ? null : (establishmentId || null);
+
+  if (tool === 'students') {
+    const sel = 'id,full_name,email,phone,birth_date,profile_id,establishment_id,created_at';
+    let studentIdsForRole = null;
+    if (ctx.role === 'sensei' || ctx.role === 'instructor' && estId) {
+      const { data: enr } = await supabaseAdmin.from('student_enrollments').select('student_id').eq('instructor_profile_id', ctx.profileId).limit(2000);
+      studentIdsForRole = [...new Set((enr || []).map(e => e.student_id))];
+    }
+    let query = supabaseAdmin.from('students').select(sel);
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('profile_id', ctx.profileId);
+    if (studentIdsForRole) query = query.in('id', studentIdsForRole);
+    if (q) query = query.ilike('full_name', '%' + q + '%');
+    const { data, error } = await query.order('full_name', { ascending: true }).limit(MAX);
+    if (error) throw new Error(error.message);
+    const rows0 = data || [];
+    const studentIds = rows0.map(r => r.id);
+    let enrMap = {};
+    let keepIds = null;
+    if (studentIds.length) {
+      let eQuery = supabaseAdmin.from('student_enrollments').select('student_id,discipline_id,current_rank,status').in('student_id', studentIds).limit(4000);
+      const { data: enrollments } = await eQuery;
+      (enrollments || []).forEach(e => { if (!enrMap[e.student_id]) enrMap[e.student_id] = e; });
+      if (disc) {
+        const resolved = await resolveDisciplineByCode(estId, disc).catch(() => null);
+        if (resolved) keepIds = new Set((enrollments || []).filter(e => e.discipline_id === resolved.id).map(e => e.student_id));
+      }
+    }
+    return {
+      rows: rows0.filter(r => !keepIds || keepIds.has(r.id)).map(r => ({
+        id: r.id, full_name: r.full_name, email: r.email, phone: r.phone, birth_date: r.birth_date,
+        current_rank: (enrMap[r.id] && enrMap[r.id].current_rank) || null,
+        discipline_code: disc || null,
+        status: (enrMap[r.id] && enrMap[r.id].status) || null,
+        establishment_id: r.establishment_id, created_at: r.created_at
+      })),
+      meta: { count: rows0.filter(r => !keepIds || keepIds.has(r.id)).length, query: q }
+    };
+  }
+
+  if (tool === 'classes') {
+    const sel = 'id,establishment_id,discipline_id,instructor_profile_id,title,scheduled_date,start_time,end_time,location,notes,status,created_at';
+    let query = supabaseAdmin.from('class_sessions').select(sel);
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'sensei' || ctx.role === 'instructor') query = query.eq('instructor_profile_id', ctx.profileId);
+    const date = String((params && (params.date || params.scheduledDate)) || '').trim();
+    if (date) query = query.eq('scheduled_date', date);
+    if (disc) {
+      const resolved = await resolveDisciplineByCode(estId, disc).catch(() => null);
+      if (resolved) query = query.eq('discipline_id', resolved.id);
+    }
+    const { data, error } = await query.order('scheduled_date', { ascending: true }).limit(MAX);
+    if (error) throw new Error(error.message);
+    const rows = data || [];
+    const discIds = [...new Set(rows.map(r => r.discipline_id).filter(Boolean))];
+    const discMap = {};
+    if (discIds.length) {
+      const { data: dlist } = await supabaseAdmin.from('disciplines').select('id,code,name').in('id', discIds);
+      (dlist || []).forEach(d => { discMap[d.id] = d; });
+    }
+    return { rows: rows.map(r => ({ id: r.id, title: r.title, discipline_code: discMap[r.discipline_id] ? discMap[r.discipline_id].code : null, discipline_name: discMap[r.discipline_id] ? discMap[r.discipline_id].name : null, scheduled_date: r.scheduled_date, start_time: r.start_time, end_time: r.end_time, location: r.location, notes: r.notes, instructor_profile_id: r.instructor_profile_id, establishment_id: r.establishment_id })), meta: { count: rows.length, query: q } };
+  }
+
+  if (tool === 'payments') {
+    const sel = 'id,establishment_id,student_id,discipline_id,amount,currency,method,concept,paid_at,created_by,status';
+    let query = supabaseAdmin.from('payments').select(sel);
+    if (!ctx.isSuperadmin && estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
+    const sid = String((params && (params.studentId || params.student_id)) || '').trim();
+    if (sid) query = query.eq('student_id', sid);
+    if (disc) {
+      const resolved = await resolveDisciplineByCode(estId, disc).catch(() => null);
+      if (resolved) query = query.eq('discipline_id', resolved.id);
+    }
+    const days = parseInt((params && params.days) || 0, 10);
+    if (days && days > 0) {
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('paid_at', since);
+    }
+    const { data, error } = await query.order('paid_at', { ascending: false }).limit(MAX);
+    if (error) throw new Error(error.message);
+    const rows = data || [];
+    const studentIds = [...new Set(rows.map(r => r.student_id).filter(Boolean))];
+    const stuMap = {};
+    if (studentIds.length) {
+      const { data: slist } = await supabaseAdmin.from('students').select('id,full_name').in('id', studentIds);
+      (slist || []).forEach(s => { stuMap[s.id] = s; });
+    }
+    return { rows: rows.map(r => ({ id: r.id, student_id: r.student_id, student_name: stuMap[r.student_id] ? stuMap[r.student_id].full_name : null, amount: r.amount, currency: r.currency, method: r.method, concept: r.concept, paid_at: r.paid_at, discipline_code: disc || null, establishment_id: r.establishment_id, status: r.status })), meta: { count: rows.length, query: q } };
+  }
+
+  if (tool === 'notifications') {
+    try {
+      const sel = 'id,title,body,audience_role,establishment_id,created_at';
+      let query = supabaseAdmin.from('notifications').select(sel);
+      if (estId) query = query.eq('establishment_id', estId);
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(MAX);
+      if (error) return { rows: [], meta: { count: 0, note: error.message } };
+      return { rows: (data || []).map(r => ({ id: r.id, title: r.title, body: r.body, audience_role: r.audience_role, establishment_id: r.establishment_id, created_at: r.created_at })), meta: { count: (data || []).length } };
+    } catch (err) { return { rows: [], meta: { count: 0, note: 'Sin datos de notificaciones aún.' } }; }
+  }
+
+  return { rows: [], meta: { count: 0, note: 'Herramienta de búsqueda no soportada.' } };
+}
+
+// Valida y normaliza la propuesta de la IA contra las reglas del formulario REAL.
+// Devuelve { ok, values (solo campos válidos), missing (campos obligatorios ausentes) }.
+async function aiValidatePrefill(tool, draft, ctx, establishmentId) {
+  const out = { ok: false, values: {}, missing: [] };
+  if (!draft || typeof draft !== 'object') { out.missing.push('datos del formulario'); return out; }
+  const estId = establishmentId || null;
+
+  if (tool === 'students') {
+    const fullName = String(draft.fullName || draft.name || '').trim();
+    if (!fullName) out.missing.push('fullName (nombre completo)');
+    const email = String(draft.email || '').trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) out.missing.push('email válido');
+    let birthDate = String(draft.birthDate || '').trim();
+    if (birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) { if (birthDate.length === 8 && /^\d{8}$/.test(birthDate)) birthDate = birthDate.slice(0, 4) + '-' + birthDate.slice(4, 6) + '-' + birthDate.slice(6, 8); else out.missing.push('birthDate en formato YYYY-MM-DD'); }
+    let disciplineCode = String(draft.disciplineCode || draft.discipline || '').trim().toLowerCase();
+    if (disciplineCode && estId) {
+      const { data: dl } = await supabaseAdmin.from('establishment_disciplines').select('discipline_code').eq('establishment_id', estId).eq('discipline_code', disciplineCode).limit(1);
+      if (!dl || !dl.length) { const { data: dis } = await supabaseAdmin.from('disciplines').select('id, code').ilike('code', '%' + disciplineCode + '%').limit(3); if (dis && dis.length === 1) disciplineCode = dis[0].code; else out.missing.push('disciplineCode válido para el establecimiento'); }
+    }
+    out.values = { fullName, email, phone: String(draft.phone || '').trim(), birthDate, currentRank: String(draft.currentRank || draft.rank || '').trim(), disciplineCode };
+  } else if (tool === 'classes') {
+    const title = String(draft.title || '').trim();
+    if (!title) out.missing.push('title (título de la clase)');
+    const scheduledDate = String(draft.scheduledDate || draft.date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) out.missing.push('scheduledDate en formato YYYY-MM-DD');
+    const startTime = String(draft.startTime || draft.start || '').trim();
+    if (!/^\d{2}:\d{2}/.test(startTime)) out.missing.push('startTime en formato HH:MM');
+    const disc = String(draft.disciplineCode || '').trim().toLowerCase();
+    out.values = { title, scheduledDate, startTime, endTime: String(draft.endTime || draft.end || '').trim(), location: String(draft.location || '').trim(), notes: String(draft.notes || '').trim(), disciplineCode: disc };
+  } else if (tool === 'payments') {
+    const amount = Number(draft.amount || 0);
+    if (!amount || amount <= 0) out.missing.push('amount (monto mayor a 0)');
+    let studentId = String(draft.studentId || '').trim();
+    if (!studentId) {
+      const name = String(draft.studentName || draft.fullName || '').trim();
+      if (name && estId) {
+        const { data: found } = await supabaseAdmin.from('students').select('id').eq('establishment_id', estId).ilike('full_name', '%' + name + '%').limit(1);
+        if (found && found.length) studentId = found[0].id; else out.missing.push('studentId (no encontré alumno: ' + name + ')');
+      } else out.missing.push('studentId o studentName');
+    }
+    out.values = { studentId, amount, currency: String(draft.currency || 'USD').trim().toUpperCase(), method: String(draft.method || '').trim(), concept: String(draft.concept || '').trim(), paidAt: String(draft.paidAt || '').trim() };
+  } else if (tool === 'notifications') {
+    const title = String(draft.title || '').trim();
+    const body = String(draft.body || '').trim();
+    if (!title) out.missing.push('title (título de la notificación)');
+    if (!body) out.missing.push('body (mensaje de la notificación)');
+    out.values = { title, body };
+  }
+  out.ok = out.missing.length === 0;
+  return out;
+}
+
+// Prepara una propuesta de borrado (NUNCA borra aquí): devuelve la entidad encontrada
+// y confirmada por rol, para que el frontend pida OK y ejecute el DELETE real.
+async function aiProposeDelete(tool, params, ctx, establishmentId) {
+  const target = {};
+  const estId = establishmentId || null;
+  if (tool === 'students') {
+    const id = String((params && (params.id || params.studentId)) || '').trim();
+    if (!id) return { ok: false, error: 'Falta el ID del alumno.' };
+    let q = supabaseAdmin.from('students').select('id, full_name, establishment_id');
+    if (estId) q = q.eq('establishment_id', estId);
+    const { data } = await q.eq('id', id).maybeSingle();
+    if (!data) return { ok: false, error: 'Alumno no encontrado.' };
+    Object.assign(target, { entityType: 'student', id: data.id, label: data.full_name || 'Alumno', establishment_id: data.establishment_id, endpoint: '/api/students/' + data.id });
+  } else if (tool === 'classes') {
+    const id = String((params && (params.id || params.classId)) || '').trim();
+    if (!id) return { ok: false, error: 'Falta el ID de la clase.' };
+    let q = supabaseAdmin.from('classes').select('id, title, scheduled_date, establishment_id');
+    if (estId) q = q.eq('establishment_id', estId);
+    const { data } = await q.eq('id', id).maybeSingle();
+    if (!data) return { ok: false, error: 'Clase no encontrada.' };
+    Object.assign(target, { entityType: 'class', id: data.id, label: (data.title || 'Clase') + (data.scheduled_date ? ' (' + data.scheduled_date + ')' : ''), establishment_id: data.establishment_id, endpoint: '/api/classes/' + data.id });
+  } else if (tool === 'payments') {
+    const id = String((params && (params.id || params.paymentId)) || '').trim();
+    if (!id) return { ok: false, error: 'Falta el ID del pago.' };
+    let q = supabaseAdmin.from('payments').select('id, amount, concept, paid_at, establishment_id');
+    if (estId) q = q.eq('establishment_id', estId);
+    const { data } = await q.eq('id', id).maybeSingle();
+    if (!data) return { ok: false, error: 'Pago no encontrado.' };
+    Object.assign(target, { entityType: 'payment', id: data.id, label: '$' + Number(data.amount || 0) + (data.concept ? ' · ' + data.concept : ''), establishment_id: data.establishment_id, endpoint: '/api/payments/' + data.id });
+  } else {
+    return { ok: false, error: 'No se pueden borrar elementos de este tipo.' };
+  }
+  return { ok: true, target };
+}
+
+// Texto que describe las herramientas disponibles según el rol → se inyecta al prompt.
+function buildAIToolsSuffix(role) {
+  const allowed = Object.keys(AI_TOOLS).filter(t => aiToolAllowed(t, role, 'read'));
+  if (!allowed.length) return '';
+  const desc = allowed.map(t => {
+    const d = AI_TOOLS[t];
+    const write = aiToolAllowed(t, role, 'write') ? ' · puede proponer ALTAS/EDICIONES' : '';
+    const del = aiToolAllowed(t, role, 'delete') ? ' · puede proponer BORRADOS (requieren confirmación)' : '';
+    return `${t} (${d.label}${write}${del})`;
+  }).join('; ');
+  return [
+    '',
+    'REGLAS DE HERRAMIENTAS (MODO MIXTO):',
+    '- Como BUSCADOR del sistema tienes datos reales. NO inventes cifras ni nombres: usa las herramientas disponibles.',
+    '- Herramientas disponibles para tu rol: ' + desc + '.',
+    '- Para BUSCAR datos, responde dejando EXACTAMENTE al final de tu mensaje una línea con:',
+    '  <<<TOOL>>>{"tool":"NOMBRE_TOOL","params":{"query":"...","disciplineCode":"...","limit":30}}',
+    '  (Herramientas para buscar: ' + allowed.join(', ') + ')',
+    '- Para CREAR o EDITAR: NO guardes nada. Responde y termina con <<<TOOL>>>{"tool":"students","params":{...}} con los campos del formulario (fullName, email, phone, birthDate, currentRank, disciplineCode). Mismo patrón para classes/payments/notificaciones. NUNCA simules haber guardado.',
+    '- Para BORRAR: termina con <<<TOOL>>>{"tool":"students","params":{"id":"<uuid>"}} (según el tipo). Solo lo propones; el sistema pedirá confirmación.',
+    '- Si el usuario no dio toda la información para una acción de escritura, pregúntale qué falta ANTES y no termines con <<<TOOL>>>.'
+  ].join('\n');
+}
+// ══════════════════════════════════════════════════════════════
+// POST /api/ai/chat — Fase A: proxy a la IA con herramientas reales por rol.
+// Devuelve content + opcional toolResult con la acción a ejecutar en el frontend.
+// ══════════════════════════════════════════════════════════════
 app.post('/api/ai/chat', requireAuth, async (req, res) => {
   try {
     const profileId = req.authUser.id;
@@ -7887,8 +8304,9 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
 
     const baseUrl = getAIBaseUrl(cfg);
     const model = getAIModel(cfg);
-    const systemPrompt = await buildAIContext(req, establishmentId);
     const aiRole = await getAIContextRole(req, establishmentId);
+    const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
+    const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
 
     // Cargar memoria reciente del usuario (Fase 1)
     let messages = [{ role: 'system', content: systemPrompt }];
@@ -7923,8 +8341,85 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
       return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
     }
-    const content = aiJson?.choices?.[0]?.message?.content || '';
-    if (!content) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
+    const rawContent = aiJson?.choices?.[0]?.message?.content || '';
+    if (!rawContent) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
+
+    // ── Fase A: detección de herramienta (formato <<<TOOL>>>{json} al final) ──
+    let content = String(rawContent);
+    let toolAction = null;
+    const toolMatch = content.match(/<<<TOOL>>>(\{[\s\S]*\})/);
+    if (toolMatch) {
+      content = content.replace(/<<<TOOL>>>(\{[\s\S]*\})/, '').trim();
+      const parsed = aiParseJsonLoose(toolMatch[1]);
+      if (parsed && parsed.tool) {
+        const tool = String(parsed.tool).toLowerCase();
+        const params = parsed.params || {};
+        const def = AI_TOOLS[tool];
+
+        if (def && aiToolAllowed(tool, aiRole, 'read')) {
+          // 1) Intención de BÚSQUEDA (si el texto de la IA aún espera datos) — solo si la
+          //    IA pidió explícitamente buscar (tool 'query'), o si hay params de búsqueda.
+          const looksLikeSearch = !params.fullName && !params.title && !params.amount && !params.body && (params.query || params.q || params.name || params.date || params.studentName || params.studentId || params.limit);
+          if (looksLikeSearch) {
+            const searchRes = await aiSearchTool(tool, params, ctx, establishmentId);
+            const rowsArr = (searchRes.rows || []).slice(0, 50);
+            // Filas truncadas para mantener el prompt compacto (cada fila max 400 chars).
+            const rows = rowsArr.map(r => {
+              try {
+                const s = JSON.stringify(r);
+                return s && s.length > 400 ? s.slice(0, 400) + '…' : s;
+              } catch (_e) { return '(fila)'; }
+            }).join('\n') || '(vacío)';
+            // Segunda pasada: la IA resume los datos REALES encontrados (nunca los inventa).
+            // Se usa un system corto y los datos en un mensaje 'user' (más robusto con Gemini),
+            // y un fallback local si el proveedor falla (nunca dejamos al usuario sin respuesta).
+            const secondSystem = [
+              'Eres el asistente de MartialSystem. Responde en español, ordenado y directo.',
+              'Usa SOLAMENTE los datos que recibes; NO inventes nombres, cifras ni filas.',
+              'Si no hay resultados, dilo claramente. NO termines con <<<TOOL>>> ni JSON.'
+            ].join('\n');
+            const secondUser = [
+              'El usuario preguntó: ' + String(message),
+              'RESULTADOS REALES DE LA BÚSQUEDA (usar SOLO estos datos):',
+              rows
+            ].join('\n');
+            try {
+              content = await aiCallLLM(cfg, apiKey, [
+                { role: 'system', content: secondSystem },
+                { role: 'user', content: secondUser }
+              ], { temperature: 0.3, max_tokens: 700 });
+            } catch (secondErr) {
+              // Fallback: si el proveedor falla en la 2ª pasada, respondemos con los datos reales.
+              content = rowsArr.length
+                ? '🔍 Encontré ' + rowsArr.length + ' resultado(s) real(es).\n' + rows
+                : '🔍 La búsqueda no devolvió resultados.';
+            }
+            toolAction = { action: 'search', tool, params, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } };
+          } else if (aiToolAllowed(tool, aiRole, 'write')) {
+            // 2) Intención de CREAR/EDITAR → validar contra el formulario real; NUNCA guardar.
+            const validated = await aiValidatePrefill(tool, params, ctx, establishmentId);
+            toolAction = { action: 'prefill', tool, formId: def.formId, values: validated.values, missing: validated.missing };
+            if (validated.missing && validated.missing.length) {
+              content = 'Para completar el formulario de ' + def.label + ' necesito lo siguiente: ' + validated.missing.join(', ') + '. ¿Me los confirmas?';
+            } else {
+              content = '✍️ Listo: preparé la propuesta para ' + def.label + '. Revisa el formulario y confirma para guardar (yo nunca guardo por ti). ' + content;
+            }
+          } else if (aiToolAllowed(tool, aiRole, 'delete')) {
+            // 3) Intención de BORRAR → solo propuesta con confirmación.
+            const delRes = await aiProposeDelete(tool, params, ctx, establishmentId);
+            if (!delRes.ok) { content = delRes.error || 'No se pudo preparar el borrado.'; }
+            else {
+              toolAction = { action: 'delete', tool, target: delRes.target };
+              content = '🗑️ He localizado: **' + delRes.target.label + '**. Para eliminarlo pulsa el botón de confirmación debajo (yo no borro sin tu OK).';
+            }
+          } else {
+            content = 'Tu rol no te permite realizar esta acción sobre ' + (def ? def.label : tool) + '.';
+          }
+        } else {
+          content = content || ('No tengo herramienta disponible para: ' + tool + ' con tu rol.');
+        }
+      }
+    }
 
     // Guardar en la memoria del usuario (Fase 1)
     try {
@@ -7937,7 +8432,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       });
     } catch (_) { /* best-effort */ }
 
-    return res.json({ ok: true, data: { content, model, memorySaved: true } });
+    return res.json({ ok: true, data: { content, model, memorySaved: true, tool: toolAction } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'AI request failed' });
   }

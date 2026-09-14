@@ -2147,6 +2147,11 @@
       <article class="card full" id="ai-config-card" style="display:none;">
         <h3>🤖 API Keys de las IAs (Configuración) <span class="pill">Solo superadmin</span></h3>
         <p class="muted">Registra las API keys de las IAs que trabajan en el sistema. Cada key se guarda solo en el servidor y nunca se muestra completa. Si activas varias, el sistema reparte las llamadas entre ellas automáticamente.</p>
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:6px;align-items:center;">
+          <input id="ai-quick-key" type="password" placeholder="Pega aquí una API key → se detecta el proveedor automáticamente..." style="flex:1;min-width:240px;" autocomplete="off">
+          <button class="btn" id="ai-quick-add" type="button">✨ Detectar y agregar</button>
+        </div>
+        <div class="muted" id="ai-quick-status" style="font-size:12px;margin-bottom:6px;"></div>
         <form id="ai-config-form" onsubmit="return false;" autocomplete="off" style="margin:0;">
           <div id="ai-providers-list"><span class="muted">Cargando proveedores...</span></div>
         </form>
@@ -11371,6 +11376,37 @@
       if (provider === 'custom') return 'modelo de tu proveedor';
       return 'gpt-4o-mini / gpt-4o';
     }
+    function aiDetectProvider(key) {
+      const k = String(key || '').trim();
+      if (!k) return null;
+      if (/^AIza[0-9A-Za-z_-]{35}$/.test(k) || /^AQ\./.test(k)) return { provider: 'gemini', note: 'clave de Google AI (Gemini)' };
+      if (/^sk-ant-/.test(k)) return { provider: 'custom', note: 'formato Anthropic → usar Custom' };
+      if (/^sk-proj-/.test(k) || /^sk-svcacct-/.test(k) || /^sk-[A-Za-z0-9]{44,}$/.test(k)) return { provider: 'openai', note: 'formato OpenAI' };
+      if (/^sk-[0-9a-f]{32}$/i.test(k)) return { provider: 'deepseek', note: 'formato DeepSeek' };
+      return null;
+    }
+    function aiModelDefault(provider) {
+      const map = { gemini: 'gemini-3.6-flash', openai: 'gpt-4o-mini', deepseek: 'deepseek-chat', custom: '' };
+      return map[provider] !== undefined ? map[provider] : '';
+    }
+    function aiQuickDetect() {
+      const inp = ids('ai-quick-key');
+      const st = ids('ai-quick-status');
+      const v = String((inp && inp.value) || '').trim();
+      if (!v) { if (st) st.textContent = 'Pega una API key para detectarla.'; if (inp) inp.focus(); return; }
+      const det = aiDetectProvider(v);
+      if (!det) {
+        if (st) st.textContent = '⚠️ No se pudo identificar el proveedor con este formato. Agrégalo y elige proveedor manualmente.';
+        return;
+      }
+      if (st) st.textContent = '';
+      aiAddProviderRow({ provider: det.provider, model: aiModelDefault(det.provider), baseUrl: '', enabled: true, hasKey: true, apiKeyHint: v.slice(-4) });
+      const rows = document.querySelectorAll('#ai-providers-list .ai-provider-row');
+      const last = rows[rows.length - 1];
+      if (last) { const k = last.querySelector('.ai-p-key'); if (k) k.value = v; }
+      if (inp) inp.value = '';
+      if (st) st.textContent = '✅ Detectado: ' + AI_PROVIDER_LABELS[det.provider] + (det.note ? ' (' + det.note + ')' : '') + '. Pulsa "Guardar configuración".';
+    }
     function aiKeyPlaceholder(provider, hasKey) {
       if (hasKey) return '••••••• (vacío conserva la actual)';
       if (provider === 'gemini') return 'AIza... o AQ... (clave de Google AI)';
@@ -11432,6 +11468,21 @@
         if (hint) hint.textContent = '🕐 La key se borrará al guardar.';
         dk.disabled = true;
         dk.textContent = '⏳ Pendiente de guardar';
+      });
+      const keyInp = row.querySelector('.ai-p-key');
+      if (keyInp) keyInp.addEventListener('input', function () {
+        const v = keyInp.value.trim();
+        if (v.length < 12) return;
+        const det = aiDetectProvider(v);
+        if (!det) return;
+        const hint = row.querySelector('.ai-p-hint');
+        if (hint) hint.textContent = '🔎 Detectado: ' + AI_PROVIDER_LABELS[det.provider] + (det.note ? ' (' + det.note + ')' : '');
+        if (sel && sel.value !== det.provider) {
+          sel.value = det.provider;
+          sel.dispatchEvent(new Event('change'));
+        }
+        const modelInp = row.querySelector('.ai-p-model');
+        if (modelInp && !modelInp.value.trim()) modelInp.value = aiModelDefault(det.provider);
       });
       wrap.appendChild(row);
       return row;
@@ -11628,6 +11679,7 @@
       if (st) st.textContent = '⏳ Guardando...';
       try {
         // Guardar la key y activar la IA automáticamente (enabled=true) para que quede lista
+        const det = aiDetectProvider(key);
         const firstP = document.querySelector('#ai-providers-list .ai-p-provider');
         const firstM = document.querySelector('#ai-providers-list .ai-p-model');
         const r = await api('/api/ai/config', {
@@ -11635,8 +11687,8 @@
           body: JSON.stringify({
             apiKey: key,
             enabled: true,
-            provider: firstP ? firstP.value : 'openai',
-            model: firstM && firstM.value.trim() ? firstM.value.trim() : 'gpt-4o-mini'
+            provider: det ? det.provider : (firstP ? firstP.value : 'openai'),
+            model: det ? (aiModelDefault(det.provider) || '') : (firstM && firstM.value.trim() ? firstM.value.trim() : 'gpt-4o-mini')
           })
         });
         if (inp) inp.value = '';
@@ -12050,6 +12102,10 @@
       if (loadBtn) loadBtn.addEventListener('click', aiLoadConfig);
       const addBtn = ids('ai-provider-add');
       if (addBtn) addBtn.addEventListener('click', function () { aiAddProviderRow({ provider: 'openai', model: '', baseUrl: '', enabled: true }); });
+      const quickAdd = ids('ai-quick-add');
+      if (quickAdd) quickAdd.addEventListener('click', aiQuickDetect);
+      const quickInp = ids('ai-quick-key');
+      if (quickInp) quickInp.addEventListener('keydown', function (e) { if (e.key === 'Enter') aiQuickDetect(); });
       const usageRefresh = ids('ai-usage-refresh');
       if (usageRefresh) usageRefresh.addEventListener('click', aiLoadUsage);
       const usageReset = ids('ai-usage-reset');

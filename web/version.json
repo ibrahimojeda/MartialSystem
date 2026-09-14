@@ -1,14 +1,14 @@
 {
-  "version": "2.10.5",
-  "buildNumber": 21,
-  "message": "Corrección IA: ya no se permite usar una URL como nombre de modelo (Gemini usa gemini-3.6-flash por defecto), se corrigió un error interno 500 en el chat y el formulario sugiere el modelo correcto por proveedor. El asistente vuelve a responder.",
+  "version": "2.10.6",
+  "buildNumber": 22,
+  "message": "Detección automática de API keys: al pegar una clave se identifica el proveedor (Gemini/OpenAI/DeepSeek/Anthropic→Custom) por su formato, se asigna el proveedor correcto, se sugiere el modelo y se agrega en un clic.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.5.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.6.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "Corrección: se ignora una URL pegada en el campo Modelo (usa el modelo por defecto del proveedor)",
-    "Gemini: modelo por defecto actualizado a gemini-3.6-flash",
-    "Corrección: error 500 \"model is not defined\" en el chat cuando la IA respondía",
-    "Formulario de IA: sugerencias de modelo correctas por proveedor (Gemini/OpenAI/DeepSeek/Custom)"
+    "Nuevo: \"Pegar API key y detectar\" en Configuración — detecta el proveedor automáticamente por el formato de la clave",
+    "Al escribir una API key en cualquier fila, se detecta el proveedor, se ajusta el selector y se sugiere el modelo",
+    "El Buscador también detecta el proveedor al guardar una key",
+    "Modelos por defecto sugeridos: Gemini=gemini-3.6-flash, OpenAI=gpt-4o-mini, DeepSeek=deepseek-chat"
   ]
 }

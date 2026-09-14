@@ -1,13 +1,14 @@
 {
-  "version": "2.10.4",
-  "buildNumber": 20,
-  "message": "Corrección: la URL base del proveedor de IA ya no puede romper la conexión (se ignoran valores no válidos). El campo \"URL base\" ahora solo aparece para proveedor Custom, y los errores del proveedor se muestran de forma clara (key inválida, cuota, modelo).",
+  "version": "2.10.5",
+  "buildNumber": 21,
+  "message": "Corrección IA: ya no se permite usar una URL como nombre de modelo (Gemini usa gemini-3.6-flash por defecto), se corrigió un error interno 500 en el chat y el formulario sugiere el modelo correcto por proveedor. El asistente vuelve a responder.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.4.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.5.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "Corrección: se ignora una URL base no válida en los proveedores de IA (evita el error \"Failed to parse URL\")",
-    "Configuración IA: el campo URL base solo se muestra para proveedor Custom",
-    "Mensajes de error del proveedor más claros (key inválida, cuota agotada, modelo inexistente)"
+    "Corrección: se ignora una URL pegada en el campo Modelo (usa el modelo por defecto del proveedor)",
+    "Gemini: modelo por defecto actualizado a gemini-3.6-flash",
+    "Corrección: error 500 \"model is not defined\" en el chat cuando la IA respondía",
+    "Formulario de IA: sugerencias de modelo correctas por proveedor (Gemini/OpenAI/DeepSeek/Custom)"
   ]
 }

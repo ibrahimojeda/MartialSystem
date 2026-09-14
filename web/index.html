@@ -11365,6 +11365,12 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
     }
+    function aiModelPlaceholder(provider) {
+      if (provider === 'gemini') return 'gemini-3.6-flash';
+      if (provider === 'deepseek') return 'deepseek-chat / deepseek-reasoner';
+      if (provider === 'custom') return 'modelo de tu proveedor';
+      return 'gpt-4o-mini / gpt-4o';
+    }
     function aiKeyPlaceholder(provider, hasKey) {
       if (hasKey) return '••••••• (vacío conserva la actual)';
       if (provider === 'gemini') return 'AIza... o AQ... (clave de Google AI)';
@@ -11382,7 +11388,7 @@
       return '<div class="ai-provider-row" data-ai-id="' + aiEsc(p.id || '') + '" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;background:rgba(255,255,255,0.02);">' +
         '<div class="row" style="gap:10px;flex-wrap:wrap;">' +
           '<div style="flex:1;min-width:150px;"><label>Proveedor</label><select class="ai-p-provider" style="min-height:38px;">' + opts + '</select></div>' +
-          '<div style="flex:1;min-width:180px;"><label>Modelo</label><input class="ai-p-model" value="' + aiEsc(p.model || '') + '" placeholder="gpt-4o-mini / deepseek-chat / gemini-2.0-flash"></div>' +
+          '<div style="flex:1;min-width:180px;"><label>Modelo</label><input class="ai-p-model" value="' + aiEsc(p.model || '') + '" placeholder="' + aiModelPlaceholder(provider) + '"></div>' +
           '<div style="flex:1;min-width:180px;' + (provider === 'custom' ? '' : 'display:none;') + '" data-ai-base-wrap><label>URL base (solo custom)</label><input class="ai-p-base" value="' + aiEsc(p.baseUrl || '') + '" placeholder="https://..."></div>' +
           '<div style="flex:1;min-width:200px;"><label>API Key</label><input class="ai-p-key" type="password" autocomplete="off" placeholder="' + aiKeyPlaceholder(provider, p.hasKey) + '"></div>' +
         '</div>' +
@@ -11408,6 +11414,8 @@
         if (base) base.placeholder = sel.value === 'custom' ? 'https://mi-servidor-ia.com/v1' : 'Se usa automáticamente';
         const keyInp = row.querySelector('.ai-p-key');
         if (keyInp) keyInp.placeholder = aiKeyPlaceholder(sel.value, Boolean(keyInp.value.trim()));
+        const modelInp = row.querySelector('.ai-p-model');
+        if (modelInp) modelInp.placeholder = aiModelPlaceholder(sel.value);
       });
       const rm = row.querySelector('.ai-p-remove');
       if (rm) rm.addEventListener('click', function () {

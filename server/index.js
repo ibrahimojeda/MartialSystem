@@ -7751,7 +7751,7 @@ const AI_SETTINGS_KEY = '__ai__';
 const AI_PROVIDERS = {
   openai:   { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
   deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' },
-  gemini:   { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-2.0-flash' },
+  gemini:   { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.6-flash' },
   custom:   { label: 'Custom (OpenAI-compatible)', baseUrl: '', defaultModel: '' }
 };
 
@@ -7923,9 +7923,16 @@ function aiSanitizeBaseUrl(v, prev) {
 }
 function aiProviderModel(p) {
   const m = String((p && p.model) || '').trim();
-  if (m) return m;
+  // Si el modelo parece una URL, se ignora y se usa el modelo por defecto del proveedor.
+  if (m && !/:\/\//.test(m)) return m;
   const def = p && AI_PROVIDERS[p.provider];
   return (def && def.defaultModel) || AI_PROVIDERS.openai.defaultModel;
+}
+// Sanitiza el modelo al guardar: vacío o con URL → '' (usa el default del proveedor).
+function aiSanitizeModel(v, prev) {
+  const s = String((v !== undefined && v !== null) ? v : (prev || '')).trim();
+  if (!s || /:\/\//.test(s)) return '';
+  return s;
 }
 
 // Ejecuta una llamada al proveedor (formato OpenAI-compatible) con tracking de consumo.
@@ -8268,7 +8275,7 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
         return {
           id,
           provider: String(p.provider || prev.provider || 'openai'),
-          model: (p.model !== undefined && p.model !== null) ? String(p.model).trim() : (prev.model || ''),
+          model: aiSanitizeModel(p.model, prev.model),
           baseUrl: aiSanitizeBaseUrl(p.baseUrl, prev.baseUrl || ''),
           enabled: p.enabled !== undefined ? Boolean(p.enabled) : (prev.enabled !== false),
           apiKey: (p.clearKey === true) ? '' : ((p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim() : (prev.apiKey || '')),
@@ -8285,7 +8292,7 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
       providers = [{
         id: prev.id || 'p1',
         provider: provider || prev.provider || 'openai',
-        model: model !== undefined ? String(model).trim() : (prev.model || ''),
+        model: aiSanitizeModel(model, prev.model),
         baseUrl: aiSanitizeBaseUrl(baseUrl, prev.baseUrl || ''),
         enabled,
         apiKey: (apiKey && String(apiKey).trim()) ? String(apiKey).trim() : (prev.apiKey || ''),
@@ -8840,7 +8847,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       });
     } catch (_) { /* best-effort */ }
 
-    return res.json({ ok: true, data: { content, model, memorySaved: true, tool: toolAction } });
+    return res.json({ ok: true, data: { content, model: (aiCall && aiCall.model) || '', memorySaved: true, tool: toolAction } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'AI request failed' });
   }

@@ -7911,9 +7911,15 @@ function aiSelectProvider(cfg) {
 
 function aiProviderBaseUrl(p) {
   const b = String((p && p.baseUrl) || '').trim();
-  if (b) return b;
+  // Solo URLs absolutas; si el valor no es http(s) se usa la URL por defecto del proveedor.
+  if (/^https?:\/\//i.test(b)) return b;
   const def = p && AI_PROVIDERS[p.provider];
   return (def && def.baseUrl) || AI_PROVIDERS.openai.baseUrl;
+}
+// Sanitiza la baseUrl al guardar: solo conserva URLs absolutas (evita valores como "venta").
+function aiSanitizeBaseUrl(v, prev) {
+  const s = String((v !== undefined && v !== null) ? v : (prev || '')).trim();
+  return /^https?:\/\//i.test(s) ? s : '';
 }
 function aiProviderModel(p) {
   const m = String((p && p.model) || '').trim();
@@ -7952,6 +7958,12 @@ async function aiProviderRequest(provider, body, apiKey) {
   }
   const baseUrl = aiProviderBaseUrl(provider);
   const model = aiProviderModel(provider);
+  // Guardia extra: nunca debe quedar una URL relativa → error claro en vez de "Failed to parse URL"
+  if (!/^https?:\/\//i.test(baseUrl)) {
+    const e = new Error('La URL base del proveedor no es válida (debe empezar con http:// o https://). Actualízala en Configuración → IA.');
+    e.status = 502;
+    throw e;
+  }
   const aiRes = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
@@ -8257,7 +8269,7 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
           id,
           provider: String(p.provider || prev.provider || 'openai'),
           model: (p.model !== undefined && p.model !== null) ? String(p.model).trim() : (prev.model || ''),
-          baseUrl: (p.baseUrl !== undefined && p.baseUrl !== null) ? String(p.baseUrl).trim() : (prev.baseUrl || ''),
+          baseUrl: aiSanitizeBaseUrl(p.baseUrl, prev.baseUrl || ''),
           enabled: p.enabled !== undefined ? Boolean(p.enabled) : (prev.enabled !== false),
           apiKey: (p.clearKey === true) ? '' : ((p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim() : (prev.apiKey || '')),
           apiKeyHint: (p.clearKey === true) ? '' : ((p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim().slice(-4) : (prev.apiKeyHint || '')),
@@ -8274,7 +8286,7 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
         id: prev.id || 'p1',
         provider: provider || prev.provider || 'openai',
         model: model !== undefined ? String(model).trim() : (prev.model || ''),
-        baseUrl: baseUrl !== undefined ? String(baseUrl).trim() : (prev.baseUrl || ''),
+        baseUrl: aiSanitizeBaseUrl(baseUrl, prev.baseUrl || ''),
         enabled,
         apiKey: (apiKey && String(apiKey).trim()) ? String(apiKey).trim() : (prev.apiKey || ''),
         apiKeyHint: (apiKey && String(apiKey).trim()) ? String(apiKey).trim().slice(-4) : (prev.apiKeyHint || ''),

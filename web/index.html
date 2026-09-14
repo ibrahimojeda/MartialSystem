@@ -11383,7 +11383,7 @@
         '<div class="row" style="gap:10px;flex-wrap:wrap;">' +
           '<div style="flex:1;min-width:150px;"><label>Proveedor</label><select class="ai-p-provider" style="min-height:38px;">' + opts + '</select></div>' +
           '<div style="flex:1;min-width:180px;"><label>Modelo</label><input class="ai-p-model" value="' + aiEsc(p.model || '') + '" placeholder="gpt-4o-mini / deepseek-chat / gemini-2.0-flash"></div>' +
-          '<div style="flex:1;min-width:180px;"><label>URL base (solo custom)</label><input class="ai-p-base" value="' + aiEsc(p.baseUrl || '') + '" placeholder="https://..."></div>' +
+          '<div style="flex:1;min-width:180px;' + (provider === 'custom' ? '' : 'display:none;') + '" data-ai-base-wrap><label>URL base (solo custom)</label><input class="ai-p-base" value="' + aiEsc(p.baseUrl || '') + '" placeholder="https://..."></div>' +
           '<div style="flex:1;min-width:200px;"><label>API Key</label><input class="ai-p-key" type="password" autocomplete="off" placeholder="' + aiKeyPlaceholder(provider, p.hasKey) + '"></div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;">' +
@@ -11402,6 +11402,8 @@
       const row = holder.firstElementChild;
       const sel = row.querySelector('.ai-p-provider');
       if (sel) sel.addEventListener('change', function () {
+        const baseWrap = row.querySelector('[data-ai-base-wrap]');
+        if (baseWrap) baseWrap.style.display = sel.value === 'custom' ? '' : 'none';
         const base = row.querySelector('.ai-p-base');
         if (base) base.placeholder = sel.value === 'custom' ? 'https://mi-servidor-ia.com/v1' : 'Se usa automáticamente';
         const keyInp = row.querySelector('.ai-p-key');
@@ -11433,7 +11435,7 @@
           id: el.getAttribute('data-ai-id') || '',
           provider: el.querySelector('.ai-p-provider').value,
           model: el.querySelector('.ai-p-model').value.trim(),
-          baseUrl: el.querySelector('.ai-p-base').value.trim(),
+          baseUrl: el.querySelector('.ai-p-provider').value === 'custom' ? el.querySelector('.ai-p-base').value.trim() : '',
           enabled: el.querySelector('.ai-p-enabled').checked,
           clearKey: el.getAttribute('data-ai-clear') === '1',
           apiKey: el.querySelector('.ai-p-key').value.trim()

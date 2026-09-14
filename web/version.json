@@ -1,13 +1,13 @@
 {
-  "version": "2.10.3",
-  "buildNumber": 19,
-  "message": "APK: ahora las funciones de IA (API keys, chat y consumo) detectan el modo sin servidor y abren automáticamente el diálogo \"Configurar Servidor\" para conectarse al sistema. En modo híbrido (servidor conectado) ya se pueden agregar y eliminar API keys de varias IAs.",
-  "forceUpdate": true,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.3.apk",
+  "version": "2.10.4",
+  "buildNumber": 20,
+  "message": "Corrección: la URL base del proveedor de IA ya no puede romper la conexión (se ignoran valores no válidos). El campo \"URL base\" ahora solo aparece para proveedor Custom, y los errores del proveedor se muestran de forma clara (key inválida, cuota, modelo).",
+  "forceUpdate": false,
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.4.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "APK: mensaje claro y diálogo automático \"Configurar Servidor\" cuando se usa la IA sin servidor conectado",
-    "APK: explicación del modo híbrido para que las API keys y el consumo de IA funcionen en el móvil",
-    "Configuración IA: gestiona varias IAs (agregar, borrar key, quitar proveedor) desde el servidor conectado"
+    "Corrección: se ignora una URL base no válida en los proveedores de IA (evita el error \"Failed to parse URL\")",
+    "Configuración IA: el campo URL base solo se muestra para proveedor Custom",
+    "Mensajes de error del proveedor más claros (key inválida, cuota agotada, modelo inexistente)"
   ]
 }

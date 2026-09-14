@@ -1,15 +1,14 @@
 {
-  "version": "2.10.0",
-  "buildNumber": 16,
-  "message": "Configuración de IAs: API keys de varios proveedores (OpenAI, DeepSeek, Gemini, Custom) solo visibles para superadmin + panel de consumo de las IAs (llamadas, tokens y costo estimado en USD). Incluye corrección de advertencias de consola y búsquedas más rápidas.",
+  "version": "2.10.1",
+  "buildNumber": 17,
+  "message": "Corrección: el asistente IA mostraba \"Bad Request\" porque la API key guardada no era válida para Gemini. Ahora se muestran errores claros del proveedor (key inválida o cuota agotada), se actualiza la pista de la key al cambiarla y Configuración sugiere el formato correcto de clave por proveedor.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.0.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.1.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "Configuración de API keys de varias IAs en Configuración (solo superadmin): OpenAI, DeepSeek, Gemini y Custom, con reparto automático de llamadas entre las activas",
-    "Panel de consumo de las IAs: llamadas, tokens de entrada/salida, costo estimado (USD) por proveedor, totales y consumo de hoy",
-    "API keys y datos de consumo protegidos: solo el superadmin puede verlos (servidor con 403 + tarjetas ocultas para otros roles)",
-    "Corrección: campos de API key/password ahora están dentro de formularios (se elimina la advertencia de consola)",
-    "Corrección: buscadores de la Vista Maestra de Datos filtran en cliente al instante, sin recargar la API en cada tecla"
+    "Corrección: el asistente IA muestra mensajes claros cuando la API key no es válida o la cuota del proveedor está agotada (en vez de \"Bad Request\")",
+    "Corrección: la pista de la API key se actualiza al cambiar la clave",
+    "Configuración IA: el campo de API key sugiere el formato correcto por proveedor (AIza/AQ para Gemini, sk- para OpenAI/DeepSeek)",
+    "Se restaura la clave Gemini válida para que el asistente vuelva a responder"
   ]
 }

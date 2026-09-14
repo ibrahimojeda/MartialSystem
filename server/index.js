@@ -7878,6 +7878,25 @@ function aiProviderModel(p) {
 
 // Ejecuta una llamada al proveedor (formato OpenAI-compatible) con tracking de consumo.
 // Devuelve { content, model, baseUrl, raw } y lanza Error con .status si falla el proveedor.
+// Traduce errores del proveedor a un mensaje claro para el usuario final.
+function aiFriendlyProviderError(status, msg) {
+  const m = String(msg || '');
+  const s = Number(status || 0);
+  const prefix = `Error del proveedor IA (${s}): `;
+  if (s === 429 || /quota|rate.?limit|exceeded/i.test(m)) {
+    return prefix + 'cuota agotada en el proveedor. Revisa tu plan o API key en Configuración → IA. Detalle: ' + m;
+  }
+  if (s === 400 || s === 401 || /api key|apikey|invalid_argument|authentication/i.test(m)) {
+    return prefix + 'la API key registrada no es válida para este proveedor. Actualízala en Configuración → IA. Detalle: ' + m;
+  }
+  if (s === 404) {
+    return prefix + 'el modelo o recurso solicitado no existe. Revisa el modelo configurado en Configuración → IA. Detalle: ' + m;
+  }
+  return prefix + m;
+}
+
+// Ejecuta una llamada al proveedor (formato OpenAI-compatible) con tracking de consumo.
+// Devuelve { content, model, baseUrl, raw } y lanza Error con .status si falla el proveedor.
 async function aiProviderRequest(provider, body, apiKey) {
   const key = String(apiKey || (provider && provider.apiKey) || process.env.AI_API_KEY || '').trim();
   if (!key) {
@@ -7894,9 +7913,15 @@ async function aiProviderRequest(provider, body, apiKey) {
   });
   const aiJson = await aiRes.json().catch(() => ({}));
   if (!aiRes.ok) {
-    const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
-    const e = new Error(`Error del proveedor IA (${aiRes.status}): ${aiErr}`);
+    // El proveedor puede devolver el error como objeto o como array [{error:{...}}] (caso Gemini)
+    const rawErr =
+      (aiJson && aiJson.error && (aiJson.error.message || JSON.stringify(aiJson.error))) ||
+      (Array.isArray(aiJson) && aiJson[0] && aiJson[0].error && (aiJson[0].error.message || JSON.stringify(aiJson[0].error))) ||
+      aiRes.statusText ||
+      'unknown';
+    const e = new Error(aiFriendlyProviderError(aiRes.status, String(rawErr)));
     e.status = aiRes.status || 502;
+    e.providerMessage = String(rawErr);
     throw e;
   }
   const content = aiJson?.choices?.[0]?.message?.content || '';
@@ -8180,7 +8205,7 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
           baseUrl: (p.baseUrl !== undefined && p.baseUrl !== null) ? String(p.baseUrl).trim() : (prev.baseUrl || ''),
           enabled: p.enabled !== undefined ? Boolean(p.enabled) : (prev.enabled !== false),
           apiKey: (p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim() : (prev.apiKey || ''),
-          apiKeyHint: prev.apiKeyHint || (p.apiKey && String(p.apiKey).trim() ? String(p.apiKey).trim().slice(-4) : ''),
+          apiKeyHint: (p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim().slice(-4) : (prev.apiKeyHint || ''),
           createdAt: prev.createdAt || existing.updatedAt || new Date().toISOString()
         };
       });
@@ -8197,7 +8222,7 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
         baseUrl: baseUrl !== undefined ? String(baseUrl).trim() : (prev.baseUrl || ''),
         enabled,
         apiKey: (apiKey && String(apiKey).trim()) ? String(apiKey).trim() : (prev.apiKey || ''),
-        apiKeyHint: prev.apiKeyHint || (apiKey && String(apiKey).trim() ? String(apiKey).trim().slice(-4) : ''),
+        apiKeyHint: (apiKey && String(apiKey).trim()) ? String(apiKey).trim().slice(-4) : (prev.apiKeyHint || ''),
         createdAt: prev.createdAt || existing.updatedAt || new Date().toISOString()
       }];
     }

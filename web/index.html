@@ -11354,6 +11354,13 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
     }
+    function aiKeyPlaceholder(provider, hasKey) {
+      if (hasKey) return '••••••• (vacío conserva la actual)';
+      if (provider === 'gemini') return 'AIza... o AQ... (clave de Google AI)';
+      if (provider === 'deepseek') return 'sk-... (clave DeepSeek)';
+      if (provider === 'custom') return 'clave de tu proveedor';
+      return 'sk-... (clave OpenAI)';
+    }
     function aiProviderRowHTML(p) {
       p = p || {};
       const provider = p.provider || 'openai';
@@ -11366,7 +11373,7 @@
           '<div style="flex:1;min-width:150px;"><label>Proveedor</label><select class="ai-p-provider" style="min-height:38px;">' + opts + '</select></div>' +
           '<div style="flex:1;min-width:180px;"><label>Modelo</label><input class="ai-p-model" value="' + aiEsc(p.model || '') + '" placeholder="gpt-4o-mini / deepseek-chat / gemini-2.0-flash"></div>' +
           '<div style="flex:1;min-width:180px;"><label>URL base (solo custom)</label><input class="ai-p-base" value="' + aiEsc(p.baseUrl || '') + '" placeholder="https://..."></div>' +
-          '<div style="flex:1;min-width:200px;"><label>API Key</label><input class="ai-p-key" type="password" autocomplete="off" placeholder="' + (p.hasKey ? '••••••• (vacío conserva la actual)' : 'sk-...') + '"></div>' +
+          '<div style="flex:1;min-width:200px;"><label>API Key</label><input class="ai-p-key" type="password" autocomplete="off" placeholder="' + aiKeyPlaceholder(provider, p.hasKey) + '"></div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;">' +
           '<label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--text);"><input type="checkbox" class="ai-p-enabled" style="width:18px;height:18px;min-height:18px;"' + (p.enabled === false ? '' : ' checked') + '> Usar esta IA</label>' +
@@ -11385,6 +11392,8 @@
       if (sel) sel.addEventListener('change', function () {
         const base = row.querySelector('.ai-p-base');
         if (base) base.placeholder = sel.value === 'custom' ? 'https://mi-servidor-ia.com/v1' : 'Se usa automáticamente';
+        const keyInp = row.querySelector('.ai-p-key');
+        if (keyInp) keyInp.placeholder = aiKeyPlaceholder(sel.value, Boolean(keyInp.value.trim()));
       });
       const rm = row.querySelector('.ai-p-remove');
       if (rm) rm.addEventListener('click', function () {

@@ -3264,6 +3264,17 @@
           return data;
         } catch (e) {
           console.warn('[API] APK: sin servidor Express, endpoint no implementado:', path);
+          if (pathLower.includes('/api/ai/')) {
+            const hasSrv = !!(window.MartialMobile && window.MartialMobile.getServerUrl && window.MartialMobile.getServerUrl());
+            if (!hasSrv) {
+              // En modo Supabase Directo la IA necesita el servidor Express: abrir configuración híbrida
+              setTimeout(function () {
+                try { if (window.MartialMobile && window.MartialMobile.showConfig) window.MartialMobile.showConfig(); } catch (_) {}
+              }, 60);
+              throw new Error('Las funciones de IA requieren conectarse al servidor del sistema. Configura la URL del servidor en el diálogo "Configurar Servidor" que se acaba de abrir.');
+            }
+            throw new Error('No se pudo conectar al servidor (' + e.message + '). Verifica la URL del servidor en Configuración.');
+          }
           throw new Error('Endpoint no disponible en modo APK: ' + path);
         }
       }

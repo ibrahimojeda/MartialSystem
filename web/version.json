@@ -1,13 +1,13 @@
 {
-  "version": "2.10.2",
-  "buildNumber": 18,
-  "message": "Gestión de API keys de IAs mejorada en Configuración: botón para borrar una key individual (conservando el proveedor), y se permite eliminar la última key con confirmación. Consulta al asistente sigue normal con la key de Gemini.",
-  "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.2.apk",
+  "version": "2.10.3",
+  "buildNumber": 19,
+  "message": "APK: ahora las funciones de IA (API keys, chat y consumo) detectan el modo sin servidor y abren automáticamente el diálogo \"Configurar Servidor\" para conectarse al sistema. En modo híbrido (servidor conectado) ya se pueden agregar y eliminar API keys de varias IAs.",
+  "forceUpdate": true,
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.3.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "Configuración IA: botón \"Borrar key\" por proveedor (elimina solo la clave, mantiene el proveedor en la lista)",
-    "Configuración IA: se permite eliminar la última API key con confirmación si se desea desactivar la IA",
-    "Soporte en el servidor para clearKey y rotación automática cuando hay varias IAs activas"
+    "APK: mensaje claro y diálogo automático \"Configurar Servidor\" cuando se usa la IA sin servidor conectado",
+    "APK: explicación del modo híbrido para que las API keys y el consumo de IA funcionen en el móvil",
+    "Configuración IA: gestiona varias IAs (agregar, borrar key, quitar proveedor) desde el servidor conectado"
   ]
 }

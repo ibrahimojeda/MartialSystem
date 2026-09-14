@@ -1,15 +1,15 @@
 {
-  "version": "2.9.0",
-  "buildNumber": 15,
-  "message": "OPCIÓN B: al iniciar sesión la IA contesta automáticamente con el resumen del usuario (datos + pagos + mensajes de comunicación). Para el superadmin, la IA redacta el resumen global con los datos reales del antiguo dashboard. El Dashboard clásico se sustituye por el cuadro del Asistente IA.",
+  "version": "2.10.0",
+  "buildNumber": 16,
+  "message": "Configuración de IAs: API keys de varios proveedores (OpenAI, DeepSeek, Gemini, Custom) solo visibles para superadmin + panel de consumo de las IAs (llamadas, tokens y costo estimado en USD). Incluye corrección de advertencias de consola y búsquedas más rápidas.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.9.0.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.0.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "Resumen de bienvenida automático de la IA al iniciar sesión (Opción B)",
-    "Roles normales: el servidor prepara el resumen (perfil + pagos + mensajes) con tono de la IA",
-    "Superadmin: la IA redacta el resumen global con los datos reales del antiguo dashboard",
-    "Los mensajes del módulo de comunicación se muestran al inicio; se responden en Comunidad o vía la IA",
-    "El Dashboard clásico se reemplaza por el cuadro del Asistente IA; los módulos siguen en la barra lateral"
+    "Configuración de API keys de varias IAs en Configuración (solo superadmin): OpenAI, DeepSeek, Gemini y Custom, con reparto automático de llamadas entre las activas",
+    "Panel de consumo de las IAs: llamadas, tokens de entrada/salida, costo estimado (USD) por proveedor, totales y consumo de hoy",
+    "API keys y datos de consumo protegidos: solo el superadmin puede verlos (servidor con 403 + tarjetas ocultas para otros roles)",
+    "Corrección: campos de API key/password ahora están dentro de formularios (se elimina la advertencia de consola)",
+    "Corrección: buscadores de la Vista Maestra de Datos filtran en cliente al instante, sin recargar la API en cada tecla"
   ]
 }

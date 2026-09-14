@@ -182,6 +182,13 @@ class RoleAuditEngine {
     // ─── Settings ───
     { method: 'GET',  path: '/api/settings',                   roles: { superadmin: 200, owner: 200, sensei: 200, admin: 200, instructor: 403, guardian: 403, student: 403 } },
     { method: 'PUT',  path: '/api/settings',                   roles: { superadmin: 200, owner: 200, sensei: 200, admin: 200, instructor: 403, guardian: 403, student: 403 } },
+
+    // ─── IA (claves y consumo: SOLO superadmin; status para todos) ───
+    { method: 'GET',  path: '/api/ai/config',                  roles: { superadmin: 200, owner: 403, sensei: 403, admin: 403, instructor: 403, guardian: 403, student: 403 } },
+    { method: 'PUT',  path: '/api/ai/config',                  roles: { superadmin: 200, owner: 403, sensei: 403, admin: 403, instructor: 403, guardian: 403, student: 403 } },
+    { method: 'GET',  path: '/api/ai/usage',                   roles: { superadmin: 200, owner: 403, sensei: 403, admin: 403, instructor: 403, guardian: 403, student: 403 } },
+    { method: 'DELETE',path: '/api/ai/usage',                  roles: { superadmin: 200, owner: 403, sensei: 403, admin: 403, instructor: 403, guardian: 403, student: 403 } },
+    { method: 'GET',  path: '/api/ai/status',                  roles: { all: 200 } },
   ];
 
   // ══════════════════════════════════════════════════════════════

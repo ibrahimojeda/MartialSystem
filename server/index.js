@@ -7761,7 +7761,7 @@ const getAIConfig = async () => {
   // 1) Prioridad: archivo local del servidor (100% fiable, sin depender de Supabase)
   try {
     const local = readJsonStore(AI_CONFIG_PATH, null);
-    if (local && typeof local === 'object' && local.apiKey !== undefined) return local;
+    if (local && typeof local === 'object' && (local.apiKey !== undefined || Array.isArray(local.providers))) return local;
   } catch (_) { /* ignorar */ }
   // 2) Respaldo: tabla app_settings de Supabase
   try {
@@ -7779,16 +7779,43 @@ const getAIConfig = async () => {
   return { provider: 'openai', model: 'gpt-4o-mini', enabled: false, apiKey: '', apiKeyHint: '' };
 };
 
+// Normaliza la config: SIEMPRE expone providers (lista). Si viene formato legacy
+// (apiKey único), lo migra a providers con un solo elemento.
+function aiNormalizeConfig(cfg) {
+  if (!cfg || typeof cfg !== 'object') cfg = {};
+  let providers = Array.isArray(cfg.providers) ? cfg.providers.slice() : [];
+  if (!providers.length && cfg.apiKey) {
+    providers = [{
+      id: cfg.id || 'p1',
+      provider: cfg.provider || 'openai',
+      model: cfg.model || '',
+      baseUrl: cfg.baseUrl || '',
+      enabled: cfg.enabled !== undefined ? Boolean(cfg.enabled) : true,
+      apiKey: cfg.apiKey || '',
+      apiKeyHint: cfg.apiKeyHint || (cfg.apiKey ? String(cfg.apiKey).slice(-4) : ''),
+      createdAt: cfg.updatedAt || new Date().toISOString()
+    }];
+  }
+  return { ...cfg, providers, enabled: cfg.enabled !== undefined ? Boolean(cfg.enabled) : true };
+}
+
 const saveAIConfig = async (cfg) => {
+  const norm = aiNormalizeConfig(cfg);
   const value = {
-    provider: cfg.provider || 'openai',
-    baseUrl: cfg.baseUrl || '',
-    model: cfg.model || '',
-    enabled: cfg.enabled !== undefined ? Boolean(cfg.enabled) : true,
-    apiKey: cfg.apiKey || '',
-    apiKeyHint: cfg.apiKey ? String(cfg.apiKey).slice(-4) : (cfg.apiKeyHint || ''),
+    providers: norm.providers,
+    enabled: norm.enabled !== undefined ? Boolean(norm.enabled) : true,
     updatedAt: new Date().toISOString()
   };
+  // Compat: sigue exponiendo el primer provider como "actual" para código viejo
+  const p0 = norm.providers[0];
+  if (p0) {
+    value.provider = p0.provider || 'openai';
+    value.baseUrl = p0.baseUrl || '';
+    value.model = p0.model || '';
+    value.enabled = value.enabled;
+    value.apiKey = p0.apiKey || '';
+    value.apiKeyHint = p0.apiKeyHint || '';
+  }
   // 1) Guardar SIEMPRE en archivo local (garantiza persistencia)
   try { writeJsonStore(AI_CONFIG_PATH, value); } catch (_) { /* best-effort */ }
   // 2) Sincronizar a Supabase (best-effort, no bloquea si falla)
@@ -7802,9 +7829,180 @@ const saveAIConfig = async (cfg) => {
   return value;
 };
 
-const getAIEffectiveKey = (cfg) => String(cfg.apiKey || process.env.AI_API_KEY || '').trim();
-const getAIBaseUrl = (cfg) => String(cfg.baseUrl || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].baseUrl) || AI_PROVIDERS.openai.baseUrl).trim();
-const getAIModel = (cfg) => String(cfg.model || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].defaultModel) || AI_PROVIDERS.openai.defaultModel).trim();
+const getAIEffectiveKey = (cfg) => String((cfg && cfg.apiKey) || process.env.AI_API_KEY || '').trim();
+const getAIBaseUrl = (cfg) => String((cfg && (cfg.baseUrl || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].baseUrl))) || AI_PROVIDERS.openai.baseUrl).trim();
+const getAIModel = (cfg) => String((cfg && (cfg.model || (AI_PROVIDERS[cfg.provider] && AI_PROVIDERS[cfg.provider].defaultModel))) || AI_PROVIDERS.openai.defaultModel).trim();
+// Devuelve la lista de providers habilitados con key.
+function aiGetProviders(cfg) {
+  const norm = aiNormalizeConfig(cfg);
+  return (norm.providers || []).filter(p => p && p.enabled !== false && String(p.apiKey || '').trim());
+}
+
+// Puntero de rotación (round-robin)
+let _aiRRIndex = -1;
+function aiNextProvider(list) {
+  if (!list || !list.length) return null;
+  _aiRRIndex = (_aiRRIndex + 1) % list.length;
+  return list[_aiRRIndex];
+}
+
+// ¿Hay al menos una IA configurada (con key y habilitada)?
+function aiHasConfiguredProvider(cfg) {
+  const norm = aiNormalizeConfig(cfg);
+  return (norm.providers || []).some(p => p && p.enabled !== false && String(p.apiKey || '').trim());
+}
+
+// Selecciona la IA activa para la siguiente llamada.
+// Con varias IAs, reparte las llamadas entre ellas (round-robin).
+function aiSelectProvider(cfg) {
+  const norm = aiNormalizeConfig(cfg);
+  const active = (norm.providers || []).filter(p => p && p.enabled !== false && String(p.apiKey || '').trim());
+  if (!active.length) return null;
+  if (active.length === 1) return active[0];
+  _aiRRIndex = (_aiRRIndex + 1) % active.length;
+  return active[_aiRRIndex];
+}
+
+function aiProviderBaseUrl(p) {
+  const b = String((p && p.baseUrl) || '').trim();
+  if (b) return b;
+  const def = p && AI_PROVIDERS[p.provider];
+  return (def && def.baseUrl) || AI_PROVIDERS.openai.baseUrl;
+}
+function aiProviderModel(p) {
+  const m = String((p && p.model) || '').trim();
+  if (m) return m;
+  const def = p && AI_PROVIDERS[p.provider];
+  return (def && def.defaultModel) || AI_PROVIDERS.openai.defaultModel;
+}
+
+// Ejecuta una llamada al proveedor (formato OpenAI-compatible) con tracking de consumo.
+// Devuelve { content, model, baseUrl, raw } y lanza Error con .status si falla el proveedor.
+async function aiProviderRequest(provider, body, apiKey) {
+  const key = String(apiKey || (provider && provider.apiKey) || process.env.AI_API_KEY || '').trim();
+  if (!key) {
+    const e = new Error('AI no configurada. El superadmin debe colocar el API key en Configuración → IA.');
+    e.code = 'AI_NOT_CONFIGURED';
+    throw e;
+  }
+  const baseUrl = aiProviderBaseUrl(provider);
+  const model = aiProviderModel(provider);
+  const aiRes = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify(Object.assign({ model, temperature: 0.4, max_tokens: 1024 }, body || {}))
+  });
+  const aiJson = await aiRes.json().catch(() => ({}));
+  if (!aiRes.ok) {
+    const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
+    const e = new Error(`Error del proveedor IA (${aiRes.status}): ${aiErr}`);
+    e.status = aiRes.status || 502;
+    throw e;
+  }
+  const content = aiJson?.choices?.[0]?.message?.content || '';
+  aiTrackUsage(
+    (provider && provider.id) || ((provider && provider.provider) ? provider.provider + '-' + model : 'p1'),
+    (provider && AI_PROVIDERS[provider.provider]) ? AI_PROVIDERS[provider.provider].label : (provider ? provider.provider : 'openai'),
+    model,
+    aiJson?.usage || {}
+  );
+  return { content, model, baseUrl, raw: aiJson };
+}
+
+// ── Registro de consumo por IA (persistente en data/ai-usage.json) ──
+const AI_USAGE_PATH = path.join(__dirname, '..', 'data', 'ai-usage.json');
+
+// Precios de referencia por proveedor (USD por 1K tokens) para estimar costo.
+// Solo informativo: el proveedor factura según su propia tarifa vigente.
+const AI_MODEL_PRICES = {
+  'gpt-4o-mini':       { in: 0.00015, out: 0.00060 },
+  'gpt-4o':            { in: 0.00250, out: 0.01000 },
+  'gpt-4-turbo':       { in: 0.01000, out: 0.03000 },
+  'deepseek-chat':     { in: 0.00027, out: 0.00110 },
+  'deepseek-reasoner': { in: 0.00055, out: 0.00219 },
+  'gemini-2.0-flash':  { in: 0.00010, out: 0.00040 },
+  'gemini-1.5-flash':  { in: 0.000075, out: 0.00030 },
+  'gemini-2.5-flash':  { in: 0.00030, out: 0.00250 },
+  'gemini-3.5-flash':  { in: 0.00030, out: 0.00250 },
+  'gemini-3.6-flash':  { in: 0.00030, out: 0.00250 }
+};
+function aiEstimateTokenCost(model, pt, ct) {
+  const m = String(model || '').toLowerCase();
+  let price = AI_MODEL_PRICES[m];
+  if (!price) {
+    if (m.includes('gpt-4o-mini')) price = AI_MODEL_PRICES['gpt-4o-mini'];
+    else if (m.includes('deepseek')) price = AI_MODEL_PRICES['deepseek-chat'];
+    else if (m.includes('gemini')) price = AI_MODEL_PRICES['gemini-2.0-flash'];
+    else return 0; // custom / desconocido → sin estimación
+  }
+  return (Number(pt || 0) / 1000) * price.in + (Number(ct || 0) / 1000) * price.out;
+}
+
+function aiUsageEmpty() {
+  return {
+    providers: {},
+    totals: { calls: 0, tokens: 0, promptTokens: 0, completionTokens: 0, estCost: 0 },
+    byDay: {},
+    updatedAt: null
+  };
+}
+function aiLoadUsage() {
+  try {
+    const u = readJsonStore(AI_USAGE_PATH, null);
+    if (!u || typeof u !== 'object') return aiUsageEmpty();
+    // Compat: formato legacy { p1: {calls,...} } → migrar a estructura nueva
+    if (!u.providers && u.totals === undefined) {
+      return { ...aiUsageEmpty(), providers: u, updatedAt: u.updatedAt || null };
+    }
+    return {
+      providers: u.providers || {},
+      totals: Object.assign(aiUsageEmpty().totals, u.totals || {}),
+      byDay: u.byDay || {},
+      updatedAt: u.updatedAt || null
+    };
+  } catch (_) { return aiUsageEmpty(); }
+}
+function aiTrackUsage(providerId, providerLabel, model, usageJson) {
+  try {
+    if (!providerId) return;
+    const st = aiLoadUsage();
+    const id = String(providerId);
+    const u = usageJson || {};
+    const pt = Number(u.prompt_tokens || 0) || 0;
+    const ct = Number(u.completion_tokens || 0) || 0;
+    const now = new Date().toISOString();
+    const day = now.slice(0, 10);
+    const cost = aiEstimateTokenCost(model, pt, ct);
+
+    const entry = st.providers[id] || { calls: 0, tokens: 0, promptTokens: 0, completionTokens: 0, estCost: 0, lastUsed: null, provider: providerLabel || 'openai', model: model || '' };
+    entry.calls += 1;
+    entry.tokens += (pt + ct);
+    entry.promptTokens += pt;
+    entry.completionTokens += ct;
+    entry.estCost += cost;
+    entry.lastUsed = now;
+    if (providerLabel) entry.provider = providerLabel;
+    if (model) entry.model = model;
+    st.providers[id] = entry;
+
+    st.totals.calls += 1;
+    st.totals.tokens += (pt + ct);
+    st.totals.promptTokens += pt;
+    st.totals.completionTokens += ct;
+    st.totals.estCost += cost;
+
+    if (!st.byDay[day]) st.byDay[day] = { calls: 0, tokens: 0, estCost: 0 };
+    st.byDay[day].calls += 1;
+    st.byDay[day].tokens += (pt + ct);
+    st.byDay[day].estCost += cost;
+
+    st.updatedAt = now;
+    writeJsonStore(AI_USAGE_PATH, st);
+  } catch (_) { /* best-effort */ }
+}
+function aiResetUsage() {
+  try { writeJsonStore(AI_USAGE_PATH, aiUsageEmpty()); } catch (_) { /* best-effort */ }
+}
 
 // Verifica si el plan del establecimiento incluye IA (Fase 1: gating por plan).
 const hasAIFeature = async (establishmentId) => {
@@ -7917,38 +8115,137 @@ async function buildAIContext(req, establishmentId) {
 
 /* AI_CHAT_200 */
 
-// GET /api/ai/config — Superadmin lee la config de IA (nunca devuelve la key completa)
+// GET /api/ai/config — Superadmin lee la config de IA (nunca devuelve las keys completas)
 app.get('/api/ai/config', requireAuth, async (req, res) => {
   if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
   try {
     const cfg = await getAIConfig();
+    const norm = aiNormalizeConfig(cfg);
+    const providers = (norm.providers || []).map(p => ({
+      id: p.id || (p.provider + '-p'),
+      provider: p.provider || 'openai',
+      model: p.model || '',
+      baseUrl: p.baseUrl || '',
+      enabled: p.enabled !== false,
+      hasKey: Boolean(String(p.apiKey || '').trim() || (cfg.fromEnv && !(norm.providers || []).length)),
+      apiKeyHint: p.apiKeyHint || (p.apiKey ? String(p.apiKey).slice(-4) : ''),
+      fromEnv: Boolean(p.fromEnv || (cfg.fromEnv && !(norm.providers || []).length))
+    }));
+    const first = providers[0] || {};
     return res.json({ ok: true, data: {
-      provider: cfg.provider || 'openai',
-      baseUrl: cfg.baseUrl || '',
-      model: cfg.model || '',
       enabled: Boolean(cfg.enabled),
-      hasKey: Boolean(getAIEffectiveKey(cfg)),
-      apiKeyHint: cfg.apiKeyHint || '',
-      fromEnv: Boolean(cfg.fromEnv)
+      updatedAt: cfg.updatedAt || null,
+      hasKey: aiHasConfiguredProvider(cfg),
+      apiKeyHint: first.apiKeyHint || cfg.apiKeyHint || '',
+      fromEnv: Boolean(first.fromEnv || cfg.fromEnv),
+      // Compat: primer provider como "actual" para código viejo
+      provider: first.provider || cfg.provider || 'openai',
+      baseUrl: first.baseUrl || cfg.baseUrl || '',
+      model: first.model || cfg.model || '',
+      providers
     }});
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// PUT /api/ai/config — Superadmin guarda la config (apiKey opcional; vacía conserva la existente)
+// PUT /api/ai/config — Superadmin guarda la config.
+// Soporta providers[] (varias IAs) o formato legado de un solo par.
+// apiKey vacío en un provider conserva la key existente de ese provider.
 app.put('/api/ai/config', requireAuth, async (req, res) => {
   if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
   try {
-    const { provider, baseUrl, model, enabled, apiKey } = req.body || {};
+    const incoming = req.body || {};
     const existing = await getAIConfig();
-    const cfg = await saveAIConfig({
-      provider: provider || existing.provider || 'openai',
-      baseUrl: baseUrl !== undefined ? baseUrl : (existing.baseUrl || ''),
-      model: model !== undefined ? model : (existing.model || ''),
-      enabled: enabled !== undefined ? enabled : existing.enabled,
-      apiKey: (apiKey && String(apiKey).trim()) ? String(apiKey).trim() : (existing.apiKey || ''),
-      apiKeyHint: existing.apiKeyHint || ''
-    });
-    return res.json({ ok: true, data: { provider: cfg.provider, model: cfg.model, enabled: cfg.enabled, hasKey: Boolean(getAIEffectiveKey(cfg)), apiKeyHint: cfg.apiKeyHint } });
+    const norm = aiNormalizeConfig(existing);
+    const prevMap = new Map((norm.providers || []).map(p => [String(p.id || p.provider), p]));
+
+    let providers;
+    let enabled;
+    if (Array.isArray(incoming.providers)) {
+      const used = new Set();
+      providers = incoming.providers.map((p, idx) => {
+        p = p || {};
+        const prev = prevMap.get(String(p.id || p.provider)) || {};
+        let id = String(p.id || '').trim();
+        if (!id) {
+          const slug = String(p.provider || prev.provider || 'openai');
+          id = slug;
+          let n = 2;
+          while (used.has(id)) id = slug + '-' + (n++);
+        }
+        used.add(id);
+        return {
+          id,
+          provider: String(p.provider || prev.provider || 'openai'),
+          model: (p.model !== undefined && p.model !== null) ? String(p.model).trim() : (prev.model || ''),
+          baseUrl: (p.baseUrl !== undefined && p.baseUrl !== null) ? String(p.baseUrl).trim() : (prev.baseUrl || ''),
+          enabled: p.enabled !== undefined ? Boolean(p.enabled) : (prev.enabled !== false),
+          apiKey: (p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim() : (prev.apiKey || ''),
+          apiKeyHint: prev.apiKeyHint || (p.apiKey && String(p.apiKey).trim() ? String(p.apiKey).trim().slice(-4) : ''),
+          createdAt: prev.createdAt || existing.updatedAt || new Date().toISOString()
+        };
+      });
+      enabled = incoming.enabled !== undefined ? Boolean(incoming.enabled) : norm.enabled;
+    } else {
+      // Compat legado: un solo par (provider/model/baseUrl/apiKey)
+      const { provider, baseUrl, model, enabled: en, apiKey } = incoming;
+      enabled = en !== undefined ? Boolean(en) : norm.enabled;
+      const prev = (norm.providers && norm.providers[0]) ? norm.providers[0] : {};
+      providers = [{
+        id: prev.id || 'p1',
+        provider: provider || prev.provider || 'openai',
+        model: model !== undefined ? String(model).trim() : (prev.model || ''),
+        baseUrl: baseUrl !== undefined ? String(baseUrl).trim() : (prev.baseUrl || ''),
+        enabled,
+        apiKey: (apiKey && String(apiKey).trim()) ? String(apiKey).trim() : (prev.apiKey || ''),
+        apiKeyHint: prev.apiKeyHint || (apiKey && String(apiKey).trim() ? String(apiKey).trim().slice(-4) : ''),
+        createdAt: prev.createdAt || existing.updatedAt || new Date().toISOString()
+      }];
+    }
+
+    const cfg = await saveAIConfig({ providers, enabled });
+    return res.json({ ok: true, data: {
+      enabled: cfg.enabled,
+      hasKey: aiHasConfiguredProvider(cfg),
+      apiKeyHint: cfg.apiKeyHint || '',
+      providers: (cfg.providers || []).map(p => ({
+        id: p.id,
+        provider: p.provider,
+        model: p.model,
+        enabled: p.enabled !== false,
+        hasKey: Boolean(String(p.apiKey || '').trim()),
+        apiKeyHint: p.apiKeyHint || ''
+      }))
+    }});
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// GET /api/ai/usage — Superadmin consulta el consumo acumulado de las IAs.
+app.get('/api/ai/usage', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+  try {
+    const st = aiLoadUsage();
+    const providers = Object.entries(st.providers || {})
+      .map(([id, e]) => ({ id, ...e }))
+      .sort((a, b) => String(b.lastUsed || '').localeCompare(String(a.lastUsed || '')));
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const today = st.byDay[todayKey] || { calls: 0, tokens: 0, estCost: 0 };
+    // Últimos 7 días (tendencia ligera para el panel)
+    const lastDays = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+      lastDays.push({ day: k, ...(st.byDay[k] || { calls: 0, tokens: 0, estCost: 0 }) });
+    }
+    return res.json({ ok: true, data: { providers, totals: st.totals, today, lastDays, updatedAt: st.updatedAt } });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+
+// DELETE /api/ai/usage — Superadmin reinicia los contadores de consumo.
+app.delete('/api/ai/usage', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+  try {
+    aiResetUsage();
+    return res.json({ ok: true });
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -7980,7 +8277,7 @@ app.get('/api/ai/status', requireAuth, async (req, res) => {
       }
     }
     const enabled = Boolean(cfg.enabled);
-    const hasKey = Boolean(getAIEffectiveKey(cfg));
+    const hasKey = aiHasConfiguredProvider(cfg);
     const allowed = enabled && hasKey && planOk && !billing.severeOverdue;
     return res.json({ ok: true, data: { allowed, enabled, hasKey, planOk, role, establishmentId, billing } });
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
@@ -7998,7 +8295,8 @@ const AI_TOOLS = {
   students:      { label: 'Alumnos',        formId: 'student-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],  write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin'] },
   classes:       { label: 'Clases',         formId: 'class-form',        read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin', 'sensei'] },
   payments:      { label: 'Pagos',          formId: 'payment-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],     write: ['superadmin', 'owner', 'admin'],                             delete: ['superadmin', 'owner', 'admin'] },
-  notifications: { label: 'Notificaciones', formId: 'notification-form', read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: [] }
+  notifications: { label: 'Notificaciones', formId: 'notification-form', read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: [] },
+  billing:       { label: 'Mensualidades/Facturas', formId: 'billing-form',  read: ['superadmin', 'owner', 'admin'],                                        write: [],                                          delete: [] }
 };
 
 const aiToolAllowed = (tool, role, mode) => {
@@ -8011,25 +8309,18 @@ const aiToolAllowed = (tool, role, mode) => {
 };
 
 // Llama a la IA con el formato de tu proveedor (OpenAI-compatible). Devuelve texto.
+// Usa el provider indicado en opts.provider, o selecciona el activo de la config.
 async function aiCallLLM(cfg, apiKey, messages, opts) {
-  const baseUrl = getAIBaseUrl(cfg);
-  const model = getAIModel(cfg);
-  const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify(Object.assign({
-      model,
-      messages,
-      temperature: 0.4,
-      max_tokens: 1024
-    }, opts || {}))
-  });
-  const aiJson = await aiRes.json().catch(() => ({}));
-  if (!aiRes.ok) {
-    const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
-    throw new Error(`Error del proveedor IA (${aiRes.status}): ${aiErr}`);
-  }
-  return aiJson?.choices?.[0]?.message?.content || '';
+  opts = opts || {};
+  const provider = opts.provider || aiSelectProvider(cfg);
+  const key = String(apiKey || (provider && provider.apiKey) || process.env.AI_API_KEY || '').trim();
+  if (!key) throw new Error('AI no configurada. El superadmin debe colocar el API key en Configuración → IA.');
+  const call = await aiProviderRequest(provider, {
+    messages,
+    temperature: opts.temperature !== undefined ? opts.temperature : 0.4,
+    max_tokens: opts.max_tokens !== undefined ? opts.max_tokens : 1024
+  }, key);
+  return call.content;
 }
 
 function aiParseJsonLoose(raw) {
@@ -8113,7 +8404,7 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
   }
 
   if (tool === 'payments') {
-    const sel = 'id,establishment_id,student_id,discipline_id,amount,currency,method,concept,paid_at,created_by,status';
+    const sel = 'id,establishment_id,student_id,discipline_id,amount,currency,method,concept,paid_at,created_by';
     let query = supabaseAdmin.from('payments').select(sel);
     if (!ctx.isSuperadmin && estId) query = query.eq('establishment_id', estId);
     if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
@@ -8137,7 +8428,43 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
       const { data: slist } = await supabaseAdmin.from('students').select('id,full_name').in('id', studentIds);
       (slist || []).forEach(s => { stuMap[s.id] = s; });
     }
-    return { rows: rows.map(r => ({ id: r.id, student_id: r.student_id, student_name: stuMap[r.student_id] ? stuMap[r.student_id].full_name : null, amount: r.amount, currency: r.currency, method: r.method, concept: r.concept, paid_at: r.paid_at, discipline_code: disc || null, establishment_id: r.establishment_id, status: r.status })), meta: { count: rows.length, query: q } };
+    return { rows: rows.map(r => ({ id: r.id, student_id: r.student_id, student_name: stuMap[r.student_id] ? stuMap[r.student_id].full_name : null, amount: r.amount, currency: r.currency, method: r.method, concept: r.concept, paid_at: r.paid_at, discipline_code: disc || null, establishment_id: r.establishment_id })), meta: { count: rows.length, query: q } };
+  }
+
+  if (tool === 'billing') {
+    // Mensualidades de los dojos (system_usage_bills) con el nombre del establecimiento.
+    const sel = 'id,establishment_id,billing_month,plan_code,amount,currency,status,due_date,paid_at,confirmed_at,establishments(name)';
+    let query = supabaseAdmin.from('system_usage_bills').select(sel);
+    if (!ctx.isSuperadmin && estId) query = query.eq('establishment_id', estId);
+    const st = String((params && (params.status || params.estado)) || '').trim().toLowerCase();
+    if (st) query = query.eq('status', st);
+    const { data, error } = await query.order('due_date', { ascending: false }).limit(MAX);
+    if (error) throw new Error(error.message);
+    const rows = data || [];
+    const now = new Date();
+    return {
+      rows: rows.map(b => {
+        const due = b.due_date ? new Date(String(b.due_date).slice(0, 10)) : null;
+        const daysOverdue = b.status && b.status !== 'paid' && b.status !== 'confirmed' && b.status !== 'waived' && due
+          ? Math.max(0, Math.floor((now.getTime() - due.getTime()) / 86400000))
+          : null;
+        return {
+          id: b.id,
+          dojo: (b.establishments && b.establishments.name) || b.establishment_id,
+          establishment_id: b.establishment_id,
+          billing_month: b.billing_month,
+          plan_code: b.plan_code,
+          amount: b.amount,
+          currency: b.currency || 'USD',
+          status: b.status,
+          due_date: b.due_date,
+          paid_at: b.paid_at,
+          confirmed_at: b.confirmed_at,
+          days_overdue: daysOverdue
+        };
+      }),
+      meta: { count: rows.length, query: q }
+    };
   }
 
   if (tool === 'notifications') {
@@ -8272,8 +8599,8 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
   try {
     const profileId = req.authUser.id;
     const cfg = await getAIConfig();
-    const apiKey = getAIEffectiveKey(cfg);
-    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    const activeProvider = aiSelectProvider(cfg);
+    if (!activeProvider) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
     if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
 
     const { message, establishmentId } = req.body || {};
@@ -8302,8 +8629,6 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       }
     }
 
-    const baseUrl = getAIBaseUrl(cfg);
-    const model = getAIModel(cfg);
     const aiRole = await getAIContextRole(req, establishmentId);
     const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
     const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
@@ -8326,22 +8651,13 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     } catch (_) { /* sin memoria */ }
     messages.push({ role: 'user', content: String(message) });
 
-    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.4,
-        max_tokens: 1024
-      })
-    });
-    const aiJson = await aiRes.json().catch(() => ({}));
-    if (!aiRes.ok) {
-      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
-      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+    let aiCall;
+    try {
+      aiCall = await aiProviderRequest(activeProvider, { messages, temperature: 0.4, max_tokens: 1024 });
+    } catch (aiErr) {
+      return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
     }
-    const rawContent = aiJson?.choices?.[0]?.message?.content || '';
+    const rawContent = aiCall.content;
     if (!rawContent) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
 
     // ── Fase A: detección de herramienta (formato <<<TOOL>>>{json} al final) ──
@@ -8384,10 +8700,10 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
               rows
             ].join('\n');
             try {
-              content = await aiCallLLM(cfg, apiKey, [
+              content = await aiCallLLM(cfg, null, [
                 { role: 'system', content: secondSystem },
                 { role: 'user', content: secondUser }
-              ], { temperature: 0.3, max_tokens: 700 });
+              ], { temperature: 0.3, max_tokens: 700, provider: activeProvider });
             } catch (secondErr) {
               // Fallback: si el proveedor falla en la 2ª pasada, respondemos con los datos reales.
               content = rowsArr.length
@@ -8580,9 +8896,9 @@ app.post('/api/ai/welcome', requireAuth, async (req, res) => {
     if (role === 'superadmin') {
       const stats = await aiCollectSuperadminData();
       const cfg = await getAIConfig();
-      const apiKey = getAIEffectiveKey(cfg);
+      const activeProvider = aiSelectProvider(cfg);
 
-      if (apiKey && cfg.enabled) {
+      if (activeProvider && cfg.enabled) {
         // La IA redacta con los números REALES recolectados (nunca inventa).
         const system = [
           'Eres el asistente de MartialSystem. Responde el resumen de bienvenida para un superadministrador.',
@@ -8601,7 +8917,7 @@ app.post('/api/ai/welcome', requireAuth, async (req, res) => {
         ].join('\n');
         let content = '';
         try {
-          content = await aiCallLLM(cfg, apiKey, [{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.4, max_tokens: 700 });
+          content = await aiCallLLM(cfg, null, [{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.4, max_tokens: 700, provider: activeProvider });
         } catch (_) {
           content = '';
         }
@@ -8682,8 +8998,8 @@ app.post('/api/ai/welcome', requireAuth, async (req, res) => {
 app.post('/api/ai/draft', requireAuth, async (req, res) => {
   try {
     const cfg = await getAIConfig();
-    const apiKey = getAIEffectiveKey(cfg);
-    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    const activeProvider = aiSelectProvider(cfg);
+    if (!activeProvider) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
     if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
 
     const { formType, fields, establishmentId } = req.body || {};
@@ -8718,24 +9034,17 @@ app.post('/api/ai/draft', requireAuth, async (req, res) => {
       '- No envuelvas el JSON en markdown ni lo comentes.'
     ].join('\n');
 
-    const baseUrl = getAIBaseUrl(cfg);
-    const model = getAIModel(cfg);
-    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
+    let aiCall;
+    try {
+      aiCall = await aiProviderRequest(activeProvider, {
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         temperature: 0.4,
         max_tokens: 700
-      })
-    });
-    const aiJson = await aiRes.json().catch(() => ({}));
-    if (!aiRes.ok) {
-      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
-      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+      });
+    } catch (aiErr) {
+      return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
     }
-    let raw = aiJson?.choices?.[0]?.message?.content || '';
+    let raw = aiCall.content;
     raw = raw.replace(/```(json)?/gi, '').trim();
     let parsed = null;
     try { parsed = JSON.parse(raw); } catch (_) {
@@ -8758,8 +9067,8 @@ app.post('/api/ai/draft', requireAuth, async (req, res) => {
 app.post('/api/ai/explain', requireAuth, async (req, res) => {
   try {
     const cfg = await getAIConfig();
-    const apiKey = getAIEffectiveKey(cfg);
-    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    const activeProvider = aiSelectProvider(cfg);
+    if (!activeProvider) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
     if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
 
     const { reportType, data, establishmentId } = req.body || {};
@@ -8779,26 +9088,19 @@ app.post('/api/ai/explain', requireAuth, async (req, res) => {
       'No inventes cifras fuera de los datos entregados.'
     ].join('\n');
 
-    const baseUrl = getAIBaseUrl(cfg);
-    const model = getAIModel(cfg);
-    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
+    let aiCall;
+    try {
+      aiCall = await aiProviderRequest(activeProvider, {
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         temperature: 0.4,
         max_tokens: 500
-      })
-    });
-    const aiJson = await aiRes.json().catch(() => ({}));
-    if (!aiRes.ok) {
-      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
-      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+      });
+    } catch (aiErr) {
+      return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
     }
-    const content = aiJson?.choices?.[0]?.message?.content || '';
+    const content = aiCall.content;
     if (!content) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
-    return res.json({ ok: true, data: { content, model } });
+    return res.json({ ok: true, data: { content, model: aiCall.model } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'AI explain failed' });
   }
@@ -8809,8 +9111,8 @@ app.post('/api/ai/explain', requireAuth, async (req, res) => {
 app.post('/api/ai/mapping', requireAuth, async (req, res) => {
   try {
     const cfg = await getAIConfig();
-    const apiKey = getAIEffectiveKey(cfg);
-    if (!apiKey) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
+    const activeProvider = aiSelectProvider(cfg);
+    if (!activeProvider) return res.status(400).json({ ok: false, error: 'AI no configurada. El superadmin debe colocar el API key en Configuración → IA.' });
     if (!cfg.enabled) return res.status(400).json({ ok: false, error: 'La IA está desactivada. Actívala en Configuración → IA.' });
 
     const { targetTable, columns, sampleRows, establishmentId } = req.body || {};
@@ -8845,24 +9147,17 @@ app.post('/api/ai/mapping', requireAuth, async (req, res) => {
       '- Si te falta información esencial para decidir el mapeo, pon "question" (pregunta corta en español) y mappings mínimos.'
     ].join('\n');
 
-    const baseUrl = getAIBaseUrl(cfg);
-    const model = getAIModel(cfg);
-    const aiRes = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
+    let aiCall;
+    try {
+      aiCall = await aiProviderRequest(activeProvider, {
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         temperature: 0.3,
         max_tokens: 800
-      })
-    });
-    const aiJson = await aiRes.json().catch(() => ({}));
-    if (!aiRes.ok) {
-      const aiErr = (aiJson?.error && (aiJson.error.message || JSON.stringify(aiJson.error))) || aiRes.statusText || 'unknown';
-      return res.status(502).json({ ok: false, error: `Error del proveedor IA (${aiRes.status}): ${aiErr}` });
+      });
+    } catch (aiErr) {
+      return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
     }
-    let raw = aiJson?.choices?.[0]?.message?.content || '';
+    let raw = aiCall.content;
     raw = raw.replace(/```(json)?/gi, '').trim();
     let parsed = null;
     try { parsed = JSON.parse(raw); } catch (_) {

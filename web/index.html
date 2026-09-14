@@ -1014,7 +1014,9 @@
       <div id="ai-key-row" style="display:none;margin-bottom:10px;border:1px dashed var(--brand-2);border-radius:10px;padding:10px 12px;background:rgba(201,162,39,.05);">
         <label style="margin:0 0 4px;font-size:12px;color:var(--text);">🔑 <strong>API Key de la IA</strong> <span style="color:var(--muted);font-weight:400;">(se guarda solo en el servidor)</span></label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <input id="ai-key-inline" type="password" placeholder="sk-..." style="flex:1;min-width:220px;" autocomplete="off">
+          <form id="ai-key-form" onsubmit="return false;" autocomplete="off" style="display:contents;margin:0;flex:1;">
+            <input id="ai-key-inline" type="password" placeholder="sk-..." style="flex:1;min-width:220px;" autocomplete="off">
+          </form>
           <button class="btn" id="ai-key-save" type="button">Guardar key</button>
           <button class="btn alt" id="ai-key-test" type="button">Probar IA</button>
         </div>
@@ -2142,39 +2144,49 @@
         </div>
       </article>
 
-      <article class="card full" id="ai-config-card">
-        <h3>🤖 Asistente IA (Configuración) <span class="pill">Solo superadmin</span></h3>
-        <p class="muted">Coloca el API key del proveedor de IA que usará el sistema. La key se guarda solo en el servidor y nunca se muestra completa.</p>
-        <div class="row" style="gap:10px;align-items:end;flex-wrap:wrap;">
-          <div style="flex:1;min-width:180px;">
-            <label>Proveedor</label>
-            <select id="ai-provider" style="min-height:40px;">
-              <option value="openai">OpenAI</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="gemini">Google Gemini</option>
-              <option value="custom">Custom (OpenAI-compatible)</option>
-            </select>
-          </div>
-          <div style="flex:1;min-width:200px;">
-            <label>Modelo</label>
-            <input id="ai-model" placeholder="gpt-4o-mini / deepseek-chat / gemini-2.0-flash">
-          </div>
-          <div style="flex:1;min-width:220px;">
-            <label>API Key</label>
-            <input id="ai-api-key" type="password" placeholder="sk-... (vacío conserva la actual)" autocomplete="off">
-          </div>
-          <div style="flex:1;min-width:200px;">
-            <label>URL base (solo custom)</label>
-            <input id="ai-base-url" placeholder="https://...">
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap;">
+      <article class="card full" id="ai-config-card" style="display:none;">
+        <h3>🤖 API Keys de las IAs (Configuración) <span class="pill">Solo superadmin</span></h3>
+        <p class="muted">Registra las API keys de las IAs que trabajan en el sistema. Cada key se guarda solo en el servidor y nunca se muestra completa. Si activas varias, el sistema reparte las llamadas entre ellas automáticamente.</p>
+        <form id="ai-config-form" onsubmit="return false;" autocomplete="off" style="margin:0;">
+          <div id="ai-providers-list"><span class="muted">Cargando proveedores...</span></div>
+        </form>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+          <button class="btn alt" id="ai-provider-add" type="button">➕ Agregar proveedor</button>
           <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--text);">
             <input type="checkbox" id="ai-enabled" style="width:20px;height:20px;min-height:20px;"> Habilitar IA
           </label>
           <button class="btn" id="ai-config-save" type="button">Guardar configuración</button>
-          <button class="btn alt" id="ai-config-load" type="button">Cargar</button>
+          <button class="btn alt" id="ai-config-load" type="button">Recargar</button>
           <span class="muted" id="ai-config-status" style="font-size:12px;">Sin cambios</span>
+        </div>
+      </article>
+
+      <article class="card full" id="ai-usage-card" style="display:none;">
+        <h3>📊 Consumo de las IAs <span class="pill">Solo superadmin</span></h3>
+        <p class="muted">Llamadas, tokens y costo estimado (USD) por cada IA registrada. Los montos son aproximados según la tarifa pública por 1K tokens.</p>
+        <div style="overflow-x:auto;">
+          <table id="ai-usage-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:var(--bg-tertiary);color:var(--muted);text-align:left;">
+                <th style="padding:8px;">IA / Proveedor</th>
+                <th style="padding:8px;">Modelo</th>
+                <th style="padding:8px;">Llamadas</th>
+                <th style="padding:8px;">Tokens in</th>
+                <th style="padding:8px;">Tokens out</th>
+                <th style="padding:8px;">Total tokens</th>
+                <th style="padding:8px;">Costo est. (USD)</th>
+                <th style="padding:8px;">Último uso</th>
+              </tr>
+            </thead>
+            <tbody id="ai-usage-body">
+              <tr><td colspan="8" style="padding:10px;" class="muted">Sin datos todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
+          <button class="btn alt" id="ai-usage-refresh" type="button">🔄 Actualizar consumo</button>
+          <button class="btn alt" id="ai-usage-reset" type="button">♻️ Reiniciar contadores</button>
+          <span class="muted" id="ai-usage-status" style="font-size:12px;">Sin datos</span>
         </div>
       </article>
 
@@ -3355,6 +3367,10 @@
       }
       if (name === 'operacion' && state.accessToken) {
         showOperacionDashboard();
+      }
+      if (name === 'configuracion' && state.accessToken && window.aiIsSuperadmin && window.aiIsSuperadmin()) {
+        aiLoadConfig().catch(() => {});
+        aiLoadUsage().catch(() => {});
       }
     }
 
@@ -8106,6 +8122,11 @@
       btn.addEventListener('click', () => setCfgDataView(btn.dataset.cfgView));
     });
     setCfgDataView('users');
+    // Caché local de las vistas maestras: al escribir en el buscador se filtra
+    // en cliente (instantáneo) en vez de recargar la API en cada tecla.
+    let _cfgUsersCache = [];
+    let _cfgEstabsCache = [];
+    let _cfgOrgsCache = [];
 
     ids('cfg-users-load')?.addEventListener('click', async () => {
       try {
@@ -8156,13 +8177,16 @@
           return true;
         });
         renderCfgUsersTable(deduped);
+        _cfgUsersCache = deduped;
       } catch (err) {
         ids('cfg-users-wrap').innerHTML = `<span class="muted">${err.message}</span>`;
       }
     });
 
     ids('cfg-users-search')?.addEventListener('input', () => {
-      ids('cfg-users-load')?.click();
+      clearTimeout(window.__cfgUsersDebounce);
+      if (_cfgUsersCache.length) { renderCfgUsersTable(_cfgUsersCache); return; }
+      window.__cfgUsersDebounce = setTimeout(() => { ids('cfg-users-load')?.click(); }, 300);
     });
 
     ids('cfg-estabs-load')?.addEventListener('click', async () => {
@@ -8170,13 +8194,16 @@
         const result = await api('/api/establishments');
         const rows = Array.isArray(result?.data) ? result.data : [];
         renderCfgEstabsTable(rows);
+        _cfgEstabsCache = rows;
       } catch (err) {
         ids('cfg-estabs-wrap').innerHTML = `<span class="muted">${err.message}</span>`;
       }
     });
 
     ids('cfg-estabs-search')?.addEventListener('input', () => {
-      ids('cfg-estabs-load')?.click();
+      clearTimeout(window.__cfgEstabsDebounce);
+      if (_cfgEstabsCache.length) { renderCfgEstabsTable(_cfgEstabsCache); return; }
+      window.__cfgEstabsDebounce = setTimeout(() => { ids('cfg-estabs-load')?.click(); }, 300);
     });
 
     ids('cfg-orgs-load')?.addEventListener('click', async () => {
@@ -8210,13 +8237,16 @@
           byId.set(org.id, org);
         });
         renderCfgOrgsTable(Array.from(byId.values()));
+        _cfgOrgsCache = Array.from(byId.values());
       } catch (err) {
         ids('cfg-orgs-wrap').innerHTML = `<span class="muted">${err.message}</span>`;
       }
     });
 
     ids('cfg-orgs-search')?.addEventListener('input', () => {
-      ids('cfg-orgs-load')?.click();
+      clearTimeout(window.__cfgOrgsDebounce);
+      if (_cfgOrgsCache.length) { renderCfgOrgsTable(_cfgOrgsCache); return; }
+      window.__cfgOrgsDebounce = setTimeout(() => { ids('cfg-orgs-load')?.click(); }, 300);
     });
 
     ids('admin-load-members')?.addEventListener('click', async () => {
@@ -11318,16 +11348,84 @@
       const map = { superadmin: 'todo el sistema', owner: 'tu dojo (alumnos, pagos, clases)', admin: 'tu dojo', sensei: 'tus disciplinas y alumnos', instructor: 'tus alumnos y clases', student: 'tu progreso y asistencias', guardian: 'tu(s) estudiante(s)' };
       return map[role] || 'tus datos según tu rol';
     }
+    const AI_PROVIDER_LABELS = { openai: 'OpenAI', deepseek: 'DeepSeek', gemini: 'Google Gemini', custom: 'Custom (OpenAI-compatible)' };
+    function aiEsc(v) {
+      return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function aiProviderRowHTML(p) {
+      p = p || {};
+      const provider = p.provider || 'openai';
+      const opts = ['openai', 'deepseek', 'gemini', 'custom'].map(function (v) {
+        return '<option value="' + v + '"' + (v === provider ? ' selected' : '') + '>' + AI_PROVIDER_LABELS[v] + '</option>';
+      }).join('');
+      const hint = p.hasKey ? ('Key configurada (…' + (p.apiKeyHint || '') + ')' + (p.fromEnv ? ' · desde .env' : '')) : 'Sin key';
+      return '<div class="ai-provider-row" data-ai-id="' + aiEsc(p.id || '') + '" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;background:rgba(255,255,255,0.02);">' +
+        '<div class="row" style="gap:10px;flex-wrap:wrap;">' +
+          '<div style="flex:1;min-width:150px;"><label>Proveedor</label><select class="ai-p-provider" style="min-height:38px;">' + opts + '</select></div>' +
+          '<div style="flex:1;min-width:180px;"><label>Modelo</label><input class="ai-p-model" value="' + aiEsc(p.model || '') + '" placeholder="gpt-4o-mini / deepseek-chat / gemini-2.0-flash"></div>' +
+          '<div style="flex:1;min-width:180px;"><label>URL base (solo custom)</label><input class="ai-p-base" value="' + aiEsc(p.baseUrl || '') + '" placeholder="https://..."></div>' +
+          '<div style="flex:1;min-width:200px;"><label>API Key</label><input class="ai-p-key" type="password" autocomplete="off" placeholder="' + (p.hasKey ? '••••••• (vacío conserva la actual)' : 'sk-...') + '"></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;">' +
+          '<label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--text);"><input type="checkbox" class="ai-p-enabled" style="width:18px;height:18px;min-height:18px;"' + (p.enabled === false ? '' : ' checked') + '> Usar esta IA</label>' +
+          '<button class="btn alt ai-p-remove" type="button" style="padding:4px 10px;font-size:12px;">✕ Quitar</button>' +
+          '<span class="muted ai-p-hint" style="font-size:12px;">' + hint + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+    function aiAddProviderRow(p) {
+      const wrap = ids('ai-providers-list');
+      if (!wrap) return null;
+      const holder = document.createElement('div');
+      holder.innerHTML = aiProviderRowHTML(p);
+      const row = holder.firstElementChild;
+      const sel = row.querySelector('.ai-p-provider');
+      if (sel) sel.addEventListener('change', function () {
+        const base = row.querySelector('.ai-p-base');
+        if (base) base.placeholder = sel.value === 'custom' ? 'https://mi-servidor-ia.com/v1' : 'Se usa automáticamente';
+      });
+      const rm = row.querySelector('.ai-p-remove');
+      if (rm) rm.addEventListener('click', function () {
+        if (document.querySelectorAll('#ai-providers-list .ai-provider-row').length <= 1) { alert('⚠️ Debe quedar al menos un proveedor registrado.'); return; }
+        row.remove();
+        const st = ids('ai-config-status'); if (st) st.textContent = 'Proveedor quitado (guarda para aplicar).';
+      });
+      wrap.appendChild(row);
+      return row;
+    }
+    function aiGetProviderRows() {
+      const rows = [];
+      document.querySelectorAll('#ai-providers-list .ai-provider-row').forEach(function (el) {
+        rows.push({
+          id: el.getAttribute('data-ai-id') || '',
+          provider: el.querySelector('.ai-p-provider').value,
+          model: el.querySelector('.ai-p-model').value.trim(),
+          baseUrl: el.querySelector('.ai-p-base').value.trim(),
+          enabled: el.querySelector('.ai-p-enabled').checked,
+          apiKey: el.querySelector('.ai-p-key').value.trim()
+        });
+      });
+      return rows;
+    }
     async function aiLoadConfig() {
       try {
         const r = await api('/api/ai/config');
         const d = r.data || {};
-        ids('ai-provider').value = d.provider || 'openai';
-        ids('ai-model').value = d.model || '';
-        ids('ai-base-url').value = d.baseUrl || '';
         ids('ai-enabled').checked = !!d.enabled;
+        const wrap = ids('ai-providers-list');
+        let provs = Array.isArray(d.providers) ? d.providers : [];
+        if (wrap) {
+          wrap.innerHTML = '';
+          if (!provs.length) provs = [{ provider: d.provider || 'openai', model: d.model || '', baseUrl: d.baseUrl || '', enabled: !!d.enabled, hasKey: !!d.hasKey, apiKeyHint: d.apiKeyHint || '', fromEnv: !!d.fromEnv }];
+          provs.forEach(function (p) { aiAddProviderRow(p); });
+        }
         const st = ids('ai-config-status');
-        if (st) st.textContent = d.hasKey ? ('Key configurada (…' + (d.apiKeyHint || '') + ')' + (d.fromEnv ? ' · desde .env' : '')) : 'Sin key configurada';
+        if (st) {
+          const withKey = provs.filter(function (p) { return p.hasKey; }).length;
+          st.textContent = withKey ? (withKey + ' IA(s) con key configurada') : 'Sin key configurada';
+        }
       } catch (err) {
         const st = ids('ai-config-status');
         if (st) st.textContent = 'Error al cargar: ' + err.message;
@@ -11340,18 +11438,70 @@
         const r = await api('/api/ai/config', {
           method: 'PUT',
           body: JSON.stringify({
-            provider: ids('ai-provider').value,
-            model: ids('ai-model').value.trim(),
-            baseUrl: ids('ai-base-url').value.trim(),
             enabled: ids('ai-enabled').checked,
-            apiKey: ids('ai-api-key').value.trim()
+            providers: aiGetProviderRows()
           })
         });
-        ids('ai-api-key').value = '';
-        if (st) st.textContent = 'Guardado ✓ (' + (r.data && r.data.hasKey ? 'key configurada' : 'key pendiente') + ')';
+        document.querySelectorAll('#ai-providers-list .ai-p-key').forEach(function (i) { i.value = ''; });
+        const activeCount = ((r.data && r.data.providers) || []).filter(function (p) { return p.hasKey; }).length;
+        if (st) st.textContent = 'Guardado ✓ (' + (r.data && r.data.hasKey ? activeCount + ' IA(s) activa(s)' : 'key pendiente') + ')';
+        aiLoadConfig();
+        aiLoadUsage();
         aiCheckStatus();
       } catch (err) {
         if (st) st.textContent = 'Error: ' + err.message;
+      }
+    }
+    async function aiLoadUsage() {
+      const body = ids('ai-usage-body');
+      const status = ids('ai-usage-status');
+      if (!body) return;
+      body.innerHTML = '<tr><td colspan="8" style="padding:10px;" class="muted">⏳ Cargando consumo...</td></tr>';
+      try {
+        const r = await api('/api/ai/usage');
+        const d = r.data || {};
+        const provs = d.providers || [];
+        const fmt = function (n) { return Number(n || 0).toLocaleString('en-US'); };
+        const rows = provs.map(function (p) {
+          const last = p.lastUsed ? new Date(p.lastUsed).toLocaleString() : '—';
+          return '<tr style="border-top:1px solid var(--line);">' +
+            '<td style="padding:8px;"><b>' + aiEsc(p.provider || p.id || 'IA') + '</b></td>' +
+            '<td style="padding:8px;">' + aiEsc(p.model || '—') + '</td>' +
+            '<td style="padding:8px;">' + fmt(p.calls) + '</td>' +
+            '<td style="padding:8px;">' + fmt(p.promptTokens) + '</td>' +
+            '<td style="padding:8px;">' + fmt(p.completionTokens) + '</td>' +
+            '<td style="padding:8px;">' + fmt(p.tokens) + '</td>' +
+            '<td style="padding:8px;">$' + Number(p.estCost || 0).toFixed(4) + '</td>' +
+            '<td style="padding:8px;">' + last + '</td>' +
+          '</tr>';
+        }).join('');
+        const t = d.totals || {};
+        const today = d.today || {};
+        body.innerHTML = (rows || '<tr><td colspan="8" style="padding:10px;" class="muted">Aún no hay consumo registrado.</td></tr>') +
+          (rows ? '<tr style="border-top:2px solid var(--primary);font-weight:bold;">' +
+            '<td style="padding:8px;">TOTAL</td><td style="padding:8px;">—</td>' +
+            '<td style="padding:8px;">' + fmt(t.calls) + '</td>' +
+            '<td style="padding:8px;">' + fmt(t.promptTokens) + '</td>' +
+            '<td style="padding:8px;">' + fmt(t.completionTokens) + '</td>' +
+            '<td style="padding:8px;">' + fmt(t.tokens) + '</td>' +
+            '<td style="padding:8px;">$' + Number(t.estCost || 0).toFixed(4) + '</td>' +
+            '<td style="padding:8px;">—</td></tr>' : '');
+        if (status) status.textContent = '📅 Hoy: ' + fmt(today.calls) + ' llamadas · ' + fmt(today.tokens) + ' tokens · ≈$' + Number(today.estCost || 0).toFixed(4) + ' · Actualizado: ' + (d.updatedAt ? new Date(d.updatedAt).toLocaleString() : 'nunca');
+      } catch (err) {
+        body.innerHTML = '<tr><td colspan="8" style="padding:10px;">Error al cargar consumo: ' + aiEsc(err.message) + '</td></tr>';
+        if (status) status.textContent = 'Error: ' + err.message;
+      }
+    }
+    async function aiResetUsage() {
+      const status = ids('ai-usage-status');
+      if (!window.confirm('¿Reiniciar los contadores de consumo de las IAs?')) return;
+      if (status) status.textContent = '⏳ Reiniciando...';
+      try {
+        await api('/api/ai/usage', { method: 'DELETE' });
+        if (status) status.textContent = '✅ Contadores reiniciados.';
+        aiLoadUsage();
+      } catch (err) {
+        if (status) status.textContent = 'Error: ' + err.message;
       }
     }
     async function aiLoadMemoryCount(eid) {
@@ -11379,13 +11529,17 @@
         const d = r.data || {};
         if (card) card.style.display = '';
         if (userCard) userCard.style.display = '';
-        // Mostrar/ocultar la tarjeta de configuración IA según rol (aparece tras el login)
+        // Mostrar/ocultar las tarjetas de configuración y consumo IA según rol (aparece tras el login)
         const cfgCardV = ids('ai-config-card');
+        const usageCardV = ids('ai-usage-card');
         if (window.aiIsSuperadmin()) {
           if (cfgCardV) cfgCardV.style.display = '';
+          if (usageCardV) usageCardV.style.display = '';
           aiLoadConfig();
+          aiLoadUsage();
         } else {
           if (cfgCardV) cfgCardV.style.display = 'none';
+          if (usageCardV) usageCardV.style.display = 'none';
         }
         // Mostrar fila de configuración de API key (SOLO superadmin)
         const keyRow = ids('ai-key-row');
@@ -11432,13 +11586,15 @@
       if (st) st.textContent = '⏳ Guardando...';
       try {
         // Guardar la key y activar la IA automáticamente (enabled=true) para que quede lista
+        const firstP = document.querySelector('#ai-providers-list .ai-p-provider');
+        const firstM = document.querySelector('#ai-providers-list .ai-p-model');
         const r = await api('/api/ai/config', {
           method: 'PUT',
           body: JSON.stringify({
             apiKey: key,
             enabled: true,
-            provider: ids('ai-provider') ? ids('ai-provider').value : 'openai',
-            model: ids('ai-model') ? ids('ai-model').value.trim() : 'gpt-4o-mini'
+            provider: firstP ? firstP.value : 'openai',
+            model: firstM && firstM.value.trim() ? firstM.value.trim() : 'gpt-4o-mini'
           })
         });
         if (inp) inp.value = '';
@@ -11538,19 +11694,30 @@
     function aiRenderSearchResults(action, out) {
       const rows = Array.isArray(action.rows) ? action.rows : [];
       if (!rows.length) return;
+      const HIDE = ['id', 'establishment_id', 'student_id', 'profile_id', 'enrollment_id', 'discipline_id', 'instructor_profile_id', 'created_at', 'paid_at', 'confirmed_at', 'notes', 'meta', 'status', 'internal'];
+      const LABELS = {
+        full_name: 'Nombre', name: 'Nombre', dojo: 'Dojo', title: 'Título',
+        email: 'Email', phone: 'Teléfono', current_rank: 'Rango', rank: 'Rango',
+        amount: 'Monto', concept: 'Concepto', currency: 'Moneda', method: 'Método',
+        billing_month: 'Mes', plan_code: 'Plan', due_date: 'Vence', scheduled_date: 'Fecha',
+        start_time: 'Inicio', end_time: 'Fin', location: 'Lugar', student_name: 'Alumno',
+        discipline_code: 'Disciplina', discipline_name: 'Disciplina', status_bill: 'Estado',
+        days_overdue: 'Días atraso', audience_role: 'Audiencia', is_read: 'Leído', count: 'Uso de disciplinas'
+      };
+      // Prioridad de columnas legibles (solo las que existan en las filas)
+      const PREF = ['full_name', 'name', 'dojo', 'student_name', 'title', 'email', 'phone', 'current_rank', 'rank', 'amount', 'concept', 'currency', 'billing_month', 'plan_code', 'due_date', 'scheduled_date', 'start_time', 'end_time', 'location', 'discipline_code', 'discipline_name', 'student_id', 'status_bill', 'days_overdue', 'audience_role'];
+      const firstRow = rows[0] || {};
+      const cols = PREF.filter(c => firstRow[c] !== undefined && firstRow[c] !== null).slice(0, 5);
       const box = document.createElement('div');
       box.style.cssText = 'margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;';
       const table = document.createElement('table');
       table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
-      const cols = Object.keys(rows[0] || {}).filter(k => {
-        return !['establishment_id', 'created_at', 'notes', 'id'].includes(k) && rows[0][k] !== null && rows[0][k] !== undefined;
-      }).slice(0, 7);
       const thead = document.createElement('thead');
       thead.style.cssText = 'background:var(--bg-tertiary);color:var(--muted);text-align:left;';
-      thead.innerHTML = '<tr>' + cols.map(c => '<th style="padding:8px;">' + c.replace(/_/g, ' ') + '</th>').join('') + '</tr>';
+      thead.innerHTML = '<tr>' + cols.map(c => '<th style="padding:8px;">' + (LABELS[c] || c.replace(/_/g, ' ')) + '</th>').join('') + '</tr>';
       table.appendChild(thead);
       const tbody = document.createElement('tbody');
-      rows.forEach(row => {
+      rows.slice(0, 15).forEach(row => {
         const tr = document.createElement('tr');
         tr.style.cssText = 'border-top:1px solid var(--line);';
         tr.innerHTML = cols.map(c => '<td style="padding:8px;">' + String(row[c] === null || row[c] === undefined ? '—' : row[c]) + '</td>').join('');
@@ -11562,7 +11729,7 @@
       const count = action.meta && action.meta.count;
       const note = document.createElement('div');
       note.style.cssText = 'margin-top:8px;font-size:12px;color:var(--muted);';
-      note.textContent = '📊 ' + (count !== undefined ? count + ' resultado(s) real(es).' : '') + (action.meta && action.meta.note ? ' ' + action.meta.note : '');
+      note.textContent = '📊 ' + (count !== undefined ? count + ' resultado(s) real(es).' : '') + (rows.length > 15 ? ' (mostrando 15)' : '') + (action.meta && action.meta.note ? ' ' + action.meta.note : '');
       out.appendChild(note);
     }
 
@@ -11839,6 +12006,12 @@
       if (saveBtn) saveBtn.addEventListener('click', aiSaveConfig);
       const loadBtn = ids('ai-config-load');
       if (loadBtn) loadBtn.addEventListener('click', aiLoadConfig);
+      const addBtn = ids('ai-provider-add');
+      if (addBtn) addBtn.addEventListener('click', function () { aiAddProviderRow({ provider: 'openai', model: '', baseUrl: '', enabled: true }); });
+      const usageRefresh = ids('ai-usage-refresh');
+      if (usageRefresh) usageRefresh.addEventListener('click', aiLoadUsage);
+      const usageReset = ids('ai-usage-reset');
+      if (usageReset) usageReset.addEventListener('click', aiResetUsage);
       // Botones del campo de API key visible en el Buscador
       const keySave = ids('ai-key-save');
       if (keySave) keySave.addEventListener('click', aiSaveKey);
@@ -11870,11 +12043,15 @@
       aiWireUI();
       aiMigWire();
       const cfgCard = ids('ai-config-card');
+      const usageCard = ids('ai-usage-card');
       if (window.aiIsSuperadmin()) {
         if (cfgCard) cfgCard.style.display = '';
+        if (usageCard) usageCard.style.display = '';
         aiLoadConfig();
+        aiLoadUsage();
       } else {
         if (cfgCard) cfgCard.style.display = 'none';
+        if (usageCard) usageCard.style.display = 'none';
       }
       aiCheckStatus();
     });

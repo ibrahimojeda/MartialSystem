@@ -7757,23 +7757,75 @@ const AI_PROVIDERS = {
 
 const AI_CONFIG_PATH = path.join(__dirname, '..', 'data', 'ai-config.json');
 
-const getAIConfig = async () => {
-  // 1) Prioridad: archivo local del servidor (100% fiable, sin depender de Supabase)
+// ── Almacenamiento central de la config de IA en Supabase (fuente de verdad) ──
+// app_settings (settings_key '__ai__') es la fuente de verdad: así la config de las
+// IAs (API keys y proveedores) es la misma para web y móvil desde cualquier dispositivo.
+// El archivo local (data/ai-config.json) queda como caché/respaldo para modo offline.
+
+const AI_USAGE_SETTINGS_KEY = '__ai__usage__';
+
+const readAIConfigSupabase = async () => {
+  const { data } = await supabaseAdmin
+    .from('app_settings')
+    .select('settings_value')
+    .is('establishment_id', null)
+    .eq('settings_key', AI_SETTINGS_KEY)
+    .order('updated_at', { ascending: false })
+    .limit(1);
+  const row = Array.isArray(data) && data[0];
+  if (row && row.settings_value && typeof row.settings_value === 'object' && !Array.isArray(row.settings_value)) return row.settings_value;
+  return null;
+};
+// Inserta la versión nueva y limpia filas previas del mismo key global (evita duplicados).
+const writeAppSettingsGlobal = async (settingsKey, value) => {
+  const { data: ins } = await supabaseAdmin.from('app_settings')
+    .insert({ establishment_id: null, settings_key: settingsKey, settings_value: value })
+    .select('id');
+  const newId = ins && ins[0] && ins[0].id;
+  if (newId) {
+    await supabaseAdmin.from('app_settings').delete()
+      .is('establishment_id', null)
+      .eq('settings_key', settingsKey)
+      .neq('id', newId)
+      .then(() => {});
+  }
+};
+const writeAIConfigSupabase = async (value) => writeAppSettingsGlobal(AI_SETTINGS_KEY, value);
+const readAIConfigLocal = () => {
   try {
     const local = readJsonStore(AI_CONFIG_PATH, null);
     if (local && typeof local === 'object' && (local.apiKey !== undefined || Array.isArray(local.providers))) return local;
   } catch (_) { /* ignorar */ }
-  // 2) Respaldo: tabla app_settings de Supabase
+  return null;
+};
+const writeAIConfigLocal = (value) => {
+  try { writeJsonStore(AI_CONFIG_PATH, value); } catch (_) { /* best-effort */ }
+};
+
+const getAIConfig = async () => {
   try {
-    const { data } = await supabaseAdmin
-      .from('app_settings')
-      .select('settings_value')
-      .eq('establishment_id', null)
-      .eq('settings_key', AI_SETTINGS_KEY)
-      .maybeSingle();
-    if (data?.settings_value && typeof data.settings_value === 'object') return data.settings_value;
-  } catch (_) { /* fallback */ }
-  // 3) Último recurso: variable de entorno
+    // Supabase es la fuente de verdad; el archivo local es caché.
+    // Reconciliación por updatedAt: la configuración más reciente gana y se propaga.
+    const remote = await readAIConfigSupabase();
+    const local = readAIConfigLocal();
+    const remoteTs = (remote && remote.updatedAt) ? Date.parse(remote.updatedAt) : 0;
+    const localTs = (local && local.updatedAt) ? Date.parse(local.updatedAt) : 0;
+    const hasRemote = !!(remote && (remote.apiKey !== undefined || Array.isArray(remote.providers)));
+
+    if (local && (!hasRemote || localTs > remoteTs)) {
+      // Config local más nueva (o Supabase vacío) → promover a Supabase
+      try { await writeAIConfigSupabase(local); } catch (_) { /* si falla, usar local */ }
+      return local;
+    }
+    if (hasRemote) {
+      if (!local) writeAIConfigLocal(remote);
+      return remote;
+    }
+  } catch (_) { /* si Supabase no responde, usar fallbacks */ }
+  // Respaldo: archivo local
+  const localF = readAIConfigLocal();
+  if (localF) return localF;
+  // Último recurso: variable de entorno
   const envKey = String(process.env.AI_API_KEY || '').trim();
   if (envKey) return { provider: 'openai', model: 'gpt-4o-mini', enabled: true, apiKey: envKey, apiKeyHint: envKey.slice(-4), fromEnv: true };
   return { provider: 'openai', model: 'gpt-4o-mini', enabled: false, apiKey: '', apiKeyHint: '' };
@@ -7816,16 +7868,10 @@ const saveAIConfig = async (cfg) => {
     value.apiKey = p0.apiKey || '';
     value.apiKeyHint = p0.apiKeyHint || '';
   }
-  // 1) Guardar SIEMPRE en archivo local (garantiza persistencia)
-  try { writeJsonStore(AI_CONFIG_PATH, value); } catch (_) { /* best-effort */ }
-  // 2) Sincronizar a Supabase (best-effort, no bloquea si falla)
-  try {
-    await supabaseAdmin.from('app_settings').upsert({
-      establishment_id: null,
-      settings_key: AI_SETTINGS_KEY,
-      settings_value: value
-    }, { onConflict: 'establishment_id,settings_key' });
-  } catch (_) { /* best-effort */ }
+  // 1) Supabase (fuente de verdad) — en caso de fallo se conserva la caché local
+  try { await writeAIConfigSupabase(value); } catch (_) { /* best-effort */ }
+  // 2) Archivo local (caché/respaldo para modo offline)
+  writeAIConfigLocal(value);
   return value;
 };
 
@@ -8023,10 +8069,19 @@ function aiTrackUsage(providerId, providerLabel, model, usageJson) {
 
     st.updatedAt = now;
     writeJsonStore(AI_USAGE_PATH, st);
+    // Espejo en Supabase (best-effort) para que el consumo persista entre servidores/instancias
+    try { writeAppSettingsGlobal(AI_USAGE_SETTINGS_KEY, st).catch(() => {}); } catch (_) { /* best-effort */ }
   } catch (_) { /* best-effort */ }
 }
 function aiResetUsage() {
   try { writeJsonStore(AI_USAGE_PATH, aiUsageEmpty()); } catch (_) { /* best-effort */ }
+  // Limpiar también el espejo en Supabase
+  try {
+    supabaseAdmin.from('app_settings').delete()
+      .is('establishment_id', null)
+      .eq('settings_key', AI_USAGE_SETTINGS_KEY)
+      .then(() => {}).catch(() => {});
+  } catch (_) { /* best-effort */ }
 }
 
 // Verifica si el plan del establecimiento incluye IA (Fase 1: gating por plan).

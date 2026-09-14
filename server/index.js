@@ -8204,8 +8204,8 @@ app.put('/api/ai/config', requireAuth, async (req, res) => {
           model: (p.model !== undefined && p.model !== null) ? String(p.model).trim() : (prev.model || ''),
           baseUrl: (p.baseUrl !== undefined && p.baseUrl !== null) ? String(p.baseUrl).trim() : (prev.baseUrl || ''),
           enabled: p.enabled !== undefined ? Boolean(p.enabled) : (prev.enabled !== false),
-          apiKey: (p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim() : (prev.apiKey || ''),
-          apiKeyHint: (p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim().slice(-4) : (prev.apiKeyHint || ''),
+          apiKey: (p.clearKey === true) ? '' : ((p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim() : (prev.apiKey || '')),
+          apiKeyHint: (p.clearKey === true) ? '' : ((p.apiKey && String(p.apiKey).trim()) ? String(p.apiKey).trim().slice(-4) : (prev.apiKeyHint || '')),
           createdAt: prev.createdAt || existing.updatedAt || new Date().toISOString()
         };
       });

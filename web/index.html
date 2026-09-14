@@ -11378,6 +11378,7 @@
         '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap;">' +
           '<label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--text);"><input type="checkbox" class="ai-p-enabled" style="width:18px;height:18px;min-height:18px;"' + (p.enabled === false ? '' : ' checked') + '> Usar esta IA</label>' +
           '<button class="btn alt ai-p-remove" type="button" style="padding:4px 10px;font-size:12px;">✕ Quitar</button>' +
+          (p.hasKey ? '<button class="btn alt ai-p-delkey" type="button" style="padding:4px 10px;font-size:12px;border-color:var(--danger);color:var(--danger);">🗑️ Borrar key</button>' : '') +
           '<span class="muted ai-p-hint" style="font-size:12px;">' + hint + '</span>' +
         '</div>' +
       '</div>';
@@ -11397,9 +11398,19 @@
       });
       const rm = row.querySelector('.ai-p-remove');
       if (rm) rm.addEventListener('click', function () {
-        if (document.querySelectorAll('#ai-providers-list .ai-provider-row').length <= 1) { alert('⚠️ Debe quedar al menos un proveedor registrado.'); return; }
+        const count = document.querySelectorAll('#ai-providers-list .ai-provider-row').length;
+        if (count <= 1 && !window.confirm('⚠️ No quedará ninguna key y la IA quedará desactivada. ¿Eliminar la última de todos modos?')) return;
         row.remove();
         const st = ids('ai-config-status'); if (st) st.textContent = 'Proveedor quitado (guarda para aplicar).';
+      });
+      const dk = row.querySelector('.ai-p-delkey');
+      if (dk) dk.addEventListener('click', function () {
+        if (!window.confirm('¿Borrar esta API key del sistema? Se quitará la key pero se mantendrá el proveedor en la lista. Luego presiona "Guardar configuración".')) return;
+        row.setAttribute('data-ai-clear', '1');
+        const hint = row.querySelector('.ai-p-hint');
+        if (hint) hint.textContent = '🕐 La key se borrará al guardar.';
+        dk.disabled = true;
+        dk.textContent = '⏳ Pendiente de guardar';
       });
       wrap.appendChild(row);
       return row;
@@ -11413,6 +11424,7 @@
           model: el.querySelector('.ai-p-model').value.trim(),
           baseUrl: el.querySelector('.ai-p-base').value.trim(),
           enabled: el.querySelector('.ai-p-enabled').checked,
+          clearKey: el.getAttribute('data-ai-clear') === '1',
           apiKey: el.querySelector('.ai-p-key').value.trim()
         });
       });

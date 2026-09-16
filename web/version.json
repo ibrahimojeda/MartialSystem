@@ -1,14 +1,14 @@
 {
-  "version": "2.10.6",
-  "buildNumber": 22,
-  "message": "Detección automática de API keys: al pegar una clave se identifica el proveedor (Gemini/OpenAI/DeepSeek/Anthropic→Custom) por su formato, se asigna el proveedor correcto, se sugiere el modelo y se agrega en un clic.",
+  "version": "2.11.0",
+  "buildNumber": 23,
+  "message": "Se eliminó el Dashboard clásico por rol. La pantalla de inicio (Inicio/Dashboard) ahora es la misma para todos los roles: \"Mi Información\" + \"Buscador del sistema IA\". Los módulos siguen en la barra lateral.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.10.6.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.0.apk",
   "releaseDate": "2026-09-13",
   "changelog": [
-    "Nuevo: \"Pegar API key y detectar\" en Configuración — detecta el proveedor automáticamente por el formato de la clave",
-    "Al escribir una API key en cualquier fila, se detecta el proveedor, se ajusta el selector y se sugiere el modelo",
-    "El Buscador también detecta el proveedor al guardar una key",
-    "Modelos por defecto sugeridos: Gemini=gemini-3.6-flash, OpenAI=gpt-4o-mini, DeepSeek=deepseek-chat"
+    "Eliminado el Dashboard viejo por rol (estudiante, sensei, superadmin, admin/owner)",
+    "Nueva pantalla de inicio para TODOS los roles: Mi Información + Buscador del sistema IA",
+    "Se mantiene el selector de establecimiento y el árbol de distribución en Inicio",
+    "Limpieza de funciones y estilos del dashboard antiguo"
   ]
 }

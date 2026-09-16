@@ -24,7 +24,7 @@
 
   /* ─── Hide desktop elements ─── */
   .tabs, #app-tabs, .tab-btn, .drawer-overlay, #hamburger-btn,
-  #btn-dash-trace, .pill, .mode-btn, #ui-clean-btn, #ui-dojo-btn,
+  .pill, .mode-btn, #ui-clean-btn, #ui-dojo-btn,
   #system-version {
     display: none !important;
   }
@@ -255,21 +255,6 @@
     border-radius: 999px !important;
     min-width: 18px !important;
     text-align: center !important;
-  }
-
-  /* ─── Hide old dashboard sections on mobile ─── */
-  #dashboard-student-guardian,
-  #dashboard-sensei,
-  #dashboard-superadmin,
-  #dashboard-admin-controls {
-    display: none !important;
-  }
-  /* Show only the active one */
-  #dashboard-student-guardian.active-mobile,
-  #dashboard-sensei.active-mobile,
-  #dashboard-superadmin.active-mobile,
-  #dashboard-admin-controls.active-mobile {
-    display: block !important;
   }
 
   /* ─── Tab content sections on mobile ─── */

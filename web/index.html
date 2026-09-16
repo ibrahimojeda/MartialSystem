@@ -160,12 +160,6 @@
       grid-template-columns: repeat(12, minmax(0, 1fr));
       gap: 12px;
     }
-    #dashboard-student-guardian,
-    #dashboard-sensei,
-    #dashboard-superadmin,
-    #dashboard-admin-controls {
-      display: contents;
-    }
     .card {
       grid-column: span 6;
       background: rgba(23, 29, 36, 0.97);
@@ -983,60 +977,6 @@
       </div>
     </section>
 
-    <!-- Mi Información + Buscador del sistema (globales, para todos los roles) -->
-    <article class="card full" id="ai-user-info-card" style="display:none;margin-top:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-        <h3 style="margin:0;">Mi Información</h3>
-        <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Conectado</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
-          <div style="font-size:11px;color:var(--muted);">👤 Usuario</div>
-          <div id="ai-user-name" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
-          <div id="ai-user-role" class="muted" style="font-size:12px;margin-top:2px;">Role: ...</div>
-        </div>
-        <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
-          <div style="font-size:11px;color:var(--muted);">🏢 Acceso / Establecimientos</div>
-          <div id="ai-user-estabs" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
-          <div class="muted" style="font-size:12px;margin-top:2px;">Establecimientos bajo tu acceso</div>
-        </div>
-      </div>
-      <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5;">
-        💡 <strong>La IA es el buscador del sistema:</strong> pregúntale en la caja de abajo por alumnos, pagos, clases, waivers y reportes según tu rol.
-      </div>
-    </article>
-
-    <article class="card full" id="ai-assistant-card" style="display:none;margin-top:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🔍 Buscador del sistema — escribe tu consulta</label>
-        <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
-      </div>
-      <div id="ai-key-row" style="display:none;margin-bottom:10px;border:1px dashed var(--brand-2);border-radius:10px;padding:10px 12px;background:rgba(201,162,39,.05);">
-        <label style="margin:0 0 4px;font-size:12px;color:var(--text);">🔑 <strong>API Key de la IA</strong> <span style="color:var(--muted);font-weight:400;">(se guarda solo en el servidor)</span></label>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <form id="ai-key-form" onsubmit="return false;" autocomplete="off" style="display:contents;margin:0;flex:1;">
-            <input id="ai-key-inline" type="password" placeholder="sk-..." style="flex:1;min-width:220px;" autocomplete="off">
-          </form>
-          <button class="btn" id="ai-key-save" type="button">Guardar key</button>
-          <button class="btn alt" id="ai-key-test" type="button">Probar IA</button>
-        </div>
-        <div class="muted" id="ai-key-status" style="font-size:11px;margin-top:4px;"></div>
-      </div>
-      <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
-        <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
-      </div>
-      <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
-      <div style="display:flex;gap:8px;align-items:flex-start;">
-        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos tiene mi dojo? ¿Quiénes deben pagos? ¿Cuántas clases hay hoy? Explica el churn...">
-        <button class="btn" id="ai-send" type="button">Enviar ➤</button>
-      </div>
-      <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
-        <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
-        <span>⚠️ La IA puede equivocarse · verifica los datos</span>
-      </div>
-    </article>
-
     <section id="login-gate" style="display:flex;justify-content:center;align-items:flex-start;padding-top:40px;min-height:80vh;">
       <div style="width:100%;max-width:480px;">
         <div style="text-align:center;margin-bottom:16px;">
@@ -1162,151 +1102,60 @@
 
     <!-- â•â•â•â•â•â•â•â•â•â• DASHBOARD OPERACIONAL (ROLE-BASED) â•â•â•â•â•â•â•â•â•â• -->
     <section id="tab-operacion" class="grid hidden">
-
-      <!-- Botón de diagnóstico de carga del Dashboard -->
-      <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-bottom: 2px;">
-        <button class="btn alt" id="btn-dash-trace" type="button" style="padding:6px 12px;font-size:12px;">📊 Ver carga del Dashboard</button>
+    <article class="card full" id="ai-user-info-card" style="display:none;margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h3 style="margin:0;">Mi Información</h3>
+        <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Conectado</span>
       </div>
-
-      <!-- 1ï¸âƒ£ DASHBOARD STUDENT/GUARDIAN -->
-      <div id="dashboard-student-guardian" class="hidden" style="width: 100%;">
-        
-        <!-- Disciplina Actual -->
-        <article class="card" style="grid-column: span 6;">
-          <h3>Mi Disciplina</h3>
-          <div id="dash-student-disciplines" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Próximas Clases -->
-        <article class="card" style="grid-column: span 6;">
-          <h3 id="dashboard-student-upcoming-title">Próximas Clases</h3>
-          <div id="dash-student-upcoming" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Mi Asistencia -->
-        <article class="card" style="grid-column: span 4;">
-          <h3>Mi Asistencia</h3>
-          <div id="dash-student-attendance" style="padding: 8px 0; text-align: center;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Mis Calificaciones -->
-        <article class="card" style="grid-column: span 4;">
-          <h3 id="dashboard-student-score-title">Última Calificación</h3>
-          <div id="dash-student-score" style="padding: 8px 0; text-align: center;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Mensajes -->
-        <article class="card" style="grid-column: span 4;">
-          <h3>Mensajes</h3>
-          <div id="dash-student-notifications" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Pagos Pendientes -->
-        <article class="card" style="grid-column: span 6;">
-          <h3>Mi Situación de Pagos</h3>
-          <div id="dash-student-payments" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Próximo Examen -->
-        <article class="card" style="grid-column: span 6;">
-          <h3 id="dashboard-student-exam-title">Próximo Examen</h3>
-          <div id="dash-student-exam" style="padding: 8px 0; text-align: center;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);">👤 Usuario</div>
+          <div id="ai-user-name" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
+          <div id="ai-user-role" class="muted" style="font-size:12px;margin-top:2px;">Role: ...</div>
+        </div>
+        <div style="background:#151a23;border:1px solid #283140;border-radius:10px;padding:12px;">
+          <div style="font-size:11px;color:var(--muted);">🏢 Acceso / Establecimientos</div>
+          <div id="ai-user-estabs" style="font-size:1.4rem;font-weight:800;margin-top:4px;">—</div>
+          <div class="muted" style="font-size:12px;margin-top:2px;">Establecimientos bajo tu acceso</div>
+        </div>
       </div>
-
-      <!-- 2ï¸âƒ£ DASHBOARD SENSEI/INSTRUCTOR -->
-      <div id="dashboard-sensei" class="hidden" style="width: 100%;">
-        
-        <!-- Mis Disciplinas -->
-        <article class="card" style="grid-column: span 4;">
-          <h3>Mis Disciplinas</h3>
-          <div id="dash-sensei-disciplines" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Total Estudiantes Activos -->
-        <article class="card" style="grid-column: span 4;">
-          <h3>Estudiantes Activos</h3>
-          <div id="dash-sensei-students" style="padding: 8px 0; text-align: center;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Asistencia Hoy -->
-        <article class="card" style="grid-column: span 4;">
-          <h3>Asistencia Hoy</h3>
-          <div id="dash-sensei-attendance" style="padding: 8px 0; text-align: center;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Estudiantes Bajo Desempeño -->
-        <article class="card" style="grid-column: span 6;">
-          <h3 id="dashboard-sensei-attention-title">Requieren Atención</h3>
-          <div id="dash-sensei-attention" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Próximas Clases -->
-        <article class="card" style="grid-column: span 6;">
-          <h3>Mis Clases Hoy</h3>
-          <div id="dash-sensei-classes" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Evaluaciones Pendientes -->
-        <article class="card" style="grid-column: span 6;">
-          <h3>Evaluaciones Pendientes</h3>
-          <div id="dash-sensei-evaluations" style="padding: 8px 0; text-align: center;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
-
-        <!-- Comunicados no Leídos -->
-        <article class="card" style="grid-column: span 6;">
-          <h3>Comunicados</h3>
-          <div id="dash-sensei-notifications" style="padding: 8px 0;">
-            <span class="muted" style="font-size: 12px;">Cargando...</span>
-          </div>
-        </article>
+      <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5;">
+        💡 <strong>La IA es el buscador del sistema:</strong> pregúntale en la caja de abajo por alumnos, pagos, clases, waivers y reportes según tu rol.
       </div>
+    </article>
 
-      <!-- 3ï¸âƒ£ DASHBOARD SUPERADMIN -->
-      <div id="dashboard-superadmin" class="hidden" style="width: 100%;">
+    <article class="card full" id="ai-assistant-card" style="display:none;margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <label style="margin:0;text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🔍 Buscador del sistema — escribe tu consulta</label>
+        <span class="pill" id="ai-role-pill">🔒 Según tu rol</span>
       </div>
-
-            <!-- Fallback: Controles de administración (oculto por defecto) -->
-      <div id="dashboard-admin-controls" class="hidden" style="width: 100%; grid-column: 1 / -1;">
-        <article class="card full">
-          <h3 id="dashboard-admin-title">Herramientas de Administración</h3>
-          <p id="dashboard-admin-subtitle" class="muted">Acceso a formularios administrativos avanzados</p>
-          <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-            <button class="btn" id="btn-admin-students" type="button">Gestionar Alumnos</button>
-            <button class="btn" id="btn-admin-classes" type="button">Crear Clases</button>
-            <button class="btn" id="btn-admin-attendance" type="button">Registrar Asistencia</button>
-            <button class="btn" id="btn-admin-evaluations" type="button">Evaluaciones</button>
-          </div>
-        </article>
+      <div id="ai-key-row" style="display:none;margin-bottom:10px;border:1px dashed var(--brand-2);border-radius:10px;padding:10px 12px;background:rgba(201,162,39,.05);">
+        <label style="margin:0 0 4px;font-size:12px;color:var(--text);">🔑 <strong>API Key de la IA</strong> <span style="color:var(--muted);font-weight:400;">(se guarda solo en el servidor)</span></label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <form id="ai-key-form" onsubmit="return false;" autocomplete="off" style="display:contents;margin:0;flex:1;">
+            <input id="ai-key-inline" type="password" placeholder="sk-..." style="flex:1;min-width:220px;" autocomplete="off">
+          </form>
+          <button class="btn" id="ai-key-save" type="button">Guardar key</button>
+          <button class="btn alt" id="ai-key-test" type="button">Probar IA</button>
+        </div>
+        <div class="muted" id="ai-key-status" style="font-size:11px;margin-top:4px;"></div>
       </div>
+      <div id="ai-billing-block" style="display:none;background:rgba(201,74,74,.1);border:1px solid rgba(201,74,74,.4);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px;">
+        <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
+      </div>
+      <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos tiene mi dojo? ¿Quiénes deben pagos? ¿Cuántas clases hay hoy? Explica el churn...">
+        <button class="btn" id="ai-send" type="button">Enviar ➤</button>
+      </div>
+      <div id="ai-output" style="margin-top:10px;background:#111a27;border:1px solid #2c394b;border-radius:10px;padding:12px 14px;min-height:60px;font-size:13px;line-height:1.5;white-space:pre-wrap;display:none;"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-top:10px;">
+        <span id="ai-memory-count">🧠 Memoria: 0 conversaciones</span>
+        <span>⚠️ La IA puede equivocarse · verifica los datos</span>
+      </div>
+    </article>
 
-      <article class="card full" id="tree-card">
+<article class="card full" id="tree-card">
         <h3>Arbol de Distribucion por Local/Academia</h3>
         <p class="muted">Selecciona el local y carga el arbol para ver disciplinas y distribucion operativa.</p>
         <div class="row" style="margin-bottom:10px;">
@@ -2707,21 +2556,6 @@
     </section>
   </main>
 
-  <!-- Panel flotante de diagnóstico de carga del Dashboard -->
-  <div id="dash-trace-panel" style="display:none;position:fixed;top:70px;right:14px;z-index:2000;width:min(480px,94vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:12px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-      <strong style="font-size:13px;">📊 Carga del Dashboard (diagnóstico)</strong>
-      <button class="btn alt" id="btn-dash-trace-close" type="button" style="padding:3px 8px;font-size:11px;">✕</button>
-    </div>
-    <div id="dash-trace-log" style="max-height:280px;overflow:auto;">
-      <pre style="margin:0;font-size:11px;white-space:pre-wrap;line-height:1.5;">Presiona "▶ Re-ejecutar dashboard" o recarga (F5). Los fetch a /api/dashboard se registrarán aquí...</pre>
-    </div>
-    <div style="display:flex;gap:6px;margin-top:8px;">
-      <button class="btn" id="btn-dash-trace-rerun" type="button" style="padding:5px 10px;font-size:11px;flex:1;">▶ Re-ejecutar dashboard</button>
-      <button class="btn alt" id="btn-dash-trace-clear" type="button" style="padding:5px 10px;font-size:11px;flex:1;">🗑 Limpiar</button>
-    </div>
-  </div>
-
   <div class="drawer-overlay" id="drawer-overlay"></div>
 
   <!-- ─── Mobile Bottom Navigation ──────────────────────────── -->
@@ -2811,25 +2645,9 @@
       try { localStorage.setItem('martialsystem-ui-theme', isClean ? 'clean' : 'dojo'); } catch (_) {}
     }
 
-    function applyDashboardCopy(mode) {
-      const isClean = mode === 'clean';
-      const copy = {
-        'dashboard-admin-title': isClean ? 'Panel Administrativo' : 'Herramientas de Administración',
-        'dashboard-admin-subtitle': isClean ? 'Accesos rápidos de gestión' : 'Acceso a formularios administrativos avanzados',
-        'dashboard-student-upcoming-title': isClean ? 'Agenda Próxima' : 'Próximas Clases',
-        'dashboard-student-score-title': isClean ? 'Última Nota' : 'Última Calificación',
-        'dashboard-student-exam-title': isClean ? 'Siguiente Examen' : 'Próximo Examen',
-        'dashboard-sensei-attention-title': isClean ? 'Casos Prioritarios' : 'Requieren Atención',
-        'dashboard-superadmin-memberships-title': isClean ? 'Membresías' : 'Membresías Activas',
-        'dashboard-superadmin-establishments-title': isClean ? 'Establecimientos destacados' : 'Establecimientos Más Activos',
-        'dashboard-superadmin-disciplines-title': isClean ? 'Disciplinas destacadas' : 'Disciplinas Más Populares',
-        'dashboard-superadmin-transactions-title': isClean ? 'Actividad Reciente' : 'Últimas Transacciones'
-      };
-      Object.entries(copy).forEach(([id, text]) => {
-        const el = ids(id);
-        if (el) el.textContent = text;
-      });
-    }
+        // El dashboard clásico fue eliminado; función sin efecto.
+    function applyDashboardCopy(mode) { /* no-op */ }
+
 
     function repairVisibleMojibake() {
       const replacements = [
@@ -4090,84 +3908,20 @@
     // que su función loadXxxDashboard tenga datos reales. NO toca el
     // dashboard-admin-controls (owner/admin) porque ese se renderiza dinámicamente
     // con loadOwnerDashboard.
-    function resetAllDashboardCards() {
-      const containers = ['dashboard-superadmin', 'dashboard-student-guardian', 'dashboard-sensei'];
-      containers.forEach(cid => {
-        const cont = ids(cid);
-        if (!cont) return;
-        cont.querySelectorAll('article.card').forEach(card => {
-          card.style.display = 'none';
-        });
-      });
-    }
+        // El dashboard clásico fue eliminado; función sin efecto.
+    function resetAllDashboardCards() { /* no-op */ }
 
-    function renderMobileQuickActions() {
-      const role = currentMembershipRole() || state.profileRole || '';
-      const dashboardSections = ['dashboard-student-guardian', 'dashboard-sensei', 'dashboard-superadmin', 'dashboard-admin-controls'];
-      
-      // Remove existing quick action bars
-      document.querySelectorAll('.mobile-quick-actions').forEach(el => el.remove());
-      
-      // Only add on mobile (< 768px)
-      if (window.innerWidth > 768) return;
-      
-      dashboardSections.forEach(sectionId => {
-        const section = ids(sectionId);
-        if (!section || section.classList.contains('hidden')) return;
-        
-        const bar = document.createElement('div');
-        bar.className = 'mobile-quick-actions';
-        
-        if (role === 'owner' || role === 'admin') {
-          bar.innerHTML = `
-            <button class="btn" onclick="showTab('academico')" type="button">👥 Alumnos</button>
-            <button class="btn" onclick="showTab('calendario')" type="button">📅 Clases</button>
-            <button class="btn" onclick="showTab('finanzas')" type="button">💰 Pagos</button>
-            <button class="btn alt" onclick="showTab('marketplace')" type="button">🛒 Tienda</button>
-          `;
-        } else if (role === 'sensei' || role === 'instructor') {
-          bar.innerHTML = `
-            <button class="btn" onclick="showTab('calendario')" type="button">📅 Mis clases</button>
-            <button class="btn" onclick="showTab('academico')" type="button">📝 Evaluar</button>
-            <button class="btn alt" onclick="showTab('comunidad')" type="button">💬 Mensajes</button>
-          `;
-        } else if (role === 'student' || role === 'guardian') {
-          bar.innerHTML = `
-            <button class="btn" onclick="showTab('academico')" type="button">📚 Mis cursos</button>
-            <button class="btn" onclick="showTab('finanzas')" type="button">💰 Pagos</button>
-            <button class="btn alt" onclick="showTab('comunidad')" type="button">💬 Notificaciones</button>
-          `;
-        } else if (role === 'superadmin') {
-          bar.innerHTML = `
-            <button class="btn" onclick="showTab('configuracion')" type="button">⚙️ Config</button>
-            <button class="btn" onclick="showTab('finanzas')" type="button">💰 Finanzas</button>
-            <button class="btn alt" onclick="showTab('administracion')" type="button">👥 Usuarios</button>
-          `;
-        }
-        
-        section.prepend(bar);
-      });
-    }
 
+        // El dashboard clásico fue eliminado; función sin efecto.
+    function renderMobileQuickActions() { /* no-op */ }
+
+
+        // Pantalla de inicio: 'Mi Información' + 'Buscador IA' para todos los roles.
+    // El Dashboard clásico por rol fue eliminado.
     function showOperacionDashboard() {
       applyDashboardCopy(document.body.classList.contains('theme-clean') ? 'clean' : 'dojo');
-
-      // ── Opción B: El Dashboard clásico se reemplaza por el panel del Asistente IA.
-      // La IA recibe los datos del usuario/pagos/notificaciones al iniciar sesión y
-      // contesta en el cuadro principal. Los módulos siguen en la barra lateral.
       const role = currentMembershipRole() || state.profileRole || '';
-      const dashboardStudent = ids('dashboard-student-guardian');
-      const dashboardSensei = ids('dashboard-sensei');
-      const dashboardSuperadmin = ids('dashboard-superadmin');
-      const dashboardAdmin = ids('dashboard-admin-controls');
 
-      // Ocultar todos los widgets clásicos (la IA es la pantalla de inicio)
-      if (dashboardStudent) dashboardStudent.classList.add('hidden');
-      if (dashboardSensei) dashboardSensei.classList.add('hidden');
-      if (dashboardSuperadmin) dashboardSuperadmin.classList.add('hidden');
-      if (dashboardAdmin) dashboardAdmin.classList.add('hidden');
-
-      // Asegurar que el asistente IA esté visible (el welcome se lanza en setAuthenticated)
       const aiCard = ids('ai-assistant-card');
       if (aiCard && state.accessToken) aiCard.style.display = '';
       const userCard = ids('ai-user-info-card');
@@ -4178,9 +3932,10 @@
         checkSystemBillingOverlay();
       }
 
-      // Add mobile quick actions bar
+      // Add mobile quick actions bar (no-op: dashboard eliminado)
       renderMobileQuickActions();
     }
+
 
     function setAuthenticated(auth) {
       document.body.classList.toggle('auth', !!auth);

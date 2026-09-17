@@ -1,14 +1,16 @@
 {
-  "version": "2.11.2",
+  "version": "2.11.3",
   "buildNumber": 25,
   "message": "Panel \"Consumo de las IAs\" mejorado: lista TODAS las IAs registradas (nuevas incluidas, sin reescribir su consumo), muestra el consumo individual de cada una con estado, y explica qué significa cada métrica (llamadas, tokens de entrada/salida, costo estimado).",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.2.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.3.apk",
   "releaseDate": "2026-09-17",
   "changelog": [
     "Consumo de las IAs: se listan todas las IAs registradas, incluso las recién agregadas (con consumo en 0)",
     "Consumo individual por IA: llamadas, tokens de entrada/salida, total, costo estimado y último uso",
     "Columna Estado: activa / sin key / desactivada",
     "Leyenda que explica qué significa cada métrica del consumo"
-  ]
+  ],
+  "build": 27,
+  "appVersion": "2.11.3"
 }

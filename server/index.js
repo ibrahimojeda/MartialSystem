@@ -7999,6 +7999,43 @@ async function aiProviderRequest(provider, body, apiKey) {
   return { content, model, baseUrl, raw: aiJson };
 }
 
+// Llama a la IA con failover automático: si el proveedor seleccionado falla (cuota,
+// key inválida, modelo inexistente, red...), prueba con la siguiente IA activa.
+// Devuelve { content, model, baseUrl, providerId, providerLabel } de la que respondió.
+async function aiCallWithFailover(cfg, body, opts) {
+  opts = opts || {};
+  const norm = aiNormalizeConfig(cfg);
+  const active = (norm.providers || []).filter(p => p && p.enabled !== false && String(p.apiKey || '').trim());
+  if (!active.length) throw new Error('AI no configurada. El superadmin debe colocar el API key en Configuración → IA.');
+  // Orden de intento: empezar por el proveedor que tocaría (round-robin) y luego el resto.
+  const first = (opts.provider && active.find(p => (p.id || p.provider) === opts.provider)) || active.find(p => (p.id || p.provider) === (norm.providers[0] && norm.providers[0].id)) || active[0];
+  const ordered = [];
+  active.forEach(p => { if (p && p !== first) ordered.push(p); });
+  const tries = [first].concat(ordered);
+  const errors = [];
+  let lastErr = null;
+  for (const provider of tries) {
+    try {
+      const res = await aiProviderRequest(provider, body);
+      return {
+        content: res.content,
+        model: res.model,
+        baseUrl: res.baseUrl,
+        providerId: provider.id || provider.provider || 'p1',
+        providerLabel: (AI_PROVIDERS[provider.provider] && AI_PROVIDERS[provider.provider].label) || provider.provider || 'IA'
+      };
+    } catch (err) {
+      lastErr = err;
+      errors.push((AI_PROVIDERS[provider.provider] && AI_PROVIDERS[provider.provider].label) || provider.provider || provider.id || 'IA' + ': ' + (err.message || ''));
+    }
+  }
+  const e = lastErr || new Error('No hay ninguna IA disponible');
+  e.status = (e && e.status) || 502;
+  e.message = (tries.length > 1 ? 'Todas las IAs fallaron. ' : '') + (e.message || '');
+  e.providerErrors = errors;
+  throw e;
+}
+
 // ── Registro de consumo por IA (persistente en data/ai-usage.json) ──
 const AI_USAGE_PATH = path.join(__dirname, '..', 'data', 'ai-usage.json');
 
@@ -8815,7 +8852,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
 
     let aiCall;
     try {
-      aiCall = await aiProviderRequest(activeProvider, { messages, temperature: 0.4, max_tokens: 1024 });
+      aiCall = await aiCallWithFailover(cfg, { messages, temperature: 0.4, max_tokens: 1024 });
     } catch (aiErr) {
       return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
     }
@@ -8864,10 +8901,16 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
               rows
             ].join('\n');
             try {
-              content = await aiCallLLM(cfg, null, [
-                { role: 'system', content: secondSystem },
-                { role: 'user', content: secondUser }
-              ], { temperature: 0.3, max_tokens: 700, provider: activeProvider });
+              const secondCall = await aiCallWithFailover(cfg, {
+                messages: [
+                  { role: 'system', content: secondSystem },
+                  { role: 'user', content: secondUser }
+                ],
+                temperature: 0.3,
+                max_tokens: 700
+              });
+              content = secondCall.content;
+              activeProvider = { id: secondCall.providerId, provider: secondCall.providerLabel, apiKey: '' };
             } catch (secondErr) {
               // Fallback: si el proveedor falla en la 2ª pasada, respondemos con los datos reales.
               content = rowsArr.length
@@ -8912,7 +8955,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       });
     } catch (_) { /* best-effort */ }
 
-    return res.json({ ok: true, data: { content, model: (aiCall && aiCall.model) || '', memorySaved: true, tool: toolAction } });
+    return res.json({ ok: true, data: { content, model: (aiCall && aiCall.model) || '', provider: (aiCall && aiCall.providerLabel) || '', providerId: (aiCall && aiCall.providerId) || '', memorySaved: true, tool: toolAction } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'AI request failed' });
   }
@@ -9081,7 +9124,12 @@ app.post('/api/ai/welcome', requireAuth, async (req, res) => {
         ].join('\n');
         let content = '';
         try {
-          content = await aiCallLLM(cfg, null, [{ role: 'system', content: system }, { role: 'user', content: user }], { temperature: 0.4, max_tokens: 700, provider: activeProvider });
+          const welcomeCall = await aiCallWithFailover(cfg, {
+            messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+            temperature: 0.4,
+            max_tokens: 700
+          });
+          content = welcomeCall.content || '';
         } catch (_) {
           content = '';
         }
@@ -9200,7 +9248,7 @@ app.post('/api/ai/draft', requireAuth, async (req, res) => {
 
     let aiCall;
     try {
-      aiCall = await aiProviderRequest(activeProvider, {
+      aiCall = await aiCallWithFailover(cfg, {
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         temperature: 0.4,
         max_tokens: 700
@@ -9254,7 +9302,7 @@ app.post('/api/ai/explain', requireAuth, async (req, res) => {
 
     let aiCall;
     try {
-      aiCall = await aiProviderRequest(activeProvider, {
+      aiCall = await aiCallWithFailover(cfg, {
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         temperature: 0.4,
         max_tokens: 500
@@ -9313,7 +9361,7 @@ app.post('/api/ai/mapping', requireAuth, async (req, res) => {
 
     let aiCall;
     try {
-      aiCall = await aiProviderRequest(activeProvider, {
+      aiCall = await aiCallWithFailover(cfg, {
         messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
         temperature: 0.3,
         max_tokens: 800

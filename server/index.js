@@ -8140,9 +8140,12 @@ async function buildAIContext(req, establishmentId) {
   const role = await getAIContextRole(req, establishmentId);
   const lines = [
     'Eres el Asistente IA de MartialSystem, sistema de gestión de escuelas de artes marciales (Karate, Judo, BJJ, Taekwondo, Kickboxing, etc.).',
-    'Responde en español, de forma clara y concisa. Si necesitas un dato numérico y no lo tienes, indícalo y sugiere dónde encontrarlo en el sistema.',
-    'NO inventes cifras, alumnos, pagos ni reportes. Con texto entre [DATOS_DISPONIBLES] tienes exactamente lo que el sistema permite ver a este rol.',
-    'Actúas como el BUSCADOR del sistema: si el usuario pide datos (alumnos, pagos, clases, reportes), preséntalos de forma ordenada y directa; si el dato no está en [DATOS_DISPONIBLES], dilo claramente y sugiere dónde consultarlo.',
+    'Habla en español, con un tono natural, amable y directo, como un asistente de confianza del dojo.',
+    'Interpreta lo que el usuario pide aunque lo diga en lenguaje cotidiano: por ejemplo "¿quiénes deben dinero?", "¿cuántos alumnos hay?", "¿a qué hora es mi próxima clase?", "¿cuántos usuarios hay por rol?" o "¿qué pasó con los pagos?".',
+    'Responde de forma conversacional: usa frases cortas y viñetas cuando ayude, evita tablas y JSON en la respuesta visible.',
+    'Usa SOLO los datos que tienes en [DATOS_DISPONIBLES] o los resultados reales de una búsqueda. NUNCA inventes cifras, alumnos, pagos, clases ni nombres.',
+    'Respeta los permisos del rol del usuario actual: si le preguntan por datos de otros roles o de otros dojos que su rol no puede ver, explícalo con naturalidad (por ejemplo: "Tu rol no te permite ver los pagos de otros alumnos") y sugiere a quién consultar.',
+    'Si es una conversación social (saludos, agradecimientos) responde de forma amable y corta, sin inventar datos.',
     `Rol del usuario actual: ${role}.`
   ];
   if (establishmentId) lines.push(`Establecimiento en contexto: ${establishmentId}.`);
@@ -8157,23 +8160,49 @@ async function buildAIContext(req, establishmentId) {
       ]);
       const payRes = await supabaseAdmin.from('payments').select('amount, paid_at, establishment_id').order('paid_at', { ascending: false }).limit(5);
       const pay = payRes.data || [];
-      lines.push('[DATOS_DISPONIBLES] Superadmin global: ' + (estabTotal || 0) + ' establecimientos, ' + (studentsTotal || 0) + ' alumnos.');
+      const [memRes, discRes] = await Promise.all([
+        supabaseAdmin.from('establishment_members').select('role').limit(4000),
+        supabaseAdmin.from('students').select('discipline_code').limit(4000)
+      ]);
+      const memRows = memRes.data || [];
+      const byRole = {};
+      memRows.forEach(m => { byRole[m.role] = (byRole[m.role] || 0) + 1; });
+      const roleTxt = ['owner', 'admin', 'sensei', 'instructor', 'guardian', 'student']
+        .filter(r => byRole[r])
+        .map(r => r + ': ' + byRole[r]).join(' · ');
+      const disc2 = discRes.data || [];
+      const byDisc2 = {};
+      disc2.forEach(s => { byDisc2[s.discipline_code] = (byDisc2[s.discipline_code] || 0) + 1; });
+      const discTop = Object.entries(byDisc2).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([d, n]) => d + ': ' + n).join(' · ');
+      const stab = (estabTotal || 0) + ' establecimientos, ' + (studentsTotal || 0) + ' alumnos';
+      lines.push('[DATOS_DISPONIBLES] Vue global: ' + stab + '.');
+      if (roleTxt) lines.push('Usuarios por rol (global): ' + roleTxt + '.');
+      if (discTop) lines.push('Alumnos por disciplina: ' + discTop + '.');
       if (pay && pay.length) lines.push('Últimos pagos registrados: ' + pay.map(p => '$' + Number(p.amount || 0).toLocaleString() + ' (' + (p.paid_at || '').slice(0, 10) + ')').join(' · '));
     } else if ((role === 'owner' || role === 'admin') && establishmentId) {
       const stRes = await supabaseAdmin.from('students').select('id', { count: 'exact', head: true }).eq('establishment_id', establishmentId);
       const discRes = await supabaseAdmin.from('students').select('discipline_code').eq('establishment_id', establishmentId).limit(500);
-      const payRes = await supabaseAdmin.from('payments').select('amount').eq('establishment_id', establishmentId).gte('paid_at', day30).limit(1000);
-      const clsRes = await supabaseAdmin.from('classes').select('id').eq('establishment_id', establishmentId).gte('scheduled_date', new Date().toISOString().slice(0, 10)).limit(20);
+      const payRes = await supabaseAdmin.from('payments').select('amount, student_id, paid_at').eq('establishment_id', establishmentId).gte('paid_at', day30).limit(1000);
+      const clsRes = await supabaseAdmin.from('classes').select('scheduled_date, start_time, end_time, discipline_code, title').eq('establishment_id', establishmentId).gte('scheduled_date', new Date().toISOString().slice(0, 10)).limit(20);
+      const memRes = await supabaseAdmin.from('establishment_members').select('role').eq('establishment_id', establishmentId).limit(2000);
       const disc = discRes.data || [];
       const byDisc = {};
       disc.forEach(s => { byDisc[s.discipline_code] = (byDisc[s.discipline_code] || 0) + 1; });
       const discTop = Object.entries(byDisc).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([d, n]) => d + ': ' + n).join(' · ');
       const pay = payRes.data || [];
       const totalMes = pay.reduce((s, x) => s + Number(x.amount || 0), 0);
+      const cls = clsRes.data || [];
+      const memRows = memRes.data || [];
+      const byRole = {};
+      memRows.forEach(m => { byRole[m.role] = (byRole[m.role] || 0) + 1; });
+      const roleTxt = ['owner', 'admin', 'sensei', 'instructor', 'guardian', 'student']
+        .filter(r => byRole[r])
+        .map(r => r + ': ' + byRole[r]).join(' · ');
       lines.push('[DATOS_DISPONIBLES] Dojo ' + establishmentId + ': ' + (stRes.count || 0) + ' alumnos.');
       if (discTop) lines.push('Alumnos por disciplina: ' + discTop + '.');
+      if (roleTxt) lines.push('Usuarios del dojo por rol: ' + roleTxt + '.');
       if (totalMes) lines.push('Pagos últimos 30 días: $' + totalMes.toLocaleString() + ' (' + pay.length + ' movimientos).');
-      lines.push('Clases programadas hoy o próximas: ' + ((clsRes.data || []).length) + '.');
+      if (cls.length) lines.push('Próximas clases: ' + cls.map(c => (c.scheduled_date || '') + ' ' + (c.start_time || '') + (c.end_time ? '-' + c.end_time : '') + ' ' + (c.title || c.discipline_code || '')).join(' · '));
     } else if ((role === 'sensei' || role === 'instructor') && establishmentId) {
       const discRes = await supabaseAdmin.from('instructor_disciplines').select('discipline_code, discipline:disciplines(name)').eq('establishment_id', establishmentId).eq('instructor_profile_id', profileId).limit(50);
       const stuRes = await supabaseAdmin.from('students').select('discipline_code').eq('establishment_id', establishmentId).overlaps('instructor_profile_ids', [profileId]).limit(500);
@@ -8789,9 +8818,11 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
             // Se usa un system corto y los datos en un mensaje 'user' (más robusto con Gemini),
             // y un fallback local si el proveedor falla (nunca dejamos al usuario sin respuesta).
             const secondSystem = [
-              'Eres el asistente de MartialSystem. Responde en español, ordenado y directo.',
+              'Eres el asistente de MartialSystem. Responde en español, con un tono natural y amable, como conversando con alguien del dojo.',
               'Usa SOLAMENTE los datos que recibes; NO inventes nombres, cifras ni filas.',
-              'Si no hay resultados, dilo claramente. NO termines con <<<TOOL>>> ni JSON.'
+              'Presenta los resultados de forma conversacional: frases cortas y viñetas si ayuda; sin tablas ni JSON.',
+              'Si no hay resultados, dilo con naturalidad (por ejemplo: "No encontré alumnos con ese criterio").',
+              'NO termines con <<<TOOL>>> ni JSON.'
             ].join('\n');
             const secondUser = [
               'El usuario preguntó: ' + String(message),

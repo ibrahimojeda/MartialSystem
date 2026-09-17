@@ -1,14 +1,14 @@
 {
-  "version": "2.11.0",
-  "buildNumber": 23,
-  "message": "Se eliminó el Dashboard clásico por rol. La pantalla de inicio (Inicio/Dashboard) ahora es la misma para todos los roles: \"Mi Información\" + \"Buscador del sistema IA\". Los módulos siguen en la barra lateral.",
+  "version": "2.11.1",
+  "buildNumber": 24,
+  "message": "La IA conversa de forma natural: interpreta preguntas en lenguaje cotidiano, responde con viñetas, respeta los permisos del rol (superadmin/owner/admin ven datos de su dojo; sensei/student solo lo suyo) y responde saludos amablemente.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.0.apk",
-  "releaseDate": "2026-09-13",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.1.apk",
+  "releaseDate": "2026-09-17",
   "changelog": [
-    "Eliminado el Dashboard viejo por rol (estudiante, sensei, superadmin, admin/owner)",
-    "Nueva pantalla de inicio para TODOS los roles: Mi Información + Buscador del sistema IA",
-    "Se mantiene el selector de establecimiento y el árbol de distribución en Inicio",
-    "Limpieza de funciones y estilos del dashboard antiguo"
+    "Conversación natural: la IA entiende preguntas cotidianas (¿cuántos alumnos?, ¿quiénes deben?, ¿a qué hora es mi clase?)",
+    "Respuestas conversacionales con viñetas, sin tablas ni JSON",
+    "Respeto de permisos por rol: solo se comparten datos que el rol puede ver y se explica con naturalidad",
+    "Contexto enriquecido: superadmin ve usuarios por rol global y por disciplina; owner/admin ve usuarios de su dojo por rol, próximas clases y pagos"
   ]
 }

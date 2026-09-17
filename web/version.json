@@ -1,14 +1,14 @@
 {
-  "version": "2.11.1",
-  "buildNumber": 24,
-  "message": "La IA conversa de forma natural: interpreta preguntas en lenguaje cotidiano, responde con viñetas, respeta los permisos del rol (superadmin/owner/admin ven datos de su dojo; sensei/student solo lo suyo) y responde saludos amablemente.",
+  "version": "2.11.2",
+  "buildNumber": 25,
+  "message": "Panel \"Consumo de las IAs\" mejorado: lista TODAS las IAs registradas (nuevas incluidas, sin reescribir su consumo), muestra el consumo individual de cada una con estado, y explica qué significa cada métrica (llamadas, tokens de entrada/salida, costo estimado).",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.1.apk",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.2.apk",
   "releaseDate": "2026-09-17",
   "changelog": [
-    "Conversación natural: la IA entiende preguntas cotidianas (¿cuántos alumnos?, ¿quiénes deben?, ¿a qué hora es mi clase?)",
-    "Respuestas conversacionales con viñetas, sin tablas ni JSON",
-    "Respeto de permisos por rol: solo se comparten datos que el rol puede ver y se explica con naturalidad",
-    "Contexto enriquecido: superadmin ve usuarios por rol global y por disciplina; owner/admin ve usuarios de su dojo por rol, próximas clases y pagos"
+    "Consumo de las IAs: se listan todas las IAs registradas, incluso las recién agregadas (con consumo en 0)",
+    "Consumo individual por IA: llamadas, tokens de entrada/salida, total, costo estimado y último uso",
+    "Columna Estado: activa / sin key / desactivada",
+    "Leyenda que explica qué significa cada métrica del consumo"
   ]
 }

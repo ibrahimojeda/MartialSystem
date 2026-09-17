@@ -8352,9 +8352,43 @@ app.get('/api/ai/usage', requireAuth, async (req, res) => {
   if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
   try {
     const st = aiLoadUsage();
-    const providers = Object.entries(st.providers || {})
-      .map(([id, e]) => ({ id, ...e }))
-      .sort((a, b) => String(b.lastUsed || '').localeCompare(String(a.lastUsed || '')));
+    const usageMap = st.providers || {};
+    // Unir la config actual (todas las IAs, incluidas las recién agregadas) con su consumo.
+    const cfg = await getAIConfig();
+    const norm = aiNormalizeConfig(cfg);
+    const configured = norm.providers || [];
+    const all = new Map();
+    configured.forEach(p => {
+      const id = String(p.id || p.provider || 'p1');
+      all.set(id, {
+        id,
+        provider: p.provider || 'openai',
+        model: p.model || (AI_PROVIDERS[p.provider] && AI_PROVIDERS[p.provider].defaultModel) || '',
+        enabled: p.enabled !== false,
+        hasKey: Boolean(String(p.apiKey || '').trim()),
+        calls: 0, tokens: 0, promptTokens: 0, completionTokens: 0, estCost: 0, lastUsed: null
+      });
+    });
+    Object.entries(usageMap).forEach(([id, e]) => {
+      if (!all.has(id)) {
+        all.set(id, {
+          id, provider: (e && e.provider) || id, model: (e && e.model) || '',
+          enabled: false, hasKey: false,
+          calls: 0, tokens: 0, promptTokens: 0, completionTokens: 0, estCost: 0, lastUsed: null
+        });
+      }
+      const cur = all.get(id);
+      cur.calls = (e && e.calls) || 0;
+      cur.tokens = (e && e.tokens) || 0;
+      cur.promptTokens = (e && e.promptTokens) || 0;
+      cur.completionTokens = (e && e.completionTokens) || 0;
+      cur.estCost = (e && e.estCost) || 0;
+      cur.lastUsed = (e && e.lastUsed) || null;
+      if (e && e.provider) cur.provider = e.provider;
+      if (e && e.model) cur.model = e.model;
+    });
+    const providers = Array.from(all.values())
+      .sort((a, b) => String(b.lastUsed || '').localeCompare(String(a.lastUsed || '')) || String(a.provider).localeCompare(String(b.provider)));
     const todayKey = new Date().toISOString().slice(0, 10);
     const today = st.byDay[todayKey] || { calls: 0, tokens: 0, estCost: 0 };
     // Últimos 7 días (tendencia ligera para el panel)

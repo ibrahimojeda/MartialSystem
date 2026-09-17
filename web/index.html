@@ -2017,13 +2017,14 @@
 
       <article class="card full" id="ai-usage-card" style="display:none;">
         <h3>📊 Consumo de las IAs <span class="pill">Solo superadmin</span></h3>
-        <p class="muted">Llamadas, tokens y costo estimado (USD) por cada IA registrada. Los montos son aproximados según la tarifa pública por 1K tokens.</p>
+        <p class="muted">Consumo individual de cada IA registrada: llamadas, tokens de entrada/salida y costo estimado (USD). Las IAs recién agregadas aparecen con su estado y consumo en 0.</p>
         <div style="overflow-x:auto;">
           <table id="ai-usage-table" style="width:100%;border-collapse:collapse;font-size:13px;">
             <thead>
               <tr style="background:var(--bg-tertiary);color:var(--muted);text-align:left;">
                 <th style="padding:8px;">IA / Proveedor</th>
                 <th style="padding:8px;">Modelo</th>
+                <th style="padding:8px;">Estado</th>
                 <th style="padding:8px;">Llamadas</th>
                 <th style="padding:8px;">Tokens in</th>
                 <th style="padding:8px;">Tokens out</th>
@@ -11304,7 +11305,7 @@
       const body = ids('ai-usage-body');
       const status = ids('ai-usage-status');
       if (!body) return;
-      body.innerHTML = '<tr><td colspan="8" style="padding:10px;" class="muted">⏳ Cargando consumo...</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" style="padding:10px;" class="muted">⏳ Cargando consumo...</td></tr>';
       try {
         const r = await api('/api/ai/usage');
         const d = r.data || {};
@@ -11312,8 +11313,9 @@
         const fmt = function (n) { return Number(n || 0).toLocaleString('en-US'); };
         const rows = provs.map(function (p) {
           const last = p.lastUsed ? new Date(p.lastUsed).toLocaleString() : '—';
+          const estado = p.enabled ? (p.hasKey ? '✅ Activa' : '⚠️ Sin key') : '🚫 Desactivada';
           return '<tr style="border-top:1px solid var(--line);">' +
-            '<td style="padding:8px;"><b>' + aiEsc(p.provider || p.id || 'IA') + '</b></td>' +
+            '<td style="padding:8px;"><b>' + aiEsc(p.provider || p.id || 'IA') + '</b><div style="font-size:11px;color:var(--muted);">' + estado + '</div></td>' +
             '<td style="padding:8px;">' + aiEsc(p.model || '—') + '</td>' +
             '<td style="padding:8px;">' + fmt(p.calls) + '</td>' +
             '<td style="padding:8px;">' + fmt(p.promptTokens) + '</td>' +
@@ -11325,7 +11327,7 @@
         }).join('');
         const t = d.totals || {};
         const today = d.today || {};
-        body.innerHTML = (rows || '<tr><td colspan="8" style="padding:10px;" class="muted">Aún no hay consumo registrado.</td></tr>') +
+        body.innerHTML = (rows || '<tr><td colspan="10" style="padding:10px;" class="muted">Aún no hay consumo registrado.</td></tr>') +
           (rows ? '<tr style="border-top:2px solid var(--primary);font-weight:bold;">' +
             '<td style="padding:8px;">TOTAL</td><td style="padding:8px;">—</td>' +
             '<td style="padding:8px;">' + fmt(t.calls) + '</td>' +
@@ -11334,9 +11336,21 @@
             '<td style="padding:8px;">' + fmt(t.tokens) + '</td>' +
             '<td style="padding:8px;">$' + Number(t.estCost || 0).toFixed(4) + '</td>' +
             '<td style="padding:8px;">—</td></tr>' : '');
+        const legend = document.createElement('div');
+        legend.style.cssText = 'margin-top:10px;font-size:11px;color:var(--muted);line-height:1.7;';
+        legend.innerHTML =
+          '<strong style="color:var(--text);">📖 Qué significa cada dato:</strong><br>' +
+          '• <b>Llamadas</b>: veces que se invocó esta IA (preguntas/consultas procesadas).<br>' +
+          '• <b>Tokens de entrada</b>: información enviada al modelo (tu pregunta + contexto) para que responda.<br>' +
+          '• <b>Tokens de salida</b>: texto que el modelo generó como respuesta.<br>' +
+          '• <b>Total tokens</b>: suma de entrada + salida.<br>' +
+          '• <b>Costo estimado (USD)</b>: aproximación según la tarifa pública por cada 1.000 tokens del modelo (puede variar con la facturación real del proveedor).<br>' +
+          '• <b>Último uso</b>: fecha/hora del último consumo de esa IA.<br>' +
+          '• <b>Estado</b>: Activa/Sin key/Desactivada según la configuración.';
+        body.parentNode.appendChild(legend);
         if (status) status.textContent = '📅 Hoy: ' + fmt(today.calls) + ' llamadas · ' + fmt(today.tokens) + ' tokens · ≈$' + Number(today.estCost || 0).toFixed(4) + ' · Actualizado: ' + (d.updatedAt ? new Date(d.updatedAt).toLocaleString() : 'nunca');
       } catch (err) {
-        body.innerHTML = '<tr><td colspan="8" style="padding:10px;">Error al cargar consumo: ' + aiEsc(err.message) + '</td></tr>';
+        body.innerHTML = '<tr><td colspan="10" style="padding:10px;">Error al cargar consumo: ' + aiEsc(err.message) + '</td></tr>';
         if (status) status.textContent = 'Error: ' + err.message;
       }
     }

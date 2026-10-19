@@ -173,7 +173,7 @@ Se ejecutó auditoría estática (solo lectura). Confirmaciones que **refinan** 
 ### 🔴 Confirmado — P0
 | ID | Resultado | Evidencia |
 |---|---|---|
-| AUDIT-011 | **Superadmin usa la contraseña por defecto `Venta@Dojo2026!`** en `.env` (credencial adivinable, documentada en README y en el historial de Git) | `.env` `SUPERADMIN_PASSWORD` = valor por defecto |
+| AUDIT-011 | **Superadmin usa la contraseña por defecto `REDACTED`** en `.env` (credencial adivinable, documentada en README y en el historial de Git) | `.env` `SUPERADMIN_PASSWORD` = valor por defecto |
 | AUDIT-012 | **Vulnerabilidad crítica en `@capacitor/android` (<8.5.1)**: carga de contenido remoto en el origen de la app vía proxy HTTP interno (afecta al APK) | `npm audit` GHSA-rvm3-566m-v7fv |
 
 ### 🟠 Confirmado — P1

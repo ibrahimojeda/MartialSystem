@@ -249,7 +249,7 @@
 ```bash
 # Secretos en historial
 git log --all --oneline -- .env tok.txt data/ai-config.json data/trial-users.json
-git log --oneline -S 'Venta@Dojo2026!' --all
+git log --oneline -S 'REDACTED' --all
 
 # Secretos en árbol de trabajo (solo nombres de archivo)
 git grep -l -I -E "sk_live_|sk_test_|whsec_|SERVICE_ROLE_KEY|-----BEGIN|PRIVATE KEY" -- . ':!node_modules' ':!*.apk'

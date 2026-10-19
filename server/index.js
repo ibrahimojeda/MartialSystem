@@ -26,6 +26,12 @@ if (GIT_COMMIT === 'unknown') {
     GIT_COMMIT = String(require('child_process').execSync('git rev-parse --short HEAD', { encoding: 'utf8' })).trim();
   } catch (_) { /* .git no disponible en runtime */ }
 }
+let GIT_BRANCH = String(process.env.RENDER_GIT_BRANCH || process.env.BRANCH || '').trim() || 'unknown';
+if (GIT_BRANCH === 'unknown') {
+  try {
+    GIT_BRANCH = String(require('child_process').execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' })).trim();
+  } catch (_) { /* .git no disponible en runtime */ }
+}
 
 const app = express();
 const PORT = Number(process.env.PORT || 8010);
@@ -926,7 +932,7 @@ app.put('/api/trial/users/:profileId', requireAuth, async (req, res) => {
 
 // ─── Login with trial check ──────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, app: 'MartialSystem', version: APP_VERSION, build: APP_BUILD, commit: GIT_COMMIT, ts: new Date().toISOString() });
+  res.json({ ok: true, app: 'MartialSystem', version: APP_VERSION, build: APP_BUILD, commit: GIT_COMMIT, branch: GIT_BRANCH, ts: new Date().toISOString() });
 });
 
 app.post('/api/upload/public', imageUpload.single('image'), (req, res) => {

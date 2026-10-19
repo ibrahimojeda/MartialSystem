@@ -1,0 +1,170 @@
+// server/ai-security.js
+// Funciones PURAS de seguridad del asistente IA (sin E/S, sin Supabase, sin red).
+// Se usan desde server/index.js y se testean en tests/ai-security.test.js.
+
+const AI_PROVIDERS = {
+  openai:   { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini' },
+  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-chat' },
+  gemini:   { label: 'Google Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', defaultModel: 'gemini-3.6-flash' },
+  custom:   { label: 'Custom (OpenAI-compatible)', baseUrl: '', defaultModel: '' }
+};
+
+const AI_TOOLS = {
+  students:      { label: 'Alumnos',        formId: 'student-form',           read: ['superadmin','owner','admin','sensei','instructor','student','guardian'], write: ['superadmin','owner','admin','sensei','instructor'], delete: ['superadmin','owner','admin'] },
+  classes:       { label: 'Clases',         formId: 'class-form',             read: ['superadmin','owner','admin','sensei','instructor'],                 write: ['superadmin','owner','admin','sensei','instructor'], delete: ['superadmin','owner','admin','sensei'] },
+  payments:      { label: 'Pagos',          formId: 'payment-form',           read: ['superadmin','owner','admin','sensei','instructor','student','guardian'], write: ['superadmin','owner','admin'], delete: ['superadmin','owner','admin'] },
+  notifications: { label: 'Notificaciones', formId: 'notification-form',      read: ['superadmin','owner','admin','sensei','instructor'],                 write: ['superadmin','owner','admin','sensei','instructor'], delete: [] },
+  billing:       { label: 'Mensualidades/Facturas', formId: 'billing-form',   read: ['superadmin','owner','admin'],                                        write: [], delete: [] },
+  users:         { label: 'Usuarios',       formId: 'admin-create-user-form', read: ['superadmin','owner','sensei'],                                       write: ['superadmin','owner','sensei'], delete: [] }
+};
+
+function aiToolAllowed(tool, role, mode) {
+  const def = AI_TOOLS[tool];
+  if (!def) return false;
+  if (mode === 'read') return def.read.includes(role);
+  if (mode === 'write') return def.write.includes(role);
+  if (mode === 'delete') return def.delete.includes(role);
+  return false;
+}
+
+function detectImageType(buffer) {
+  if (!buffer || buffer.length < 12) return null;
+  const b = buffer;
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+  return null;
+}
+
+const AI_TOOL_PARAM_LIMITS = { string: 200, arrayItems: 40, params: 20 };
+// Parser ESTRICTO de bloques <<<TOOL>>>: esquema + límites + rechazo de payloads inválidos.
+function aiParseToolBlock(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).trim();
+  if (!cleaned.startsWith('{') || !cleaned.endsWith('}')) return null;
+  let obj;
+  try { obj = JSON.parse(cleaned); } catch (_) { return null; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+
+  const tool = obj.tool;
+  if (typeof tool !== 'string' || !tool || tool.length > 40) return null;
+  if (!AI_TOOLS[String(tool).toLowerCase()]) return null;
+
+  const params = obj.params;
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
+  const keys = Object.keys(params);
+  if (keys.length > AI_TOOL_PARAM_LIMITS.params) return null;
+
+  const safeParams = {};
+  for (const k of keys) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') return null;
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(k)) return null;
+    const v = params[k];
+    if (v === null || v === undefined) continue;
+    const t = typeof v;
+    if (t === 'string') {
+      if (v.length > AI_TOOL_PARAM_LIMITS.string) return null;
+      safeParams[k] = v;
+    } else if (t === 'number' || t === 'boolean') {
+      safeParams[k] = v;
+    } else if (Array.isArray(v)) {
+      if (v.length > 20) return null;
+      if (!v.every(x => typeof x === 'string' && x.length <= AI_TOOL_PARAM_LIMITS.arrayItems)) return null;
+      safeParams[k] = v;
+    } else {
+      return null;
+    }
+  }
+  if (typeof safeParams.limit === 'number') {
+    safeParams.limit = Math.max(1, Math.min(80, Math.floor(safeParams.limit)));
+  }
+  return { tool: String(tool).toLowerCase(), params: safeParams };
+}
+
+// Bloquea SSRF: solo https; rechaza loopback, IPs privadas, link-local y metadata.
+function isSSRFUnsafeUrl(raw) {
+  let u;
+  try { u = new URL(String(raw)); } catch (_) { return true; }
+  if (u.protocol !== 'https:') return true;
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '127.0.0.1' || host === '::1' || host === '0.0.0.0' || host === '::') return true;
+  if (/^169\.254\./.test(host) || /^fe80:/i.test(host)) return true;
+  if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return true;
+  if (host === 'metadata' || host === 'metadata.google.internal' || host.endsWith('.internal') || host.endsWith('.local')) return true;
+  return false;
+}
+
+function aiSanitizeBaseUrl(v, prev) {
+  const s = String((v !== undefined && v !== null) ? v : (prev || '')).trim();
+  if (!/^https?:\/\//i.test(s)) return '';
+  if (isSSRFUnsafeUrl(s)) return '';
+  return s;
+}
+
+function aiSanitizeModel(v, prev) {
+  const s = String((v !== undefined && v !== null) ? v : (prev || '')).trim();
+  if (!s || /:\/\//.test(s)) return '';
+  return s;
+}
+
+// Gating por plan fail-closed. sb = cliente Supabase inyectado.
+async function hasAIFeatureWith(sb, establishmentId) {
+  if (!establishmentId || establishmentId === 'superadmin') return true;
+  try {
+    const { data: ep } = await sb
+      .from('establishment_plans').select('plan_code').eq('establishment_id', establishmentId).maybeSingle();
+    if (!ep || !ep.plan_code) return false;
+    const { data: sp } = await sb
+      .from('system_plans').select('features').eq('code', ep.plan_code).maybeSingle();
+    const feats = (sp && sp.features) || [];
+    return Array.isArray(feats) && feats.includes('ia_features');
+  } catch (_) { return false; }
+}
+
+// Decisión de bloqueo por factura vencida (>=15 días).
+function shouldBlockBilling(bill, nowMs) {
+  if (!bill) return false;
+  if (bill.status === 'confirmed' || bill.status === 'waived') return false;
+  const due = new Date(bill.due_date).getTime();
+  if (!Number.isFinite(due)) return false;
+  const daysOverdue = Math.max(0, Math.floor((nowMs - due) / 86400000));
+  return daysOverdue >= 15;
+}
+
+// Presupuesto global: bloquea si el costo estimado supera el límite configurado.
+function isOverBudget(totals, budgetUsd) {
+  const budget = Number(budgetUsd);
+  if (!Number.isFinite(budget) || budget <= 0) return false;
+  const est = Number((totals && totals.estCost) || 0);
+  return est > budget;
+}
+
+// Failover puro: prueba proveedores en orden; devuelve el primero que responde.
+async function aiFailoverWith(providers, requestFn, labelFor) {
+  if (!providers || !providers.length) throw new Error('AI no configurada. El superadmin debe colocar el API key en Configuración → IA.');
+  const errors = [];
+  for (const p of providers) {
+    try {
+      const res = await requestFn(p);
+      const label = labelFor ? labelFor(p) : (p.provider || p.id || 'IA');
+      return { content: res.content, model: res.model, baseUrl: res.baseUrl, providerId: p.id || p.provider || 'p1', providerLabel: label };
+    } catch (err) {
+      const label = labelFor ? labelFor(p) : (p.provider || p.id || 'IA');
+      errors.push(label + ': ' + (err.message || ''));
+    }
+  }
+  const e = new Error((providers.length > 1 ? 'Todas las IAs fallaron. ' : '') + (errors[errors.length - 1] || 'sin detalles'));
+  e.status = 502;
+  e.providerErrors = errors;
+  throw e;
+}
+
+module.exports = {
+  AI_PROVIDERS, AI_TOOLS, aiToolAllowed, detectImageType, aiParseToolBlock,
+  isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
+  hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith
+};
+

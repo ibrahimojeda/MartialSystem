@@ -6,6 +6,11 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const { supabaseAdmin, supabasePublic } = require('./supabaseClient');
+const {
+  AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
+  isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
+  hasAIFeatureWith, shouldBlockBilling
+} = require('./ai-security');
 
 const app = express();
 const PORT = Number(process.env.PORT || 8010);
@@ -426,16 +431,7 @@ const imageUpload = multer({
   }
 });
 
-// Valida el contenido real (magic bytes) de una imagen. Rechaza archivos disfrazados.
-const detectImageType = (buffer) => {
-  if (!buffer || buffer.length < 12) return null;
-  const b = buffer;
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
-  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
-  return null;
-};
+// detectImageType importado desde ./ai-security (ver require al inicio)
 
 const uploadImageToStorage = async (file, folder = 'general') => {
   const mime = String(file?.mimetype || '').toLowerCase();
@@ -521,6 +517,9 @@ const getAccessToken = (req) => {
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase();
 const buildInternalEmail = (username) => `${username}@users.martialsystem.local`;
+const escapeHtml = (v) => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const createSuperadminToken = () => `sa_${crypto.randomBytes(24).toString('hex')}`;
 
@@ -7247,6 +7246,10 @@ app.post('/api/payments/paypal/capture-order', requireAuth, async (req, res) => 
   const profileId = req.authUser.id;
   const { orderId, establishmentId, studentId } = req.body || {};
   if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
+  if (establishmentId) {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+  }
   try {
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) return res.status(400).json({ ok: false, error: 'PayPal not configured' });
     const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
@@ -7290,12 +7293,14 @@ app.post('/api/payments/paypal/webhook', async (req, res) => {
 
 // ─── Payment success/cancel pages ─────────────────────────────
 app.get('/payment/success', (req, res) => {
-  const { ref, paymentId } = req.query;
+  const ref = escapeHtml(req.query.ref);
+  const paymentId = escapeHtml(req.query.paymentId);
   res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pago exitoso - MartialSystem</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0f1318;color:#eaf0f7;}.card{background:#171d24;border:1px solid #2b3645;border-radius:14px;padding:30px;text-align:center;max-width:420px;}.icon{font-size:48px;margin-bottom:10px;}.btn{display:inline-block;background:linear-gradient(180deg,#c64834,#a73727);color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:16px;}</style></head><body><div class="card"><div class="icon">✅</div><h1>Pago exitoso</h1><p>Tu pago se ha procesado correctamente.</p>${ref ? `<p style="font-size:12px;color:#aab7c8;">Ref: ${ref}</p>` : ''}${paymentId ? `<p style="font-size:12px;color:#aab7c8;">ID: ${paymentId}</p>` : ''}<a class="btn" href="/">Volver al inicio</a></div></body></html>`);
 });
 
 app.get('/payment/cancel', (req, res) => {
-  const { ref, paymentId } = req.query;
+  const ref = escapeHtml(req.query.ref);
+  const paymentId = escapeHtml(req.query.paymentId);
   res.send(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pago cancelado - MartialSystem</title><style>body{font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0f1318;color:#eaf0f7;}.card{background:#171d24;border:1px solid #2b3645;border-radius:14px;padding:30px;text-align:center;max-width:420px;}.icon{font-size:48px;margin-bottom:10px;}.btn{display:inline-block;background:linear-gradient(180deg,#35506f,#2b3f59);color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:16px;}</style></head><body><div class="card"><div class="icon">↩️</div><h1>Pago cancelado</h1><p>El proceso de pago fue cancelado. No se ha realizado ningun cargo.</p>${ref ? `<p style="font-size:12px;color:#aab7c8;">Ref: ${ref}</p>` : ''}${paymentId ? `<p style="font-size:12px;color:#aab7c8;">ID: ${paymentId}</p>` : ''}<a class="btn" href="/">Volver al inicio</a></div></body></html>`);
 });
 
@@ -8337,16 +8342,12 @@ function aiSelectProvider(cfg) {
 
 function aiProviderBaseUrl(p) {
   const b = String((p && p.baseUrl) || '').trim();
-  // Solo URLs absolutas; si el valor no es http(s) se usa la URL por defecto del proveedor.
-  if (/^https?:\/\//i.test(b)) return b;
+  // Solo URLs absolutas y sin riesgo SSRF; si no, se usa la URL por defecto del proveedor.
+  if (/^https?:\/\//i.test(b) && !isSSRFUnsafeUrl(b)) return b;
   const def = p && AI_PROVIDERS[p.provider];
   return (def && def.baseUrl) || AI_PROVIDERS.openai.baseUrl;
 }
-// Sanitiza la baseUrl al guardar: solo conserva URLs absolutas (evita valores como "venta").
-function aiSanitizeBaseUrl(v, prev) {
-  const s = String((v !== undefined && v !== null) ? v : (prev || '')).trim();
-  return /^https?:\/\//i.test(s) ? s : '';
-}
+// aiSanitizeBaseUrl importado desde ./ai-security (con SSRF)
 function aiProviderModel(p) {
   const m = String((p && p.model) || '').trim();
   // Si el modelo parece una URL, se ignora y se usa el modelo por defecto del proveedor.
@@ -8354,12 +8355,7 @@ function aiProviderModel(p) {
   const def = p && AI_PROVIDERS[p.provider];
   return (def && def.defaultModel) || AI_PROVIDERS.openai.defaultModel;
 }
-// Sanitiza el modelo al guardar: vacío o con URL → '' (usa el default del proveedor).
-function aiSanitizeModel(v, prev) {
-  const s = String((v !== undefined && v !== null) ? v : (prev || '')).trim();
-  if (!s || /:\/\//.test(s)) return '';
-  return s;
-}
+// aiSanitizeModel importado desde ./ai-security
 
 // Ejecuta una llamada al proveedor (formato OpenAI-compatible) con tracking de consumo.
 // Devuelve { content, model, baseUrl, raw } y lanza Error con .status si falla el proveedor.
@@ -8566,25 +8562,8 @@ function aiResetUsage() {
   } catch (_) { /* best-effort */ }
 }
 
-// Verifica si el plan del establecimiento incluye IA (Fase 1: gating por plan).
-const hasAIFeature = async (establishmentId) => {
-  if (!establishmentId || establishmentId === 'superadmin') return true; // superadmin siempre autorizado
-  try {
-    const { data: ep } = await supabaseAdmin
-      .from('establishment_plans')
-      .select('plan_code')
-      .eq('establishment_id', establishmentId)
-      .maybeSingle();
-    if (!ep || !ep.plan_code) return false; // fail-closed: sin plan asignado → sin IA
-    const { data: sp } = await supabaseAdmin
-      .from('system_plans')
-      .select('features')
-      .eq('code', ep.plan_code)
-      .maybeSingle();
-    const feats = sp?.features || [];
-    return Array.isArray(feats) && feats.includes('ia_features');
-  } catch (_) { return false; } // fail-closed: ante error/incertidumbre → sin IA
-};
+// Verifica si el plan del establecimiento incluye IA (Fase 1: gating por plan, fail-closed).
+const hasAIFeature = (establishmentId) => hasAIFeatureWith(supabaseAdmin, establishmentId);
 
 // Indica el rol real del usuario en el establecimiento activo.
 const getAIContextRole = async (req, establishmentId) => {
@@ -8916,23 +8895,7 @@ app.get('/api/ai/status', requireAuth, async (req, res) => {
 
 // Permitidos por herramienta: read = quién puede BUSCAR; write = quién puede recibir
 // prefill para CREAR/EDITAR; delete = quién puede solicitar borrado (con confirmación).
-const AI_TOOLS = {
-  students:      { label: 'Alumnos',        formId: 'student-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],  write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin'] },
-  classes:       { label: 'Clases',         formId: 'class-form',        read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin', 'sensei'] },
-  payments:      { label: 'Pagos',          formId: 'payment-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],     write: ['superadmin', 'owner', 'admin'],                             delete: ['superadmin', 'owner', 'admin'] },
-  notifications: { label: 'Notificaciones', formId: 'notification-form', read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: [] },
-  billing:       { label: 'Mensualidades/Facturas', formId: 'billing-form',  read: ['superadmin', 'owner', 'admin'],                                        write: [],                                          delete: [] },
-  users:         { label: 'Usuarios',        formId: 'admin-create-user-form', read: ['superadmin', 'owner', 'sensei'],                                     write: ['superadmin', 'owner', 'sensei'],           delete: [] }
-};
-
-const aiToolAllowed = (tool, role, mode) => {
-  const def = AI_TOOLS[tool];
-  if (!def) return false;
-  if (mode === 'read') return def.read.includes(role);
-  if (mode === 'write') return def.write.includes(role);
-  if (mode === 'delete') return def.delete.includes(role);
-  return false;
-};
+// AI_TOOLS y aiToolAllowed importados desde ./ai-security
 
 // Llama a la IA con el formato de tu proveedor (OpenAI-compatible). Devuelve texto.
 // Usa el provider indicado en opts.provider, o selecciona el activo de la config.
@@ -8959,51 +8922,7 @@ function aiParseJsonLoose(raw) {
   return null;
 }
 
-// Parser ESTRICTO de bloques <<<TOOL>>>: esquema + límites + rechazo de payloads inválidos.
-// Evita que la salida del modelo elija rutas/tablas/filtros/IDs sin validación del servidor.
-const AI_TOOL_PARAM_LIMITS = { string: 200, arrayItems: 40, params: 20 };
-function aiParseToolBlock(raw) {
-  if (!raw) return null;
-  const cleaned = String(raw).trim();
-  // Solo se acepta un objeto JSON literal. Sin fallback laxo (rechaza inyección/extras).
-  if (!cleaned.startsWith('{') || !cleaned.endsWith('}')) return null;
-  let obj;
-  try { obj = JSON.parse(cleaned); } catch (_) { return null; }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
-
-  const tool = obj.tool;
-  if (typeof tool !== 'string' || !tool || tool.length > 40) return null;
-  if (!AI_TOOLS[String(tool).toLowerCase()]) return null; // solo herramientas conocidas
-
-  const params = obj.params;
-  if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
-  const keys = Object.keys(params);
-  if (keys.length > AI_TOOL_PARAM_LIMITS.params) return null;
-
-  const safeParams = {};
-  for (const k of keys) {
-    if (!/^[A-Za-z0-9_]{1,40}$/.test(k)) return null; // claves inválidas → rechazo
-    const v = params[k];
-    if (v === null || v === undefined) continue;
-    const t = typeof v;
-    if (t === 'string') {
-      if (v.length > AI_TOOL_PARAM_LIMITS.string) return null;
-      safeParams[k] = v;
-    } else if (t === 'number' || t === 'boolean') {
-      safeParams[k] = v;
-    } else if (Array.isArray(v)) {
-      if (v.length > 20) return null;
-      if (!v.every(x => typeof x === 'string' && x.length <= AI_TOOL_PARAM_LIMITS.arrayItems)) return null;
-      safeParams[k] = v;
-    } else {
-      return null; // objetos anidados → rechazo
-    }
-  }
-  if (typeof safeParams.limit === 'number') {
-    safeParams.limit = Math.max(1, Math.min(80, Math.floor(safeParams.limit)));
-  }
-  return { tool: String(tool).toLowerCase(), params: safeParams };
-}
+// aiParseToolBlock importado desde ./ai-security (parser estricto con esquema)
 
 // Búsqueda REAL en Supabase, acotada por rol/establecimiento. Nunca devuelve más de
 // 80 filas y solo los campos que ese rol puede ver.
@@ -9350,11 +9269,10 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
         .eq('establishment_id', establishmentId)
         .eq('billing_month', currentMonth)
         .maybeSingle();
-      if (bill && bill.status !== 'confirmed' && bill.status !== 'waived') {
-        const daysOverdue = Math.max(0, Math.floor((now.getTime() - new Date(bill.due_date).getTime()) / 86400000));
-        if (daysOverdue >= 15) {
-          return res.status(423).json({ ok: false, error: 'Mensualidad vencida', code: 'BILLING_BLOCKED', billing: { severeOverdue: true, daysOverdue } });
-        }
+      if (shouldBlockBilling(bill, now.getTime())) {
+        const due = new Date(bill.due_date).getTime();
+        const daysOverdue = Math.max(0, Math.floor((now.getTime() - due) / 86400000));
+        return res.status(423).json({ ok: false, error: 'Mensualidad vencida', code: 'BILLING_BLOCKED', billing: { severeOverdue: true, daysOverdue } });
       }
     }
 

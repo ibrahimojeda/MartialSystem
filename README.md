@@ -30,9 +30,9 @@ En SQL Editor ejecuta en orden:
 
 ## 3.1) Acceso al sistema
 - El login ahora es por `username` + `password`.
-- Superadmin unico:
-   - `SUPERADMIN_USERNAME=venta`
-   - `SUPERADMIN_PASSWORD=Venta@Dojo2026!`
+- Superadmin unico (credenciales se definen SOLO en `.env`; nunca versionadas ni en ejemplos):
+   - `SUPERADMIN_USERNAME` (ej. `venta`)
+   - `SUPERADMIN_PASSWORD` (obligatoria, fuerte y unica; el servidor no arranca sin ella)
 - Para owners/instructors creados desde onboarding, el sistema usa un email interno tecnico y no requiere email en UI.
 
 ## 4) Ejecutar local

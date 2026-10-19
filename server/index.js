@@ -25,8 +25,38 @@ const loadTheoryFromFile = (discipline, style) => {
   return null;
 };
 
-app.use(cors());
+// ── CORS: restringir a orígenes conocidos (localhost, app nativa y los indicados en CORS_ORIGINS) ──
+const CORS_EXTRA_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const isAllowedCorsOrigin = (origin) => {
+  if (!origin) return true; // curl / apps nativas / mismo origen
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (/^capacitor:\/\/localhost$/.test(origin)) return true;
+  if (/^https?:\/\/app\.martialsystem\.local(:\d+)?$/.test(origin)) return true;
+  return CORS_EXTRA_ORIGINS.includes(origin);
+};
+app.use(cors({ origin: (origin, cb) => cb(null, isAllowedCorsOrigin(origin) ? true : false) }));
 app.use(express.json({ limit: '5mb' }));
+
+// ── Rate limiting en memoria (sin dependencias) ──
+const rateLimitBuckets = new Map();
+const rateLimit = (max, windowMs) => (req, res, next) => {
+  const key = String(req.ip || (req.socket && req.socket.remoteAddress) || 'unknown');
+  const now = Date.now();
+  if (rateLimitBuckets.size > 20000) rateLimitBuckets.clear();
+  let b = rateLimitBuckets.get(key);
+  if (!b || b.resetAt <= now) { b = { count: 0, resetAt: now + windowMs }; rateLimitBuckets.set(key, b); }
+  b.count += 1;
+  res.setHeader('X-RateLimit-Limit', String(max));
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, max - b.count)));
+  if (b.count > max) return res.status(429).json({ ok: false, error: 'Demasiadas solicitudes. Intenta de nuevo en unos segundos.' });
+  next();
+};
+app.use('/api', rateLimit(600, 60 * 1000));               // límite global del API
+app.use('/api/login', rateLimit(10, 60 * 1000));          // anti fuerza bruta
+app.use('/api/ai/chat', rateLimit(30, 60 * 1000));        // control de costo de la IA
+app.use('/api/ai/welcome', rateLimit(30, 60 * 1000));
+app.use('/api/change-password', rateLimit(10, 60 * 1000));
+app.use('/api/upload/public', rateLimit(20, 60 * 1000));      // límite anti-abuso para subida pública
 
 // Headers de no-cache para HTML y SW (forzar versión nueva en navegador)
 app.use((req, res, next) => {
@@ -82,8 +112,8 @@ const DEFAULT_ROLE_MODULES = {
   [ROLE_SENSEI]: ['operacion', 'calendario', 'academico', 'torneos', 'comunidad', 'finanzas'],
   [ROLE_ADMIN]: ['operacion', 'calendario', 'academico', 'comunidad', 'marketplace', 'finanzas'],
   [ROLE_INSTRUCTOR]: ['operacion', 'calendario', 'academico', 'comunidad'],
-  [ROLE_GUARDIAN]: ['academico', 'finanzas', 'comunidad'],
-  [ROLE_STUDENT]: ['academico', 'comunidad']
+  [ROLE_GUARDIAN]: ['operacion', 'academico', 'finanzas', 'comunidad'],
+  [ROLE_STUDENT]: ['operacion', 'academico', 'comunidad']
 };
 
 const modulePermissionsPath = path.join(__dirname, '..', 'data', 'module-permissions.json');
@@ -105,18 +135,28 @@ if (!SUPERADMIN_PASSWORD) {
   process.exit(1);
 }
 const superadminSessionsPath = path.join(__dirname, '..', 'data', 'superadmin-sessions.json');
-const superadminSessions = new Set();
+const SUPERADMIN_SESSION_TTL_MS = Number(process.env.SUPERADMIN_SESSION_TTL_HOURS || 12) * 60 * 60 * 1000;
+// Sesiones: clave = hash SHA-256 del token (nunca se persiste el token crudo), valor = timestamp de creación.
+const superadminSessions = new Map();
+const hashSuperadminToken = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 const persistSuperadminSessions = () => {
   try {
     fs.mkdirSync(path.dirname(superadminSessionsPath), { recursive: true });
-    fs.writeFileSync(superadminSessionsPath, JSON.stringify(Array.from(superadminSessions)), 'utf-8');
+    const obj = {};
+    for (const [hash, ts] of superadminSessions.entries()) obj[hash] = ts;
+    fs.writeFileSync(superadminSessionsPath, JSON.stringify(obj), 'utf-8');
   } catch (_) { /* best-effort */ }
 };
-// Cargar sesiones guardadas al arrancar (soportan reinicios del servidor)
+// Cargar sesiones guardadas (hashes con timestamp) y descartar las expiradas.
 try {
   if (fs.existsSync(superadminSessionsPath)) {
-    const arr = JSON.parse(fs.readFileSync(superadminSessionsPath, 'utf-8'));
-    if (Array.isArray(arr)) arr.forEach((t) => { if (t && t.startsWith('sa_')) superadminSessions.add(t); });
+    const obj = JSON.parse(fs.readFileSync(superadminSessionsPath, 'utf-8'));
+    if (obj && typeof obj === 'object') {
+      const now = Date.now();
+      for (const [hash, ts] of Object.entries(obj)) {
+        if (hash && ts && (now - Number(ts)) < SUPERADMIN_SESSION_TTL_MS) superadminSessions.set(hash, Number(ts));
+      }
+    }
   }
 } catch (_) { /* best-effort */ }
 
@@ -386,6 +426,17 @@ const imageUpload = multer({
   }
 });
 
+// Valida el contenido real (magic bytes) de una imagen. Rechaza archivos disfrazados.
+const detectImageType = (buffer) => {
+  if (!buffer || buffer.length < 12) return null;
+  const b = buffer;
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+  return null;
+};
+
 const uploadImageToStorage = async (file, folder = 'general') => {
   const mime = String(file?.mimetype || '').toLowerCase();
   const ext = path.extname(file?.originalname || '').toLowerCase() || (mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg');
@@ -478,8 +529,11 @@ const requireAuth = async (req, res, next) => {
   if (!accessToken) return res.status(401).json({ ok: false, error: 'Missing access token' });
 
   if (accessToken.startsWith('sa_')) {
-    if (!superadminSessions.has(accessToken)) {
-      return res.status(401).json({ ok: false, error: 'Invalid access token' });
+    const hash = hashSuperadminToken(accessToken);
+    const createdAt = superadminSessions.get(hash);
+    if (!createdAt || (Date.now() - createdAt) > SUPERADMIN_SESSION_TTL_MS) {
+      if (createdAt) { superadminSessions.delete(hash); persistSuperadminSessions(); }
+      return res.status(401).json({ ok: false, error: 'Sesión inválida o expirada' });
     }
     req.authUser = {
       id: 'superadmin',
@@ -694,7 +748,7 @@ app.post('/api/trial/signup', async (req, res) => {
     .eq('username', normalizedUsername)
     .maybeSingle();
   if (lookupError) return res.status(500).json({ ok: false, error: mapUsernameSchemaError(lookupError.message) });
-  if (existingProfile?.id) return res.status(400).json({ ok: false, error: 'username is already in use' });
+  if (existingProfile?.id) return res.status(409).json({ ok: false, error: 'username is already in use' });
 
   const email = buildInternalEmail(normalizedUsername);
   const created = { authUserId: null, establishmentId: null };
@@ -786,7 +840,11 @@ app.post('/api/trial/signup', async (req, res) => {
     if (created.authUserId) {
       await supabaseAdmin.auth.admin.deleteUser(created.authUserId);
     }
-    return res.status(500).json({ ok: false, error: err.message || 'Trial signup failed' });
+    const msg = String(err && err.message ? err.message : err || '');
+    if (/already been registered|duplicate key|already exists|already in use/i.test(msg)) {
+      return res.status(409).json({ ok: false, error: 'El usuario ya existe. Elige otro nombre de usuario.' });
+    }
+    return res.status(500).json({ ok: false, error: msg || 'Trial signup failed' });
   }
 });
 
@@ -861,6 +919,7 @@ app.post('/api/upload/public', imageUpload.single('image'), (req, res) => {
   (async () => {
     try {
       if (!req.file) return res.status(400).json({ ok: false, error: 'image file is required' });
+      if (!detectImageType(req.file.buffer)) return res.status(400).json({ ok: false, error: 'Invalid image content' });
 
       let uploaded;
       try {
@@ -888,6 +947,7 @@ app.post('/api/upload', requireAuth, imageUpload.single('image'), (req, res) => 
   (async () => {
     try {
       if (!req.file) return res.status(400).json({ ok: false, error: 'image file is required' });
+      if (!detectImageType(req.file.buffer)) return res.status(400).json({ ok: false, error: 'Invalid image content' });
 
       const folder = req.body?.folder ? String(req.body.folder) : 'private';
       let uploaded;
@@ -1004,7 +1064,7 @@ app.post('/api/onboarding', async (req, res) => {
     return res.status(500).json({ ok: false, error: mapUsernameSchemaError(ownerLookupError.message) });
   }
   if (existingOwnerProfile?.id) {
-    return res.status(400).json({ ok: false, error: 'ownerUsername is already in use' });
+    return res.status(409).json({ ok: false, error: 'ownerUsername is already in use' });
   }
 
   const ownerEmail = buildInternalEmail(normalizedOwnerUsername);
@@ -1098,7 +1158,11 @@ app.post('/api/onboarding', async (req, res) => {
     if (created.authUserId) {
       await supabaseAdmin.auth.admin.deleteUser(created.authUserId);
     }
-    return res.status(500).json({ ok: false, error: mapUsernameSchemaError(err.message) || 'Onboarding failed' });
+    const msg = String(err && err.message ? err.message : err || '');
+    if (/already been registered|duplicate key|already exists|already in use/i.test(msg)) {
+      return res.status(409).json({ ok: false, error: 'El usuario ya existe. Elige otro nombre de usuario.' });
+    }
+    return res.status(500).json({ ok: false, error: mapUsernameSchemaError(msg) || 'Onboarding failed' });
   }
 });
 
@@ -1111,7 +1175,7 @@ app.post('/api/login', async (req, res) => {
 
   if (normalizedUsername === SUPERADMIN_USERNAME && password === SUPERADMIN_PASSWORD) {
     const accessToken = createSuperadminToken();
-    superadminSessions.add(accessToken);
+    superadminSessions.set(hashSuperadminToken(accessToken), Date.now());
     persistSuperadminSessions();
     return res.json({
       ok: true,
@@ -1220,6 +1284,36 @@ app.get('/api/me', requireAuth, async (req, res) => {
   }, {});
 
   return res.json({ ok: true, data: { profile, memberships: memberships || [], modulePermissions } });
+});
+
+// Cambiar la propia contraseña (self-service). Requiere la contraseña actual.
+app.post('/api/change-password', requireAuth, async (req, res) => {
+  try {
+    if (req.isSuperadmin) {
+      return res.status(400).json({ ok: false, error: 'El superadmin cambia su contraseña en las variables de entorno (SUPERADMIN_PASSWORD).' });
+    }
+    const profileId = req.authUser.id;
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ ok: false, error: 'currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ ok: false, error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    }
+
+    const { data: prof } = await supabaseAdmin.from('profiles').select('auth_email').eq('id', profileId).maybeSingle();
+    if (!prof?.auth_email) return res.status(404).json({ ok: false, error: 'Perfil no encontrado' });
+
+    const { error: signInErr } = await supabasePublic.auth.signInWithPassword({ email: prof.auth_email, password: currentPassword });
+    if (signInErr) return res.status(401).json({ ok: false, error: 'La contraseña actual es incorrecta' });
+
+    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(profileId, { password: newPassword });
+    if (updateErr) return res.status(500).json({ ok: false, error: updateErr.message || 'No se pudo actualizar la contraseña' });
+
+    return res.json({ ok: true, data: { updated: true } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not change password' });
+  }
 });
 
 app.get('/api/tree', requireAuth, async (req, res) => {
@@ -1519,7 +1613,7 @@ app.post('/api/admin/users', requireAuth, async (req, res) => {
       return res.status(500).json({ ok: false, error: mapUsernameSchemaError(lookupError.message) });
     }
     if (existingProfile?.id) {
-      return res.status(400).json({ ok: false, error: 'username is already in use' });
+      return res.status(409).json({ ok: false, error: 'username is already in use' });
     }
 
     const email = buildInternalEmail(normalizedUsername);
@@ -1625,7 +1719,14 @@ app.post('/api/admin/users', requireAuth, async (req, res) => {
       throw innerErr;
     }
   } catch (err) {
-    return res.status(500).json({ ok: false, error: mapUsernameSchemaError(err.message) || 'Could not create user' });
+    const msg = String(err && err.message ? err.message : err || '');
+    if (/already been registered|duplicate key|already exists|username is already/i.test(msg)) {
+      return res.status(409).json({ ok: false, error: 'El username ya está en uso. Elige otro.' });
+    }
+    if (/disciplineCodes|senseiProfileId|must belong to a sensei|active in this establishment/i.test(msg)) {
+      return res.status(400).json({ ok: false, error: msg });
+    }
+    return res.status(500).json({ ok: false, error: mapUsernameSchemaError(msg) || 'Could not create user' });
   }
 });
 
@@ -2531,6 +2632,8 @@ app.put('/api/discipline-config', requireAuth, async (req, res) => {
 
 // ─── Dashboard Stats (superadmin) ───────────────────────────────────────────
 app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
+  // Dashboard global reservado a superadmin (corrige fuga multi-tenant P0: owner/sensei/instructor veían datos globales).
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
   try {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -4868,6 +4971,15 @@ app.post('/api/import/resolve-students-establishments', requireAuth, async (req,
 // TORNEOS
 // ══════════════════════════════════════════════════════════════
 
+// Modos de inscripción → tipos (Kata / Kumite). 'Ambos' cuenta como ambos.
+const modeTypesOf = (mode) => {
+  const m = String(mode || '').trim().toLowerCase();
+  if (m === 'kata') return ['kata'];
+  if (m === 'kumite') return ['kumite'];
+  if (m === 'ambos') return ['kata', 'kumite'];
+  return [];
+};
+
 app.get('/api/tournaments', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
   const { establishmentId } = req.query;
@@ -4896,11 +5008,37 @@ app.get('/api/tournaments', requireAuth, async (req, res) => {
 
 app.post('/api/tournaments/register', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
-  const { establishmentId, studentId, tournamentName, tournamentDate, category, mode, cost, notes } = req.body;
+  const { establishmentId, studentId, tournamentName, tournamentDate, category, mode, cost, notes, manualOverride } = req.body;
   if (!establishmentId || !tournamentName) return res.status(400).json({ ok: false, error: 'establishmentId and tournamentName are required' });
   try {
     const membership = await getMembership(profileId, establishmentId);
     if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+
+    // Validación: 1 competidor = máx. 1 categoría de Kata y 1 de Kumite por torneo.
+    // Excepción: solo el organizador (owner/sensei) o superadmin pueden sobrescribir manualmente.
+    let warning = null;
+    if (studentId && mode) {
+      const newTypes = modeTypesOf(mode);
+      const { data: existing } = await supabaseAdmin.from('tournament_registrations')
+        .select('id, mode, category')
+        .eq('establishment_id', establishmentId)
+        .eq('student_id', studentId)
+        .eq('tournament_name', tournamentName);
+      const conflicts = (existing || []).filter(r => modeTypesOf(r.mode).some(t => newTypes.includes(t)));
+      const canOverride = [ROLE_OWNER, ROLE_SENSEI, ROLE_SUPERADMIN].includes(membership.role);
+      if (conflicts.length && !(manualOverride === true && canOverride)) {
+        const which = newTypes.length === 2 ? 'Kata o Kumite' : (newTypes[0] === 'kata' ? 'Kata' : 'Kumite');
+        return res.status(409).json({
+          ok: false,
+          error: `El competidor ya está inscrito en ${which} en este torneo (${conflicts.map(c => c.category || 'sin categoría').join(', ')}). Máximo 1 de Kata y 1 de Kumite.`,
+          code: 'DUPLICATE_MODE',
+          conflicts: conflicts.map(c => ({ id: c.id, mode: c.mode, category: c.category }))
+        });
+      }
+      if (conflicts.length) {
+        warning = `⚠️ Excepción manual: el competidor queda en ${conflicts.length + 1} inscripciones del mismo tipo en este torneo.`;
+      }
+    }
 
     const { data, error } = await supabaseAdmin.from('tournament_registrations').insert({
       establishment_id: establishmentId,
@@ -4914,7 +5052,76 @@ app.post('/api/tournaments/register', requireAuth, async (req, res) => {
     }).select().single();
 
     if (error) throw new Error(error.message);
-    return res.status(201).json({ ok: true, data });
+    return res.status(201).json({ ok: true, data, warning });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Verifica competidores inscritos en más de una categoría del mismo tipo (Kata o Kumite) por torneo.
+app.get('/api/tournaments/verify', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+
+    const { data: rows } = await supabaseAdmin.from('tournament_registrations')
+      .select('id, student_id, tournament_name, category, mode')
+      .eq('establishment_id', establishmentId)
+      .limit(2000);
+
+    const groups = {};
+    (rows || []).forEach(r => {
+      if (!r.student_id) return;
+      const tname = r.tournament_name || '';
+      modeTypesOf(r.mode).forEach(type => {
+        const key = `${r.student_id}::${tname}::${type}`;
+        if (!groups[key]) groups[key] = { student_id: r.student_id, tournament_name: tname, type, entries: [] };
+        groups[key].entries.push(r);
+      });
+    });
+
+    const warnings = Object.values(groups)
+      .filter(g => g.entries.length > 1)
+      .map(g => ({
+        student_id: g.student_id,
+        tournament_name: g.tournament_name,
+        type: g.type,
+        count: g.entries.length,
+        categories: g.entries.map(e => e.category || '—'),
+        registrations: g.entries.map(e => ({ id: e.id, mode: e.mode, category: e.category }))
+      }));
+
+    // Detectar competidores en varias llaves del mismo tipo (brackets).
+    const { data: catRows } = await supabaseAdmin.from('tournament_categories').select('id, mode, tournament_name, name').eq('establishment_id', establishmentId);
+    const catById = {};
+    (catRows || []).forEach(c => { catById[c.id] = c; });
+    const catIds = Object.keys(catById);
+    if (catIds.length) {
+      const { data: brRows } = await supabaseAdmin.from('tournament_brackets').select('id, category_id').in('category_id', catIds);
+      const bracketToCat = {};
+      (brRows || []).forEach(b => { bracketToCat[b.id] = b.category_id; });
+      const brIds = Object.keys(bracketToCat);
+      if (brIds.length) {
+        const { data: entRows } = await supabaseAdmin.from('tournament_bracket_entries').select('student_id, bracket_id').in('bracket_id', brIds);
+        const g2 = {};
+        (entRows || []).forEach(e => {
+          if (!e.student_id) return;
+          const cat = catById[bracketToCat[e.bracket_id]];
+          if (!cat) return;
+          const key = `${e.student_id}::${cat.tournament_name}::${cat.mode}`;
+          if (!g2[key]) g2[key] = { student_id: e.student_id, tournament_name: cat.tournament_name, type: cat.mode, entries: [] };
+          g2[key].entries.push({ category: cat.name });
+        });
+        Object.values(g2).forEach(g => {
+          if (g.entries.length > 1) warnings.push({ student_id: g.student_id, tournament_name: g.tournament_name, type: g.type, count: g.entries.length, categories: g.entries.map(x => x.category || '—'), source: 'brackets' });
+        });
+      }
+    }
+
+    return res.json({ ok: true, warnings });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -5150,6 +5357,225 @@ app.delete('/api/tournaments/result/:id', requireAuth, async (req, res) => {
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ══════════════════════════════════════════════════════════════
+// LLAVES / BRACKETS DE TORNEOS
+// ══════════════════════════════════════════════════════════════
+const getCategory = async (categoryId, establishmentId) => {
+  const { data } = await supabaseAdmin.from('tournament_categories')
+    .select('id, mode, tournament_name, name, status')
+    .eq('id', categoryId).eq('establishment_id', establishmentId).maybeSingle();
+  return data || null;
+};
+const getStudentCategoriesInTournament = async (studentId, tournamentName) => {
+  const { data: entries } = await supabaseAdmin.from('tournament_bracket_entries').select('bracket_id').eq('student_id', studentId);
+  const bracketIds = [...new Set((entries || []).map(e => e.bracket_id).filter(Boolean))];
+  if (!bracketIds.length) return [];
+  const { data: brackets } = await supabaseAdmin.from('tournament_brackets').select('category_id').in('id', bracketIds);
+  const catIds = [...new Set((brackets || []).map(b => b.category_id).filter(Boolean))];
+  if (!catIds.length) return [];
+  const { data: cats } = await supabaseAdmin.from('tournament_categories').select('id, mode, name').in('id', catIds).eq('tournament_name', tournamentName);
+  return cats || [];
+};
+app.get('/api/tournaments/categories', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, tournamentName } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    let q = supabaseAdmin.from('tournament_categories').select('*').eq('establishment_id', establishmentId).order('created_at', { ascending: true });
+    if (tournamentName) q = q.eq('tournament_name', tournamentName);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true, categories: data || [] });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.post('/api/tournaments/categories', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, tournamentName, mode, name } = req.body || {};
+  if (!establishmentId || !tournamentName || !mode) return res.status(400).json({ ok: false, error: 'establishmentId, tournamentName and mode are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const m = String(mode).toLowerCase();
+    if (!['kata', 'kumite'].includes(m)) return res.status(400).json({ ok: false, error: 'mode must be Kata or Kumite' });
+    const { data, error } = await supabaseAdmin.from('tournament_categories').insert({ establishment_id: establishmentId, tournament_name: tournamentName, mode: m, name: name || null }).select().single();
+    if (error) throw new Error(error.message);
+    return res.status(201).json({ ok: true, data });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.delete('/api/tournaments/categories/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId } = req.body;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const { error } = await supabaseAdmin.from('tournament_categories').delete().eq('id', id).eq('establishment_id', establishmentId);
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.get('/api/tournaments/brackets', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { categoryId, establishmentId } = req.query;
+  if (!categoryId || !establishmentId) return res.status(400).json({ ok: false, error: 'categoryId and establishmentId are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const cat = await getCategory(categoryId, establishmentId);
+    if (!cat) return res.status(404).json({ ok: false, error: 'Categoría no encontrada' });
+    const { data, error } = await supabaseAdmin.from('tournament_brackets').select('*, entries:tournament_bracket_entries(*, students(full_name))').eq('category_id', categoryId).order('seed_order', { ascending: true });
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true, category: cat, brackets: data || [] });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.post('/api/tournaments/brackets', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, categoryId, label, round } = req.body || {};
+  if (!establishmentId || !categoryId) return res.status(400).json({ ok: false, error: 'establishmentId and categoryId are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const cat = await getCategory(categoryId, establishmentId);
+    if (!cat) return res.status(404).json({ ok: false, error: 'Categoría no encontrada' });
+    const { data, error } = await supabaseAdmin.from('tournament_brackets').insert({ category_id: categoryId, label: label || null, round: round || null }).select().single();
+    if (error) throw new Error(error.message);
+    return res.status(201).json({ ok: true, data });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.delete('/api/tournaments/brackets/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId } = req.body;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const { error } = await supabaseAdmin.from('tournament_brackets').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.post('/api/tournaments/entries', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, bracketId, studentId, seed, manualOverride } = req.body || {};
+  if (!establishmentId || !bracketId || !studentId) return res.status(400).json({ ok: false, error: 'establishmentId, bracketId and studentId are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const { data: bracket } = await supabaseAdmin.from('tournament_brackets').select('id, category_id').eq('id', bracketId).maybeSingle();
+    if (!bracket) return res.status(404).json({ ok: false, error: 'Llave no encontrada' });
+    const cat = await getCategory(bracket.category_id, establishmentId);
+    if (!cat) return res.status(404).json({ ok: false, error: 'Categoría no encontrada' });
+    let warning = null;
+    const existingCats = await getStudentCategoriesInTournament(studentId, cat.tournament_name);
+    const conflicts = existingCats.filter(c => c.id !== cat.id && modeTypesOf(c.mode).some(t => modeTypesOf(cat.mode).includes(t)));
+    const canOverride = [ROLE_OWNER, ROLE_SENSEI, ROLE_SUPERADMIN].includes(membership.role);
+    if (conflicts.length && !(manualOverride === true && canOverride)) {
+      return res.status(409).json({ ok: false, error: `El competidor ya está en ${modeTypesOf(cat.mode).join(' y ')} en este torneo. Máximo 1 de Kata y 1 de Kumite.`, code: 'DUPLICATE_MODE', conflicts: conflicts.map(c => ({ id: c.id, mode: c.mode, name: c.name })) });
+    }
+    if (conflicts.length) warning = '⚠️ Excepción manual: el competidor queda en más de una categoría del mismo tipo.';
+    const { data, error } = await supabaseAdmin.from('tournament_bracket_entries').insert({ bracket_id: bracketId, student_id: studentId, seed: seed || null, manual_override: manualOverride === true }).select().single();
+    if (error) throw new Error(error.message);
+    return res.status(201).json({ ok: true, data, warning });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.delete('/api/tournaments/entries/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId } = req.body;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const { data: entry } = await supabaseAdmin.from('tournament_bracket_entries').select('id, bracket_id').eq('id', id).maybeSingle();
+    if (!entry) return res.status(404).json({ ok: false, error: 'Entrada no encontrada' });
+    const { data: bracket } = await supabaseAdmin.from('tournament_brackets').select('id, category_id').eq('id', entry.bracket_id).maybeSingle();
+    const { error } = await supabaseAdmin.from('tournament_bracket_entries').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    if (bracket) {
+      const { data: rem } = await supabaseAdmin.from('tournament_bracket_entries').select('id').eq('bracket_id', bracket.id).limit(1);
+      if (!rem || rem.length === 0) {
+        await supabaseAdmin.from('tournament_brackets').delete().eq('id', bracket.id);
+        const { data: catB } = await supabaseAdmin.from('tournament_brackets').select('id').eq('category_id', bracket.category_id).limit(1);
+        if (!catB || catB.length === 0) await supabaseAdmin.from('tournament_categories').update({ status: 'removed' }).eq('id', bracket.category_id);
+      }
+    }
+    return res.json({ ok: true });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.post('/api/tournaments/entries/:id/move', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { establishmentId, newBracketId } = req.body || {};
+  if (!establishmentId || !newBracketId) return res.status(400).json({ ok: false, error: 'establishmentId and newBracketId are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const { data: entry } = await supabaseAdmin.from('tournament_bracket_entries').select('id, student_id, manual_override').eq('id', id).maybeSingle();
+    if (!entry) return res.status(404).json({ ok: false, error: 'Entrada no encontrada' });
+    const { data: nb } = await supabaseAdmin.from('tournament_brackets').select('id, category_id').eq('id', newBracketId).maybeSingle();
+    if (!nb) return res.status(404).json({ ok: false, error: 'Llave destino no encontrada' });
+    const newCat = await getCategory(nb.category_id, establishmentId);
+    if (!newCat) return res.status(404).json({ ok: false, error: 'Categoría destino no encontrada' });
+    const canOverride = [ROLE_OWNER, ROLE_SENSEI, ROLE_SUPERADMIN].includes(membership.role);
+    if (!(entry.manual_override || canOverride)) {
+      const existingCats = await getStudentCategoriesInTournament(entry.student_id, newCat.tournament_name);
+      const conflicts = existingCats.filter(c => c.id !== newCat.id && modeTypesOf(c.mode).some(t => modeTypesOf(newCat.mode).includes(t)));
+      if (conflicts.length) return res.status(409).json({ ok: false, error: `El competidor ya está en ${newCat.mode} en este torneo. Usa la excepción manual (organizador/superadmin).`, code: 'DUPLICATE_MODE' });
+    }
+    const { error } = await supabaseAdmin.from('tournament_bracket_entries').update({ bracket_id: newBracketId }).eq('id', id);
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
+app.post('/api/tournaments/optimize', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, tournamentName, mode } = req.body || {};
+  if (!establishmentId || !tournamentName || !mode) return res.status(400).json({ ok: false, error: 'establishmentId, tournamentName and mode are required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership || !isManagerRole(membership.role)) return res.status(403).json({ ok: false, error: 'Insufficient role' });
+    const m = String(mode).toLowerCase();
+    if (!['kata', 'kumite'].includes(m)) return res.status(400).json({ ok: false, error: 'mode must be Kata or Kumite' });
+    const { data: regs } = await supabaseAdmin.from('tournament_registrations')
+      .select('student_id, category, mode').eq('establishment_id', establishmentId).eq('tournament_name', tournamentName)
+      .order('created_at', { ascending: true }).limit(2000);
+    const competitors = (regs || []).filter(r => r.student_id && modeTypesOf(r.mode).includes(m));
+    if (!competitors.length) return res.json({ ok: true, categories: [], brackets: [], warnings: [] });
+    const groups = {};
+    competitors.forEach(c => { const k = (c.category || 'General').trim(); if (!groups[k]) groups[k] = []; groups[k].push(c); });
+    const canOverride = [ROLE_OWNER, ROLE_SENSEI, ROLE_SUPERADMIN].includes(membership.role);
+    const createdCategories = [], createdBrackets = [], warnings = [];
+    for (const [catName, members] of Object.entries(groups)) {
+      let catId;
+      const { data: existingCat } = await supabaseAdmin.from('tournament_categories')
+        .select('id').eq('establishment_id', establishmentId).eq('tournament_name', tournamentName).eq('mode', m).eq('name', catName).maybeSingle();
+      if (existingCat?.id) catId = existingCat.id;
+      else {
+        const { data: nc, error: ce } = await supabaseAdmin.from('tournament_categories').insert({ establishment_id: establishmentId, tournament_name: tournamentName, mode: m, name: catName }).select('id').single();
+        if (ce) throw new Error(ce.message);
+        catId = nc.id;
+      }
+      createdCategories.push({ id: catId, name: catName, mode: m });
+      const { data: bracket, error: be } = await supabaseAdmin.from('tournament_brackets').insert({ category_id: catId, label: catName, round: 'final' }).select('id').single();
+      if (be) throw new Error(be.message);
+      createdBrackets.push({ id: bracket.id, category_id: catId, label: catName });
+      let seed = 1;
+      for (const c of members) {
+        const existingCats = await getStudentCategoriesInTournament(c.student_id, tournamentName);
+        const conflicts = existingCats.filter(x => x.id !== catId && modeTypesOf(x.mode).some(t => modeTypesOf(m).includes(t)));
+        if (conflicts.length && !canOverride) { warnings.push({ student_id: c.student_id, category: catName, type: m, reason: 'Ya está en otra categoría del mismo tipo' }); continue; }
+        const { error: ee } = await supabaseAdmin.from('tournament_bracket_entries').insert({ bracket_id: bracket.id, student_id: c.student_id, seed });
+        if (ee) { if (/duplicate|unique/i.test(ee.message || '')) { warnings.push({ student_id: c.student_id, category: catName, type: m, reason: 'Duplicado en la misma llave' }); continue; } throw new Error(ee.message); }
+        seed += 1;
+      }
+    }
+    return res.json({ ok: true, categories: createdCategories, brackets: createdBrackets, warnings });
+  } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
+});
 // DELETE inventario
 app.delete('/api/inventory/:id', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
@@ -8149,7 +8575,7 @@ const hasAIFeature = async (establishmentId) => {
       .select('plan_code')
       .eq('establishment_id', establishmentId)
       .maybeSingle();
-    if (!ep || !ep.plan_code) return true; // sin plan asignado: permisivo
+    if (!ep || !ep.plan_code) return false; // fail-closed: sin plan asignado → sin IA
     const { data: sp } = await supabaseAdmin
       .from('system_plans')
       .select('features')
@@ -8157,7 +8583,7 @@ const hasAIFeature = async (establishmentId) => {
       .maybeSingle();
     const feats = sp?.features || [];
     return Array.isArray(feats) && feats.includes('ia_features');
-  } catch (_) { return true; } // ante fallo, permisivo
+  } catch (_) { return false; } // fail-closed: ante error/incertidumbre → sin IA
 };
 
 // Indica el rol real del usuario en el establecimiento activo.
@@ -8495,7 +8921,8 @@ const AI_TOOLS = {
   classes:       { label: 'Clases',         formId: 'class-form',        read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: ['superadmin', 'owner', 'admin', 'sensei'] },
   payments:      { label: 'Pagos',          formId: 'payment-form',      read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor', 'student', 'guardian'],     write: ['superadmin', 'owner', 'admin'],                             delete: ['superadmin', 'owner', 'admin'] },
   notifications: { label: 'Notificaciones', formId: 'notification-form', read: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'],                             write: ['superadmin', 'owner', 'admin', 'sensei', 'instructor'], delete: [] },
-  billing:       { label: 'Mensualidades/Facturas', formId: 'billing-form',  read: ['superadmin', 'owner', 'admin'],                                        write: [],                                          delete: [] }
+  billing:       { label: 'Mensualidades/Facturas', formId: 'billing-form',  read: ['superadmin', 'owner', 'admin'],                                        write: [],                                          delete: [] },
+  users:         { label: 'Usuarios',        formId: 'admin-create-user-form', read: ['superadmin', 'owner', 'sensei'],                                     write: ['superadmin', 'owner', 'sensei'],           delete: [] }
 };
 
 const aiToolAllowed = (tool, role, mode) => {
@@ -8530,6 +8957,52 @@ function aiParseJsonLoose(raw) {
     if (m) { try { return JSON.parse(m[0]); } catch (_e) { return null; } }
   }
   return null;
+}
+
+// Parser ESTRICTO de bloques <<<TOOL>>>: esquema + límites + rechazo de payloads inválidos.
+// Evita que la salida del modelo elija rutas/tablas/filtros/IDs sin validación del servidor.
+const AI_TOOL_PARAM_LIMITS = { string: 200, arrayItems: 40, params: 20 };
+function aiParseToolBlock(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).trim();
+  // Solo se acepta un objeto JSON literal. Sin fallback laxo (rechaza inyección/extras).
+  if (!cleaned.startsWith('{') || !cleaned.endsWith('}')) return null;
+  let obj;
+  try { obj = JSON.parse(cleaned); } catch (_) { return null; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+
+  const tool = obj.tool;
+  if (typeof tool !== 'string' || !tool || tool.length > 40) return null;
+  if (!AI_TOOLS[String(tool).toLowerCase()]) return null; // solo herramientas conocidas
+
+  const params = obj.params;
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return null;
+  const keys = Object.keys(params);
+  if (keys.length > AI_TOOL_PARAM_LIMITS.params) return null;
+
+  const safeParams = {};
+  for (const k of keys) {
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(k)) return null; // claves inválidas → rechazo
+    const v = params[k];
+    if (v === null || v === undefined) continue;
+    const t = typeof v;
+    if (t === 'string') {
+      if (v.length > AI_TOOL_PARAM_LIMITS.string) return null;
+      safeParams[k] = v;
+    } else if (t === 'number' || t === 'boolean') {
+      safeParams[k] = v;
+    } else if (Array.isArray(v)) {
+      if (v.length > 20) return null;
+      if (!v.every(x => typeof x === 'string' && x.length <= AI_TOOL_PARAM_LIMITS.arrayItems)) return null;
+      safeParams[k] = v;
+    } else {
+      return null; // objetos anidados → rechazo
+    }
+  }
+  if (typeof safeParams.limit === 'number') {
+    safeParams.limit = Math.max(1, Math.min(80, Math.floor(safeParams.limit)));
+  }
+  return { tool: String(tool).toLowerCase(), params: safeParams };
 }
 
 // Búsqueda REAL en Supabase, acotada por rol/establecimiento. Nunca devuelve más de
@@ -8677,7 +9150,39 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
     } catch (err) { return { rows: [], meta: { count: 0, note: 'Sin datos de notificaciones aún.' } }; }
   }
 
+  if (tool === 'users') {
+    let query = supabaseAdmin.from('establishment_members')
+      .select('id, role, profile_id, profile:profiles(full_name, username, role, is_active)')
+      .order('created_at', { ascending: false });
+    if (estId) query = query.eq('establishment_id', estId);
+    const { data, error } = await query.limit(MAX);
+    if (error) return { rows: [], meta: { count: 0, note: error.message } };
+    let rows = data || [];
+    if (ctx.role === 'sensei' && estId) {
+      rows = rows.filter(r => r.profile_id === ctx.profileId || (r.role === 'instructor' && getSenseiForInstructor(estId, r.profile_id) === ctx.profileId));
+    }
+    if (q) {
+      const ql = q.toLowerCase();
+      rows = rows.filter(r => ((r.profile && r.profile.full_name) || '').toLowerCase().includes(ql) || ((r.profile && r.profile.username) || '').toLowerCase().includes(ql));
+    }
+    return { rows: rows.map(r => ({ id: r.id, profile_id: r.profile_id, role: r.role, full_name: r.profile?.full_name || null, username: r.profile?.username || null, is_active: r.profile?.is_active })), meta: { count: rows.length, query: q } };
+  }
+
   return { rows: [], meta: { count: 0, note: 'Herramienta de búsqueda no soportada.' } };
+}
+
+// Genera una contraseña segura para SUGERIR al crear usuarios. La IA solo propone;
+// el creador humano la revisa/edita y la confirma en el formulario real.
+function generateSecurePassword() {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnopqrstuvwxyz';
+  const digits = '23456789';
+  const symbols = '!@#$%&*';
+  const all = upper + lower + digits + symbols;
+  const rand = (max) => crypto.randomBytes(1)[0] % max;
+  let pwd = upper[rand(upper.length)] + lower[rand(lower.length)] + digits[rand(digits.length)] + symbols[rand(symbols.length)];
+  while (pwd.length < 12) pwd += all[rand(all.length)];
+  return pwd.split('').sort(() => crypto.randomBytes(1)[0] - 128).join('');
 }
 
 // Valida y normaliza la propuesta de la IA contra las reglas del formulario REAL.
@@ -8727,6 +9232,27 @@ async function aiValidatePrefill(tool, draft, ctx, establishmentId) {
     if (!title) out.missing.push('title (título de la notificación)');
     if (!body) out.missing.push('body (mensaje de la notificación)');
     out.values = { title, body };
+  } else if (tool === 'users') {
+    const fullName = String(draft.fullName || draft.name || '').trim();
+    if (!fullName) out.missing.push('fullName (nombre completo)');
+    const username = normalizeUsername(draft.username);
+    if (!username) out.missing.push('username (usuario)');
+    else if (username.length < 3) out.missing.push('username de al menos 3 caracteres');
+    const role = String(draft.role || '').trim().toLowerCase();
+    if (!role) out.missing.push('role');
+    else if (!canCreateRole(ctx.role, role)) out.missing.push('role permitido (tu rol ' + ctx.role + ' no puede crear ' + role + ')');
+    let password = String(draft.password || '').trim();
+    if (!password) password = generateSecurePassword(); // la IA solo sugiere; el humano confirma
+    else if (password.length < 6) out.missing.push('password de al menos 6 caracteres');
+    let disciplineCodes = [];
+    if (Array.isArray(draft.disciplineCodes)) disciplineCodes = draft.disciplineCodes.map(String).filter(Boolean);
+    else if (draft.disciplineCode) disciplineCodes = [String(draft.disciplineCode).trim()].filter(Boolean);
+    const senseiProfileId = String(draft.senseiProfileId || '').trim();
+    if (role === 'instructor') {
+      if (!disciplineCodes.length) out.missing.push('disciplineCodes (para instructor)');
+      if ((ctx.role === 'superadmin' || ctx.role === 'owner') && !senseiProfileId) out.missing.push('senseiProfileId (para instructor creado por superadmin/owner)');
+    }
+    out.values = { fullName, username, password, role, disciplineCodes, senseiProfileId: senseiProfileId || undefined };
   }
   out.ok = out.missing.length === 0;
   return out;
@@ -8779,15 +9305,18 @@ function buildAIToolsSuffix(role) {
   }).join('; ');
   return [
     '',
-    'REGLAS DE HERRAMIENTAS (MODO MIXTO):',
+    'REGLAS DE HERRAMIENTAS (MODO MIXTO, MULTI-HERRAMIENTA):',
     '- Como BUSCADOR del sistema tienes datos reales. NO inventes cifras ni nombres: usa las herramientas disponibles.',
     '- Herramientas disponibles para tu rol: ' + desc + '.',
-    '- Para BUSCAR datos, responde dejando EXACTAMENTE al final de tu mensaje una línea con:',
+    '- Si el usuario pide VARIAS cosas a la vez, descompón la consulta y emite UNA LÍNEA <<<TOOL>>> por cada cosa que necesites buscar. Puedes emitir VARIAS líneas <<<TOOL>>> en el mismo mensaje.',
+    '- Para BUSCAR datos, deja al final de tu mensaje, UNA POR LÍNEA, el bloque:',
     '  <<<TOOL>>>{"tool":"NOMBRE_TOOL","params":{"query":"...","disciplineCode":"...","limit":30}}',
     '  (Herramientas para buscar: ' + allowed.join(', ') + ')',
-    '- Para CREAR o EDITAR: NO guardes nada. Responde y termina con <<<TOOL>>>{"tool":"students","params":{...}} con los campos del formulario (fullName, email, phone, birthDate, currentRank, disciplineCode). Mismo patrón para classes/payments/notificaciones. NUNCA simules haber guardado.',
-    '- Para BORRAR: termina con <<<TOOL>>>{"tool":"students","params":{"id":"<uuid>"}} (según el tipo). Solo lo propones; el sistema pedirá confirmación.',
-    '- Si el usuario no dio toda la información para una acción de escritura, pregúntale qué falta ANTES y no termines con <<<TOOL>>>.'
+    '- Para CREAR o EDITAR: NO guardes nada. Emite <<<TOOL>>>{"tool":"students","params":{...}} con los campos del formulario (fullName, email, phone, birthDate, currentRank, disciplineCode). Mismo patrón para classes/payments/notificaciones. NUNCA simules haber guardado.',
+    '- Para CREAR USUARIOS (solo si tu rol lo permite: superadmin/owner/sensei): emite <<<TOOL>>>{"tool":"users","params":{"fullName":"...","username":"...","role":"...","password":"..."}}. Para instructor agrega "disciplineCodes":["..."] y, si crea superadmin/owner, "senseiProfileId":"...". El sistema genera una contraseña segura si no la indicas; nunca guardes la cuenta tú.',
+    '- Para BORRAR: emite <<<TOOL>>>{"tool":"students","params":{"id":"<uuid>"}} (según el tipo). Solo lo propones; el sistema pedirá confirmación.',
+    '- Si NO necesitas buscar datos (solo saludar, explicar o conversar), NO emitas ninguna <<<TOOL>>>.',
+    '- Si el usuario no dio toda la información para una acción de escritura, pregúntale qué falta ANTES y no emitas <<<TOOL>>>.'
   ].join('\n');
 }
 // ══════════════════════════════════════════════════════════════
@@ -8804,6 +9333,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
 
     const { message, establishmentId } = req.body || {};
     if (!message || !String(message).trim()) return res.status(400).json({ ok: false, error: 'message is required' });
+    if (String(message).length > 2000) return res.status(400).json({ ok: false, error: 'Mensaje demasiado largo (máximo 2000 caracteres).' });
 
     // Gating por plan (Fase 1): el establecimiento debe incluir ia_features en su plan.
     if (!req.isSuperadmin && establishmentId) {
@@ -8850,98 +9380,104 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     } catch (_) { /* sin memoria */ }
     messages.push({ role: 'user', content: String(message) });
 
-    let aiCall;
-    try {
-      aiCall = await aiCallWithFailover(cfg, { messages, temperature: 0.4, max_tokens: 1024 });
-    } catch (aiErr) {
-      return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
-    }
-    const rawContent = aiCall.content;
-    if (!rawContent) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
+    // ── Fase A+ (multi-herramienta / agentic) ──
+    // La IA puede pedir VARIAS búsquedas en un mismo mensaje. Se ejecutan TODAS respetando
+    // permisos por rol, y si hubo búsqueda se reinyectan los resultados reales para que la
+    // IA redacte la respuesta final combinada (sin inventar). CREAR/EDITAR nunca guarda;
+    // BORRAR siempre pide confirmación.
+    const MAX_STEPS = 4;
+    const toolActions = [];
+    let content = '';
+    let finalModel = '';
+    let finalProvider = '';
+    let finalProviderId = '';
 
-    // ── Fase A: detección de herramienta (formato <<<TOOL>>>{json} al final) ──
-    let content = String(rawContent);
-    let toolAction = null;
-    const toolMatch = content.match(/<<<TOOL>>>(\{[\s\S]*\})/);
-    if (toolMatch) {
-      content = content.replace(/<<<TOOL>>>(\{[\s\S]*\})/, '').trim();
-      const parsed = aiParseJsonLoose(toolMatch[1]);
-      if (parsed && parsed.tool) {
-        const tool = String(parsed.tool).toLowerCase();
-        const params = parsed.params || {};
+    for (let step = 0; step < MAX_STEPS; step++) {
+      let aiCall;
+      try {
+        aiCall = await aiCallWithFailover(cfg, { messages, temperature: 0.4, max_tokens: 1024 });
+      } catch (aiErr) {
+        return res.status((aiErr && aiErr.status) || 502).json({ ok: false, error: (aiErr && aiErr.message) || 'Error del proveedor IA' });
+      }
+      finalModel = aiCall.model || '';
+      finalProvider = aiCall.providerLabel || '';
+      finalProviderId = aiCall.providerId || '';
+      const rawContent = aiCall.content || '';
+      if (!rawContent && step === 0) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
+
+      // Extraer TODAS las líneas <<<TOOL>>>{json} (una por herramienta)
+      const toolBlocks = [];
+      const re = /<<<TOOL>>>(\{[\s\S]*?\})/g;
+      let m;
+      while ((m = re.exec(rawContent)) !== null) toolBlocks.push(m[1]);
+      const text = String(rawContent).replace(/<<<TOOL>>>(\{[\s\S]*?\})/g, '').trim();
+
+      if (!toolBlocks.length) { content = text || String(rawContent); break; }
+
+      // Ejecutar cada herramienta (respetando permisos y límites)
+      const searchResults = [];
+      let hasSearch = false;
+      for (const block of toolBlocks) {
+        const parsed = aiParseToolBlock(block);
+        if (!parsed) continue;
+        const tool = parsed.tool;
+        const params = parsed.params;
         const def = AI_TOOLS[tool];
 
-        if (def && aiToolAllowed(tool, aiRole, 'read')) {
-          // 1) Intención de BÚSQUEDA (si el texto de la IA aún espera datos) — solo si la
-          //    IA pidió explícitamente buscar (tool 'query'), o si hay params de búsqueda.
-          const looksLikeSearch = !params.fullName && !params.title && !params.amount && !params.body && (params.query || params.q || params.name || params.date || params.studentName || params.studentId || params.limit);
-          if (looksLikeSearch) {
-            const searchRes = await aiSearchTool(tool, params, ctx, establishmentId);
-            const rowsArr = (searchRes.rows || []).slice(0, 50);
-            // Filas truncadas para mantener el prompt compacto (cada fila max 400 chars).
-            const rows = rowsArr.map(r => {
-              try {
-                const s = JSON.stringify(r);
-                return s && s.length > 400 ? s.slice(0, 400) + '…' : s;
-              } catch (_e) { return '(fila)'; }
-            }).join('\n') || '(vacío)';
-            // Segunda pasada: la IA resume los datos REALES encontrados (nunca los inventa).
-            // Se usa un system corto y los datos en un mensaje 'user' (más robusto con Gemini),
-            // y un fallback local si el proveedor falla (nunca dejamos al usuario sin respuesta).
-            const secondSystem = [
-              'Eres el asistente de MartialSystem. Responde en español, con un tono natural y amable, como conversando con alguien del dojo.',
-              'Usa SOLAMENTE los datos que recibes; NO inventes nombres, cifras ni filas.',
-              'Presenta los resultados de forma conversacional: frases cortas y viñetas si ayuda; sin tablas ni JSON.',
-              'Si no hay resultados, dilo con naturalidad (por ejemplo: "No encontré alumnos con ese criterio").',
-              'NO termines con <<<TOOL>>> ni JSON.'
-            ].join('\n');
-            const secondUser = [
-              'El usuario preguntó: ' + String(message),
-              'RESULTADOS REALES DE LA BÚSQUEDA (usar SOLO estos datos):',
-              rows
-            ].join('\n');
-            try {
-              const secondCall = await aiCallWithFailover(cfg, {
-                messages: [
-                  { role: 'system', content: secondSystem },
-                  { role: 'user', content: secondUser }
-                ],
-                temperature: 0.3,
-                max_tokens: 700
-              });
-              content = secondCall.content;
-              activeProvider = { id: secondCall.providerId, provider: secondCall.providerLabel, apiKey: '' };
-            } catch (secondErr) {
-              // Fallback: si el proveedor falla en la 2ª pasada, respondemos con los datos reales.
-              content = rowsArr.length
-                ? '🔍 Encontré ' + rowsArr.length + ' resultado(s) real(es).\n' + rows
-                : '🔍 La búsqueda no devolvió resultados.';
-            }
-            toolAction = { action: 'search', tool, params, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } };
-          } else if (aiToolAllowed(tool, aiRole, 'write')) {
-            // 2) Intención de CREAR/EDITAR → validar contra el formulario real; NUNCA guardar.
-            const validated = await aiValidatePrefill(tool, params, ctx, establishmentId);
-            toolAction = { action: 'prefill', tool, formId: def.formId, values: validated.values, missing: validated.missing };
-            if (validated.missing && validated.missing.length) {
-              content = 'Para completar el formulario de ' + def.label + ' necesito lo siguiente: ' + validated.missing.join(', ') + '. ¿Me los confirmas?';
-            } else {
-              content = '✍️ Listo: preparé la propuesta para ' + def.label + '. Revisa el formulario y confirma para guardar (yo nunca guardo por ti). ' + content;
-            }
-          } else if (aiToolAllowed(tool, aiRole, 'delete')) {
-            // 3) Intención de BORRAR → solo propuesta con confirmación.
-            const delRes = await aiProposeDelete(tool, params, ctx, establishmentId);
-            if (!delRes.ok) { content = delRes.error || 'No se pudo preparar el borrado.'; }
-            else {
-              toolAction = { action: 'delete', tool, target: delRes.target };
-              content = '🗑️ He localizado: **' + delRes.target.label + '**. Para eliminarlo pulsa el botón de confirmación debajo (yo no borro sin tu OK).';
-            }
-          } else {
-            content = 'Tu rol no te permite realizar esta acción sobre ' + (def ? def.label : tool) + '.';
+        if (!def || !aiToolAllowed(tool, aiRole, 'read')) {
+          if (def) content = content || ('Tu rol no te permite ver: ' + def.label + '.');
+          continue;
+        }
+
+        const looksLikeSearch = !params.fullName && !params.title && !params.amount && !params.body && (params.query || params.q || params.name || params.date || params.studentName || params.studentId || params.limit);
+        if (looksLikeSearch) {
+          const searchRes = await aiSearchTool(tool, params, ctx, establishmentId);
+          const rowsArr = (searchRes.rows || []).slice(0, 50);
+          searchResults.push({ tool, label: def.label, rows: rowsArr, meta: searchRes.meta });
+          toolActions.push({ action: 'search', tool, params, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
+          hasSearch = true;
+        } else if (aiToolAllowed(tool, aiRole, 'write')) {
+          const validated = await aiValidatePrefill(tool, params, ctx, establishmentId);
+          toolActions.push({ action: 'prefill', tool, formId: def.formId, values: validated.values, missing: validated.missing });
+          if (validated.missing && validated.missing.length) {
+            content = 'Para completar el formulario de ' + def.label + ' necesito lo siguiente: ' + validated.missing.join(', ') + '. ¿Me los confirmas?';
+          } else if (!content) {
+            content = '✍️ Listo: preparé la propuesta para ' + def.label + '. Revisa el formulario y confirma para guardar (yo nunca guardo por ti).';
+          }
+        } else if (aiToolAllowed(tool, aiRole, 'delete')) {
+          const delRes = await aiProposeDelete(tool, params, ctx, establishmentId);
+          if (!delRes.ok) { content = delRes.error || 'No se pudo preparar el borrado.'; }
+          else {
+            toolActions.push({ action: 'delete', tool, target: delRes.target });
+            content = '🗑️ He localizado: **' + delRes.target.label + '**. Para eliminarlo pulsa el botón de confirmación debajo (yo no borro sin tu OK).';
           }
         } else {
-          content = content || ('No tengo herramienta disponible para: ' + tool + ' con tu rol.');
+          content = content || ('Tu rol no te permite realizar esta acción sobre ' + def.label + '.');
         }
       }
+
+      // Si hubo búsquedas, reinyectar resultados reales y pedir la respuesta final combinada.
+      if (hasSearch) {
+        const dataText = searchResults.map(r => {
+          const rows = r.rows.map(x => {
+            try { const s = JSON.stringify(x); return s && s.length > 400 ? s.slice(0, 400) + '…' : s; } catch (_e) { return '(fila)'; }
+          }).join('\n');
+          return '[' + r.label + '] ' + (r.rows.length ? r.rows.length + ' resultado(s):\n' + rows : 'sin resultados');
+        }).join('\n\n');
+        messages.push({ role: 'assistant', content: text || 'He buscado los datos solicitados.' });
+        messages.push({ role: 'user', content: [
+          'El usuario preguntó: ' + String(message),
+          'RESULTADOS REALES DE LAS BÚSQUEDAS (usar SOLO estos datos):',
+          dataText,
+          '',
+          'Responde ahora en español, con frases cortas y viñetas, combinando TODOS los resultados anteriores. Si alguna búsqueda no devolvió resultados, dilo con naturalidad. NO inventes datos y NO termines con <<<TOOL>>> ni JSON.'
+        ].join('\n') });
+        continue;
+      }
+
+      // Sin búsqueda (solo prefill/borrado o texto): finalizar.
+      if (!content) content = text;
+      break;
     }
 
     // Guardar en la memoria del usuario (Fase 1)
@@ -8953,9 +9489,18 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
         user_message: String(message),
         ai_response: content
       });
+      // Purga automática: conservar solo las últimas 50 conversaciones por usuario.
+      const { data: oldRows } = await supabaseAdmin.from('ai_memory')
+        .select('id')
+        .eq('profile_id', profileId)
+        .order('created_at', { ascending: false })
+        .range(50, 99999);
+      if (oldRows && oldRows.length) {
+        await supabaseAdmin.from('ai_memory').delete().in('id', oldRows.map(r => r.id));
+      }
     } catch (_) { /* best-effort */ }
 
-    return res.json({ ok: true, data: { content, model: (aiCall && aiCall.model) || '', provider: (aiCall && aiCall.providerLabel) || '', providerId: (aiCall && aiCall.providerId) || '', memorySaved: true, tool: toolAction } });
+    return res.json({ ok: true, data: { content, model: finalModel, provider: finalProvider, providerId: finalProviderId, memorySaved: true, tools: toolActions, tool: toolActions[0] || null } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'AI request failed' });
   }

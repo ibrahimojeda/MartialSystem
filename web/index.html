@@ -1122,6 +1122,21 @@
       <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5;">
         💡 <strong>La IA es el buscador del sistema:</strong> pregúntale en la caja de abajo por alumnos, pagos, clases, waivers y reportes según tu rol.
       </div>
+      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">🔐 <strong>Cambiar mi contraseña</strong></div>
+        <form id="change-password-form" class="form" style="margin:0;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:160px;">
+            <label style="font-size:11px;">Contraseña actual</label>
+            <input id="cp-current" type="password" autocomplete="current-password" placeholder="••••••••">
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <label style="font-size:11px;">Nueva contraseña</label>
+            <input id="cp-new" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button class="btn" type="submit" style="padding:6px 12px;">Actualizar contraseña</button>
+        </form>
+        <div id="cp-status" class="muted" style="font-size:12px;margin-top:6px;"></div>
+      </div>
     </article>
 
     <article class="card full" id="ai-assistant-card" style="display:none;margin-top:12px;">
@@ -2252,11 +2267,20 @@
           <div><label>Costo ($)</label><input id="tr-cost" type="number" step="0.01" placeholder="25.00"></div>
           <div><label>Notas</label><input id="tr-notes" placeholder="Opcional"></div>
           <div class="full">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+              <input type="checkbox" id="tr-manual-override" style="width:auto;min-height:auto;"> Excepción manual (permitir duplicado de modalidad — solo organizador/superadmin)
+            </label>
+          </div>
+          <div class="full">
             <button class="btn" type="submit">Registrar inscripcion</button>
             <button class="btn alt" id="tr-load" type="button" style="margin-left:8px;">Ver inscripciones</button>
           </div>
         </form>
         <div id="tournament-reg-output"><span class="muted">Sin datos. Presiona "Ver inscripciones".</span></div>
+        <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap;">
+          <button class="btn alt" id="tr-verify" type="button">⚠️ Verificar duplicados (Kata/Kumite)</button>
+        </div>
+        <div id="tr-verify-output" style="margin-top:8px;"></div>
       </article>
       <article class="card full">
         <h3>Resultados de Torneo</h3>
@@ -2274,6 +2298,22 @@
           </div>
         </form>
         <div id="tournament-res-output"><span class="muted">Sin datos. Presiona "Ver resultados".</span></div>
+      </article>
+      <article class="card full" id="bracket-card">
+        <h3>🥋 Llaves (Brackets)</h3>
+        <div class="form" style="margin-bottom:12px;">
+          <div class="row" style="gap:8px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:150px;"><label>Establishment ID</label><input id="br-est-id" placeholder="uuid establecimiento"></div>
+            <div style="flex:1;min-width:180px;"><label>Nombre del torneo</label><input id="br-name" placeholder="Copa Nacional 2026"></div>
+            <div style="flex:1;min-width:120px;"><label>Modalidad</label><select id="br-mode"><option value="Kata">Kata</option><option value="Kumite">Kumite</option></select></div>
+          </div>
+          <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <button class="btn" id="br-optimize" type="button">⚙️ Optimizar</button>
+            <button class="btn alt" id="br-load" type="button">Cargar llaves</button>
+            <button class="btn alt" id="br-verify" type="button">⚠️ Verificar duplicados</button>
+          </div>
+        </div>
+        <div id="bracket-output"><span class="muted">Selecciona torneo + modalidad y pulsa "Optimizar" o "Cargar llaves".</span></div>
       </article>
     </section>
 
@@ -4146,25 +4186,41 @@
     function renderMobileDashboardGrid() {
       const role = getMobileRole();
       const icons = DASHBOARD_ICONS[role] || DASHBOARD_ICONS.owner;
-      
-      // Remove existing grid
-      const existing = document.querySelector('.mobile-dashboard-grid');
-      if (existing) existing.remove();
-      
-      const grid = document.createElement('div');
-      grid.className = 'mobile-dashboard-grid';
-      
+
+      // Remove existing wrapper
+      const existingWrap = document.querySelector('.mobile-dash-wrap');
+      if (existingWrap) existingWrap.remove();
+
+      // La IA es lo principal: los accesos rápidos van DEBAJO, colapsados por defecto (opcionales).
+      const wrap = document.createElement('div');
+      wrap.className = 'mobile-dash-wrap';
+      wrap.innerHTML = `
+        <button class="mobile-dash-toggle" type="button" aria-expanded="false">
+          <span>☰ Accesos rápidos</span><span class="mobile-dash-chev">▾</span>
+        </button>
+        <div class="mobile-dashboard-grid" style="display:none;"></div>
+      `;
+      const grid = wrap.querySelector('.mobile-dashboard-grid');
       grid.innerHTML = icons.map(item => `
         <button class="mobile-dash-item" onclick="showTab('${item.tab}')" type="button" style="border-top: 3px solid ${item.color};">
           <span class="dash-icon">${item.icon}</span>
           <span class="dash-label">${item.label}</span>
         </button>
       `).join('');
-      
-      // Insert at top of tab-operacion
+
+      wrap.querySelector('.mobile-dash-toggle').addEventListener('click', function () {
+        const g = wrap.querySelector('.mobile-dashboard-grid');
+        const chev = wrap.querySelector('.mobile-dash-chev');
+        const show = g.style.display === 'none';
+        g.style.display = show ? 'grid' : 'none';
+        if (chev) chev.textContent = show ? '▴' : '▾';
+        this.setAttribute('aria-expanded', String(show));
+      });
+
+      // Insertar DEBAJO de las tarjetas de IA (no arriba), dentro de tab-operacion.
       const tabOp = ids('tab-operacion');
       if (tabOp) {
-        tabOp.prepend(grid);
+        tabOp.appendChild(wrap);
       }
     }
 
@@ -5204,17 +5260,92 @@
             const eid = ids('tr-est-id').value.trim() || selectedEstablishmentId();
             if (!eid) { ids('tournament-reg-output').innerHTML = '<span class="muted">Ingresa Establishment ID.</span>'; return; }
             try {
-              await api('/api/tournaments/register', { method: 'POST', body: JSON.stringify({
+              const r = await api('/api/tournaments/register', { method: 'POST', body: JSON.stringify({
                 establishmentId: eid, studentId: ids('tr-student-id').value.trim() || null,
                 tournamentName: ids('tr-name').value.trim(), tournamentDate: ids('tr-date').value || null,
                 category: ids('tr-category').value.trim() || null, mode: ids('tr-mode').value,
-                cost: ids('tr-cost').value || null, notes: ids('tr-notes').value.trim() || null
+                cost: ids('tr-cost').value || null, notes: ids('tr-notes').value.trim() || null,
+                manualOverride: !!(ids('tr-manual-override')?.checked)
               }) });
               ids('tr-name').value = ''; ids('tr-date').value = ''; ids('tr-category').value = ''; ids('tr-cost').value = ''; ids('tr-notes').value = '';
+              if (ids('tr-manual-override')) ids('tr-manual-override').checked = false;
               await loadTournamentRegs();
+              if (r && r.warning) {
+                const warn = document.createElement('div');
+                warn.style.cssText = 'margin-top:8px;color:#e6a23c;font-size:12px;';
+                warn.textContent = r.warning;
+                ids('tournament-reg-output').appendChild(warn);
+              }
             } catch (err) { ids('tournament-reg-output').innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
           });
               ids('tr-load')?.addEventListener('click', loadTournamentRegs);
+              ids('tr-verify')?.addEventListener('click', async () => {
+                const eid = ids('tr-est-id').value.trim() || selectedEstablishmentId();
+                const out = ids('tr-verify-output');
+                if (!eid) { if (out) out.innerHTML = '<span class="muted">Ingresa Establishment ID.</span>'; return; }
+                if (out) out.innerHTML = '<span class="muted">Verificando...</span>';
+                try {
+                  const r = await api(`/api/tournaments/verify?establishmentId=${encodeURIComponent(eid)}`);
+                  const warnings = r.warnings || [];
+                  if (!warnings.length) { if (out) out.innerHTML = '<span class="muted">✅ Sin duplicados: cada competidor está en máx. 1 Kata y 1 Kumite por torneo.</span>'; return; }
+                  if (out) out.innerHTML = warnings.map(w => `<div style="padding:8px;margin-top:6px;border:1px solid var(--warn);border-radius:8px;background:rgba(230,162,60,.08);font-size:12px;"><strong>⚠️ ${w.tournament_name}</strong> — competidor <code>${w.student_id ? w.student_id.slice(0,8)+'…' : '—'}</code> en ${w.count} inscripciones de <b>${w.type}</b>: ${(w.categories||[]).join(', ')}</div>`).join('');
+                } catch (err) { if (out) out.innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
+              });
+            function renderBrackets(cats, brackets) {
+              const out = ids('bracket-output');
+              if (!out) return;
+              if (!brackets || !brackets.length) { out.innerHTML = '<span class="muted">No hay llaves todavía. Pulsa "Optimizar".</span>'; return; }
+              out.innerHTML = brackets.map(b => {
+                const entries = b.entries || [];
+                const rows = entries.length ? entries.map(e => `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;margin-top:4px;background:var(--panel-2);border-radius:6px;font-size:12px;"><span>#${e.seed ?? '—'} ${(e.students && e.students.full_name) || (e.student_id ? e.student_id.slice(0,8)+'…' : '—')}</span><button class="btn alt" style="padding:2px 8px;font-size:11px;" onclick="removeBracketEntry('${e.id}')">Quitar</button></div>`).join('') : '<span class="muted">Sin competidores.</span>';
+                return `<div style="margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px;"><strong>${b.label || 'Llave'}</strong> <span class="pill">${entries.length} competidor(es)</span><div style="margin-top:6px;">${rows}</div></div>`;
+              }).join('');
+            }
+            async function loadBrackets() {
+              const eid = ids('br-est-id').value.trim() || selectedEstablishmentId();
+              const tname = ids('br-name').value.trim();
+              const out = ids('bracket-output');
+              if (!eid || !tname) { out.innerHTML = '<span class="muted">Ingresa Establishment ID y Nombre del torneo.</span>'; return; }
+              try {
+                const r = await api(`/api/tournaments/categories?establishmentId=${encodeURIComponent(eid)}&tournamentName=${encodeURIComponent(tname)}`);
+                const cats = r.categories || [];
+                if (!cats.length) { out.innerHTML = '<span class="muted">No hay categorías. Pulsa "Optimizar" para generarlas.</span>'; return; }
+                const brackets = [];
+                for (const c of cats) { const br = await api(`/api/tournaments/brackets?establishmentId=${encodeURIComponent(eid)}&categoryId=${encodeURIComponent(c.id)}`); brackets.push(...(br.brackets || [])); }
+                renderBrackets(cats, brackets);
+              } catch (err) { out.innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
+            }
+            window.removeBracketEntry = async function(id) {
+              if (!confirm('¿Quitar competidor de la llave?')) return;
+              const eid = ids('br-est-id').value.trim() || selectedEstablishmentId();
+              try { await api(`/api/tournaments/entries/${id}`, { method: 'DELETE', body: JSON.stringify({ establishmentId: eid }) }); await loadBrackets(); }
+              catch (err) { alert(err.message); }
+            };
+            ids('br-optimize')?.addEventListener('click', async () => {
+              const eid = ids('br-est-id').value.trim() || selectedEstablishmentId();
+              const tname = ids('br-name').value.trim();
+              const mode = ids('br-mode').value;
+              const out = ids('bracket-output');
+              if (!eid || !tname) { out.innerHTML = '<span class="muted">Ingresa Establishment ID y Nombre del torneo.</span>'; return; }
+              out.innerHTML = '<span class="muted">⏳ Optimizando llaves...</span>';
+              try {
+                const r = await api('/api/tournaments/optimize', { method: 'POST', body: JSON.stringify({ establishmentId: eid, tournamentName: tname, mode }) });
+                await loadBrackets();
+                if (r.warnings && r.warnings.length) out.insertAdjacentHTML('beforeend', '<div style="margin-top:10px;color:var(--warn);font-size:12px;"><strong>⚠️ Advertencias:</strong><br>' + r.warnings.map(w => `• ${(w.student_id||'').slice(0,8)}… (${w.type}): ${w.reason}`).join('<br>') + '</div>');
+              } catch (err) { out.innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
+            });
+            ids('br-load')?.addEventListener('click', loadBrackets);
+            ids('br-verify')?.addEventListener('click', async () => {
+              const eid = ids('br-est-id').value.trim() || selectedEstablishmentId();
+              const out = ids('bracket-output');
+              if (!eid) { out.innerHTML = '<span class="muted">Ingresa Establishment ID.</span>'; return; }
+              try {
+                const r = await api(`/api/tournaments/verify?establishmentId=${encodeURIComponent(eid)}`);
+                const warnings = r.warnings || [];
+                if (!warnings.length) { out.innerHTML = '<span class="muted">✅ Sin duplicados.</span>'; return; }
+                out.innerHTML = '<div style="margin-top:10px;color:var(--warn);font-size:12px;"><strong>⚠️ Duplicados detectados:</strong><br>' + warnings.map(w => `• ${w.tournament_name} — ${(w.student_id||'').slice(0,8)}… en ${w.count} de ${w.type}${w.source === 'brackets' ? ' (llaves)' : ''}`).join('<br>') + '</div>';
+              } catch (err) { out.innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
+            });
             ids('tournament-res-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const eid = ids('trr-est-id').value.trim() || selectedEstablishmentId();
@@ -6081,8 +6212,8 @@
         sensei: ['operacion','calendario','academico','torneos','comunidad','finanzas'],
         admin: ['operacion','calendario','academico','comunidad','marketplace','finanzas'],
         instructor: ['operacion','calendario','academico','comunidad'],
-        guardian: ['academico','finanzas','comunidad'],
-        student: ['academico','comunidad']
+        guardian: ['operacion','academico','finanzas','comunidad'],
+        student: ['operacion','academico','comunidad']
       };
 
       state.modulePermissions = {};
@@ -6313,6 +6444,8 @@
         if (result.refresh_token) {
           try { localStorage.setItem('ms_refresh_token', result.refresh_token); } catch (_) {}
         }
+        // Transición al panel: ocultar login de inmediato al autenticar (fix: antes quedaba visible si fallaba refreshMe).
+        setAuthenticated(true);
         // Recordarme: guardar credenciales si el checkbox está marcado
         try {
           const rememberMe = ids('remember-me')?.checked;
@@ -6329,16 +6462,17 @@
         } catch (_) {}
         ids('login-output').textContent = JSON.stringify({ ok: true, user: result.user }, null, 2);
 
-        // Cargar perfil y membresías
-        if (isCapacitor && window.MartialSupabaseAPI) {
-          await refreshMeDirect();
-        } else {
-          await refreshMe();
-        }
+        // Cargar perfil y membresías (un fallo de carga NO revierte la sesión ya activa)
+        try {
+          if (isCapacitor && window.MartialSupabaseAPI) {
+            await refreshMeDirect();
+          } else {
+            await refreshMe();
+          }
+        } catch (_) { /* la sesión ya está activa; refrescar datos no debe bloquear el panel */ }
 
         // No bloquear el login esperando el banco teórico; se carga en segundo plano
         loadTheoryDisciplines();
-        setAuthenticated(true);
         updateUserInfo();
         const allowed = allowedModulesForCurrentEstablishment();
         showTab(allowed[0] || 'operacion');
@@ -8045,6 +8179,10 @@
       }
 
       try {
+        if (!(ids('admin-password').value || '').trim()) {
+          ids('admin-output').textContent = 'La contraseña es obligatoria para crear el usuario.';
+          return;
+        }
         const role = ids('admin-role').value;
         const payload = {
           establishmentId,
@@ -8107,6 +8245,24 @@
         ids('admin-output').textContent = JSON.stringify(result, null, 2);
       } catch (err) {
         ids('admin-output').textContent = err.message;
+      }
+    });
+
+    ids('change-password-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = ids('cp-status');
+      const current = ids('cp-current').value;
+      const next = ids('cp-new').value;
+      if (!current || !next) { if (status) status.textContent = 'Completa ambos campos.'; return; }
+      if (next.length < 6) { if (status) status.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.'; return; }
+      if (status) status.textContent = '⏳ Actualizando...';
+      try {
+        const r = await api('/api/change-password', { method: 'POST', body: JSON.stringify({ currentPassword: current, newPassword: next }) });
+        if (status) status.textContent = (r && r.ok) ? '✅ Contraseña actualizada correctamente.' : '⚠️ ' + ((r && r.error) || 'No se pudo actualizar.');
+        ids('cp-current').value = '';
+        ids('cp-new').value = '';
+      } catch (err) {
+        if (status) status.textContent = '❌ ' + err.message;
       }
     });
 
@@ -8190,57 +8346,7 @@
     });
 
     // â”€â”€ TORNEOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    ids('tournament-reg-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const establishmentId = ids('tr-est-id').value.trim() || selectedEstablishmentId();
-      if (!establishmentId) { ids('tournament-reg-output').textContent = 'Ingresa Establishment ID'; return; }
-      try {
-        const result = await api('/api/tournaments/register', {
-          method: 'POST',
-          body: JSON.stringify({
-            establishmentId,
-            studentId: ids('tr-student-id').value.trim() || null,
-            tournamentName: ids('tr-name').value.trim(),
-            tournamentDate: ids('tr-date').value || null,
-            category: ids('tr-category').value.trim() || null,
-            mode: ids('tr-mode').value,
-            cost: ids('tr-cost').value || null,
-            notes: ids('tr-notes').value.trim() || null
-          })
-        });
-        ids('tournament-reg-output').textContent = JSON.stringify(result, null, 2);
-      } catch (err) { ids('tournament-reg-output').textContent = err.message; }
-    });
-
-    ids('tr-load')?.addEventListener('click', async () => {
-      const establishmentId = ids('tr-est-id').value.trim() || selectedEstablishmentId();
-      if (!establishmentId) { ids('tournament-reg-output').textContent = 'Ingresa Establishment ID'; return; }
-      try {
-        const result = await api(`/api/tournaments?establishmentId=${encodeURIComponent(establishmentId)}`);
-        ids('tournament-reg-output').textContent = JSON.stringify(result, null, 2);
-      } catch (err) { ids('tournament-reg-output').textContent = err.message; }
-    });
-
-    ids('tournament-res-form')?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const establishmentId = ids('trr-est-id').value.trim() || selectedEstablishmentId();
-      if (!establishmentId) { ids('tournament-res-output').textContent = 'Ingresa Establishment ID'; return; }
-      try {
-        const result = await api('/api/tournaments/result', {
-          method: 'POST',
-          body: JSON.stringify({
-            establishmentId,
-            studentId: ids('trr-student-id').value.trim() || null,
-            tournamentName: ids('trr-name').value.trim() || null,
-            mode: ids('trr-mode').value.trim() || null,
-            roundReached: ids('trr-round').value.trim() || null,
-            medal: ids('trr-medal').value.trim() || null,
-            points: ids('trr-points').value.trim() || null
-          })
-        });
-        ids('tournament-res-output').textContent = JSON.stringify(result, null, 2);
-      } catch (err) { ids('tournament-res-output').textContent = err.message; }
-    });
+    // (handlers de torneos centralizados más arriba: se eliminó el set duplicado que causaba doble registro)
 
     // â”€â”€ INVENTARIO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     ids('inventory-form')?.addEventListener('submit', async (e) => {
@@ -11496,12 +11602,12 @@
           body: JSON.stringify({ message: msg, establishmentId: eid || null })
         });
         const content = (r.data && r.data.content) ? r.data.content : '(sin respuesta)';
-        const toolAction = (r.data && r.data.tool) || null;
+        const tools = Array.isArray(r.data && r.data.tools) ? r.data.tools : ((r.data && r.data.tool) ? [r.data.tool] : []);
         out.innerHTML = '';
         const p = document.createElement('p');
         p.innerHTML = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
         out.appendChild(p);
-        if (toolAction) aiApplyToolAction(toolAction, out);
+        tools.forEach(function (toolAction) { if (toolAction) aiApplyToolAction(toolAction, out); });
       } catch (err) {
         if (/mensualidad|vencida|billing/i.test(err.message || '')) {
           out.innerHTML = '🚫 <strong>Mensualidad vencida.</strong> Regulariza tu pago para usar la IA.';
@@ -11626,14 +11732,15 @@
 
     // Aplica los valores propuestos por la IA a los inputs REALES del formulario del módulo.
     function aiApplyPrefill(tool, values, formId) {
-      const tabFor = { students: 'academico', classes: 'calendario', payments: 'finanzas', notifications: 'comunidad' };
+      const tabFor = { students: 'academico', classes: 'calendario', payments: 'finanzas', notifications: 'comunidad', users: 'roles' };
       const targetTab = tabFor[tool] || 'operacion';
       if (typeof showTab === 'function') showTab(targetTab);
       const mapFor = {
         students: { fullName: 'st-name', email: 'st-email', phone: 'st-phone', birthDate: 'st-birth', currentRank: 'st-rank', disciplineCode: 'st-discipline' },
         classes: { title: 'cl-title', disciplineCode: 'cl-discipline', scheduledDate: 'cl-date', startTime: 'cl-start', endTime: 'cl-end', location: 'cl-location', notes: 'cl-notes' },
         payments: { studentId: 'pay-student-id', amount: 'pay-amount', currency: 'pay-currency', method: 'pay-method', concept: 'pay-concept', paidAt: 'pay-date', disciplineCode: 'pay-discipline' },
-        notifications: { title: 'nt-title', body: 'nt-body' }
+        notifications: { title: 'nt-title', body: 'nt-body' },
+        users: { fullName: 'admin-full-name', username: 'admin-username', password: 'admin-password', role: 'admin-role' }
       };
       const map = mapFor[tool] || {};
       let filled = 0;
@@ -11651,6 +11758,24 @@
           filled += 1;
         }
       });
+      if (tool === 'users') {
+        const role = String(values.role || '').toLowerCase();
+        const discWrap = ids('admin-discipline-wrap');
+        const senseiWrap = ids('admin-sensei-wrap');
+        if (role === 'instructor') {
+          if (discWrap) discWrap.style.display = '';
+          if (senseiWrap) senseiWrap.style.display = '';
+          const discSel = ids('admin-discipline-codes');
+          if (discSel && Array.isArray(values.disciplineCodes)) {
+            Array.from(discSel.options || []).forEach(o => { o.selected = values.disciplineCodes.indexOf(o.value) !== -1; });
+          }
+          const senseiInput = ids('admin-sensei-id');
+          if (senseiInput && values.senseiProfileId) senseiInput.value = String(values.senseiProfileId);
+        } else {
+          if (discWrap) discWrap.style.display = 'none';
+          if (senseiWrap) senseiWrap.style.display = 'none';
+        }
+      }
       const banner = document.createElement('div');
       banner.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;padding:12px 16px;background:#1c2938;border:1px solid var(--primary);color:var(--text);border-radius:10px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.4);';
       banner.innerHTML = '<strong>✍️ Formulario de ' + tool + ' prellenado por la IA (' + filled + ' campo(s)).</strong><br><span style="font-size:12px;">Revisa y guarda tú con el botón normal del formulario.</span>';

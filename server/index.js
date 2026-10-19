@@ -12,6 +12,21 @@ const {
   hasAIFeatureWith, shouldBlockBilling
 } = require('./ai-security');
 
+// ── Metadatos de despliegue para /api/health (versión, build y commit) ──
+let APP_VERSION = '0.0.0';
+let APP_BUILD = '0';
+try {
+  const _vj = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'web', 'version.json'), 'utf8'));
+  APP_VERSION = String(_vj.version || _vj.appVersion || '0.0.0');
+  APP_BUILD = String(_vj.build || _vj.buildNumber || '0');
+} catch (_) { /* sin version.json: usar fallback */ }
+let GIT_COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || '').trim() || 'unknown';
+if (GIT_COMMIT === 'unknown') {
+  try {
+    GIT_COMMIT = String(require('child_process').execSync('git rev-parse --short HEAD', { encoding: 'utf8' })).trim();
+  } catch (_) { /* .git no disponible en runtime */ }
+}
+
 const app = express();
 const PORT = Number(process.env.PORT || 8010);
 const MEDIA_BUCKET = String(process.env.SUPABASE_MEDIA_BUCKET || 'martial-media').trim();
@@ -911,7 +926,7 @@ app.put('/api/trial/users/:profileId', requireAuth, async (req, res) => {
 
 // ─── Login with trial check ──────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, app: 'MartialSystem', ts: new Date().toISOString() });
+  res.json({ ok: true, app: 'MartialSystem', version: APP_VERSION, build: APP_BUILD, commit: GIT_COMMIT, ts: new Date().toISOString() });
 });
 
 app.post('/api/upload/public', imageUpload.single('image'), (req, res) => {

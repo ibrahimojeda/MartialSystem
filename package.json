@@ -8,11 +8,6 @@
     "start": "node server/index.js"
   },
   "dependencies": {
-    "@capacitor/android": "8.5.1",
-    "@capacitor/cli": "^8.5.0",
-    "@capacitor/core": "^8.5.0",
-    "@capacitor/preferences": "^8.0.1",
-    "@capgo/capacitor-native-biometric": "^8.6.7",
     "@supabase/supabase-js": "^2.49.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -23,8 +18,16 @@
     "stripe": "^22.3.0"
   },
   "devDependencies": {
+    "@capacitor/android": "8.5.1",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/preferences": "^8.0.1",
+    "@capgo/capacitor-native-biometric": "^8.6.7",
     "@capacitor/assets": "^3.0.5",
     "sharp": "^0.35.3",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "qs": "^6.16.1"
   }
 }

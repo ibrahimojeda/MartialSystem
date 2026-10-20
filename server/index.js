@@ -83,6 +83,7 @@ app.use('/api/ai/chat', rateLimit(30, 60 * 1000));        // control de costo de
 app.use('/api/ai/welcome', rateLimit(30, 60 * 1000));
 app.use('/api/change-password', rateLimit(10, 60 * 1000));
 app.use('/api/upload/public', rateLimit(20, 60 * 1000));      // límite anti-abuso para subida pública
+app.use('/api/onboarding', rateLimit(3, 15 * 60 * 1000));     // anti-abuso para altas públicas
 
 // Headers de no-cache para HTML y SW (forzar versión nueva en navegador)
 app.use((req, res, next) => {
@@ -1073,6 +1074,15 @@ app.post('/api/onboarding', async (req, res) => {
   const normalizedOwnerUsername = normalizeUsername(ownerUsername);
   if (!establishmentName || !normalizedOwnerUsername || !ownerPassword || !ownerFullName) {
     return res.status(400).json({ ok: false, error: 'Missing required fields' });
+  }
+  if (String(ownerPassword).length < 12 || String(ownerPassword).length > 128) {
+    return res.status(400).json({ ok: false, error: 'ownerPassword must be between 12 and 128 characters' });
+  }
+  if (String(establishmentName).trim().length > 160 || String(ownerFullName).trim().length > 160) {
+    return res.status(400).json({ ok: false, error: 'Name fields are too long' });
+  }
+  if (!/^[a-z0-9._-]{3,64}$/.test(normalizedOwnerUsername)) {
+    return res.status(400).json({ ok: false, error: 'Invalid ownerUsername format' });
   }
 
   const { data: existingOwnerProfile, error: ownerLookupError } = await supabaseAdmin
@@ -4850,18 +4860,28 @@ app.get('/api/establishment-disciplines', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/establishments', async (_req, res) => {
-  const { data, error } = await supabaseAdmin
+app.get('/api/establishments', requireAuth, async (req, res) => {
+  let query = supabaseAdmin
     .from('establishments')
     .select('id, name, city, country, is_active')
     .order('created_at', { ascending: false });
-
+  if (!req.isSuperadmin) {
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('establishment_members')
+      .select('establishment_id')
+      .eq('profile_id', req.authUser.id);
+    if (membershipError) return res.status(500).json({ ok: false, error: membershipError.message });
+    const ids = [...new Set((memberships || []).map((m) => m.establishment_id).filter(Boolean))];
+    if (!ids.length) return res.json({ ok: true, data: [] });
+    query = query.in('id', ids);
+  }
+  const { data, error } = await query;
   if (error) return res.status(500).json({ ok: false, error: error.message });
   return res.json({ ok: true, data });
 });
 
 app.get('/api/import/global-context', requireAuth, async (req, res) => {
-  if (req.authUser?.id !== 'superadmin') {
+  if (!req.isSuperadmin) {
     return res.status(403).json({ ok: false, error: 'Only superadmin can access global import context' });
   }
 
@@ -4951,7 +4971,7 @@ app.get('/api/import/global-context', requireAuth, async (req, res) => {
 });
 
 app.post('/api/import/resolve-students-establishments', requireAuth, async (req, res) => {
-  if (req.authUser?.id !== 'superadmin') {
+  if (!req.isSuperadmin) {
     return res.status(403).json({ ok: false, error: 'Only superadmin can resolve global student ownership' });
   }
 
@@ -7266,10 +7286,12 @@ app.post('/api/payments/paypal/create-order', requireAuth, async (req, res) => {
 app.post('/api/payments/paypal/capture-order', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
   const { orderId, establishmentId, studentId } = req.body || {};
-  if (!orderId) return res.status(400).json({ ok: false, error: 'orderId is required' });
-  if (establishmentId) {
-    const membership = await getMembership(profileId, establishmentId);
-    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+  if (!orderId || !establishmentId) return res.status(400).json({ ok: false, error: 'orderId and establishmentId are required' });
+  const membership = await getMembership(profileId, establishmentId);
+  if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+  if (studentId) {
+    const { data: student } = await supabaseAdmin.from('students').select('id').eq('id', studentId).eq('establishment_id', establishmentId).maybeSingle();
+    if (!student) return res.status(400).json({ ok: false, error: 'studentId does not belong to this establishment' });
   }
   try {
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) return res.status(400).json({ ok: false, error: 'PayPal not configured' });
@@ -7277,6 +7299,13 @@ app.post('/api/payments/paypal/capture-order', requireAuth, async (req, res) => 
     const tokenRes = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, { method: 'POST', headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=client_credentials' });
     const tokenData = await tokenRes.json();
     if (!tokenRes.ok) throw new Error(tokenData.error_description || 'PayPal auth failed');
+    const orderCheckRes = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}`, { headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' } });
+    const orderCheck = await orderCheckRes.json();
+    if (!orderCheckRes.ok) throw new Error(orderCheck.message || 'PayPal order lookup failed');
+    const referenceId = orderCheck.purchase_units?.[0]?.reference_id || '';
+    if (!referenceId.startsWith(`${establishmentId}-`)) {
+      return res.status(403).json({ ok: false, error: 'PayPal order is not associated with this establishment' });
+    }
     const captureRes = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${orderId}/capture`, { method: 'POST', headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' } });
     const captureData = await captureRes.json();
     if (!captureRes.ok) throw new Error(captureData.message || 'PayPal capture failed');

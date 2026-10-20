@@ -137,18 +137,83 @@ function needsModelInterpretation(intent, message) {
   return false;
 }
 
-// Parsea la salida JSON del modelo de interpretación y rechaza campos desconocidos.
+// Parsea la salida JSON del modelo de interpretación y rechaza valores inválidos/peligrosos.
 function parseStructuredAIIntent(raw) {
   if (!raw) return null;
   let cleaned = String(raw).trim();
+  if (cleaned.length > 4000) return null;
   const m = cleaned.match(/\{[\s\S]*\}/);
   if (m) cleaned = m[0];
   let obj;
   try { obj = JSON.parse(cleaned); } catch (_) { return null; }
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
-  const allowed = ['intent', 'domain', 'operation', 'filters', 'data', 'scope', 'needs_confirmation', 'missing', 'confidence'];
-  for (const k of Object.keys(obj)) if (!allowed.includes(k)) return null;
+
+  const allowedFields = ['intent', 'domain', 'operation', 'filters', 'data', 'scope', 'needs_confirmation', 'missing', 'confidence'];
+  for (const k of Object.keys(obj)) if (!allowedFields.includes(k)) return null;
+
+  const ALLOWED_INTENTS = ['read', 'write', 'delete', 'chat', 'clarify'];
+  const ALLOWED_DOMAINS = ['students', 'payments', 'classes', 'users', 'billing', 'attendance', 'notifications', 'reports', 'unknown'];
+  const ALLOWED_OPERATIONS = ['list', 'search', 'count', 'latest_per_student', 'create', 'update', 'delete', 'explain', 'unknown'];
+  const ALLOWED_SCOPES = ['current_establishment', 'own_records', 'global'];
+
+  if (!ALLOWED_INTENTS.includes(obj.intent)) return null;
+  if (!ALLOWED_DOMAINS.includes(obj.domain)) return null;
+  if (!ALLOWED_OPERATIONS.includes(obj.operation)) return null;
+  if (!ALLOWED_SCOPES.includes(obj.scope)) return null;
+
+  const conf = Number(obj.confidence);
+  if (!Number.isFinite(conf) || conf < 0 || conf > 1) return null;
+  if (typeof obj.needs_confirmation !== 'boolean') return null;
+  if (obj.filters !== undefined && (typeof obj.filters !== 'object' || Array.isArray(obj.filters) || obj.filters === null)) return null;
+  if (obj.data !== undefined && (typeof obj.data !== 'object' || Array.isArray(obj.data) || obj.data === null)) return null;
+  if (obj.missing !== undefined && !Array.isArray(obj.missing)) return null;
+
+  // Rechazar prototipos, strings largos, anidados y contenido ejecutable en filters/data/missing.
+  for (const section of [obj.filters, obj.data, obj.missing]) {
+    if (!section) continue;
+    for (const k of Object.keys(section)) {
+      if (/__proto__|constructor|prototype/.test(k)) return null;
+      const v = section[k];
+      if (typeof v === 'string') {
+        if (v.length > 200) return null;
+        if (/https?:\/\/|javascript:|<\s*script|\b(select|drop|truncate|alter|union)\b\s|--/.test(v)) return null;
+      } else if (v && typeof v === 'object') {
+        return null; // no anidados
+      }
+    }
+  }
+
   return obj;
+}
+
+// Formatea una respuesta determinística legible (sin llamar al modelo).
+function formatDeterministicAIResult(intent, rows, ctx) {
+  const domain = (intent && intent.domain) || 'unknown';
+  const n = (rows && rows.length) || 0;
+  if (!n) {
+    const label = { students: 'alumnos', payments: 'pagos', classes: 'clases', users: 'usuarios', billing: 'facturas' }[domain] || 'resultados';
+    return 'No encontré ' + label + ' dentro de tu alcance autorizado.';
+  }
+  if (domain === 'payments') {
+    const lines = rows.slice(0, 10).map(r => {
+      const name = r.student_name || r.full_name || 'Alumno';
+      const date = r.paid_at ? String(r.paid_at).slice(0, 10) : '—';
+      const amount = r.amount !== undefined ? '$' + Number(r.amount).toLocaleString() : '';
+      const concept = r.concept ? ' — ' + r.concept : '';
+      return '- ' + name + ' — ' + date + ' — ' + amount + concept;
+    }).join('\n');
+    return 'Encontré los últimos pagos:\n' + lines;
+  }
+  if (domain === 'students') {
+    const lines = rows.slice(0, 10).map(r => '- ' + (r.full_name || 'Alumno') + (r.discipline_name ? ' — ' + r.discipline_name : '')).join('\n');
+    return 'Encontré ' + n + ' alumnos:\n' + lines;
+  }
+  if (domain === 'classes') {
+    const lines = rows.slice(0, 10).map(r => '- ' + (r.title || 'Clase') + (r.scheduled_date ? ' — ' + r.scheduled_date : '')).join('\n');
+    return 'Encontré ' + n + ' clases:\n' + lines;
+  }
+  const lines = rows.slice(0, 10).map(r => '- ' + (r.full_name || r.title || r.username || 'Registro')).join('\n');
+  return 'Encontré ' + n + ' resultados:\n' + lines;
 }
 
 function detectImageType(buffer) {
@@ -292,6 +357,6 @@ module.exports = {
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
-  needsModelInterpretation, parseStructuredAIIntent
+  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult
 };
 

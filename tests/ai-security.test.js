@@ -7,7 +7,7 @@ const {
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
-  needsModelInterpretation, parseStructuredAIIntent
+  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -295,6 +295,26 @@ test('parseStructuredAIIntent acepta JSON válido y rechaza campos desconocidos'
   assert.equal(p.domain, 'payments');
   assert.equal(parseStructuredAIIntent('{"intent":"read","hack":"x"}'), null);
   assert.equal(parseStructuredAIIntent('no es json'), null);
+});
+
+// ─── parseStructuredAIIntent hardening ───
+test('parseStructuredAIIntent rechaza valores inválidos y contenido peligroso', () => {
+  assert.equal(parseStructuredAIIntent('{"intent":"hack","domain":"payments","operation":"list","scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":0.9}'), null);
+  assert.equal(parseStructuredAIIntent('{"intent":"read","domain":"payments","operation":"list","scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":1.5}'), null);
+  assert.equal(parseStructuredAIIntent('{"intent":"read","domain":"payments","operation":"list","scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":0.9,"filters":{"amount":{"operator":">","value":"DROP TABLE"}}}'), null);
+  assert.equal(parseStructuredAIIntent('{"intent":"read","domain":"payments","operation":"list","scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":0.9,"filters":{"__proto__":{"x":1}}}'), null);
+});
+
+// ─── formatDeterministicAIResult ───
+test('formatDeterministicAIResult produce texto legible sin IDs', () => {
+  const intent = { intent: 'read', domain: 'payments', operation: 'latest_per_student' };
+  const rows = [{ student_name: 'Juan Pérez', paid_at: '2026-10-15', amount: 50000, concept: 'Mensualidad' }];
+  const s = formatDeterministicAIResult(intent, rows, {});
+  assert.ok(s.includes('Juan Pérez'));
+  assert.ok(s.includes('$50'));
+  assert.ok(!s.includes('stu-1'));
+  const empty = formatDeterministicAIResult({ domain: 'payments' }, [], {});
+  assert.ok(empty.includes('No encontré pagos'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

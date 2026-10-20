@@ -11,7 +11,7 @@ const {
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
   buildAIIntent, normalizeAISemantics, validateAIIntent,
-  needsModelInterpretation, parseStructuredAIIntent
+  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9613,18 +9613,8 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const looksGarbage = (s) => !s || /^[\s{}[\],:."']*$/.test(String(s));
     if (looksGarbage(content) && searchResults.length) {
       // Respuesta determinística a partir de los resultados reales (sin volver a llamar a la IA).
-      content = searchResults.map(r => {
-        const n = r.rows.length;
-        const lbl = (r.label || 'resultados').toLowerCase();
-        if (!n) return 'No encontré ' + lbl + ' para tu consulta.';
-        const items = r.rows.slice(0, 10).map(x => {
-          if (x.full_name) return '· ' + x.full_name + (x.current_rank ? ' (' + x.current_rank + ')' : '') + (x.discipline_name ? ' — ' + x.discipline_name : '');
-          if (x.title) return '· ' + x.title + (x.scheduled_date ? ' — ' + x.scheduled_date : '');
-          if (x.amount !== undefined) return '· $' + Number(x.amount || 0).toLocaleString() + (x.concept ? ' — ' + x.concept : '');
-          try { return '· ' + JSON.stringify(x).slice(0, 140); } catch (_e) { return '· (resultado)'; }
-        }).join('\n');
-        return 'Encontré ' + n + ' ' + lbl + ':\n' + items;
-      }).join('\n\n');
+      const allRows = searchResults.flatMap(r => r.rows || []);
+      content = formatDeterministicAIResult(intent, allRows, ctx);
     }
     if (looksGarbage(content)) {
       return res.status(502).json({ ok: false, error: 'La IA no produjo una respuesta válida', code: 'AI_INVALID_RESPONSE' });

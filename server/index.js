@@ -10,7 +10,8 @@ const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
-  buildAIIntent, normalizeAISemantics, validateAIIntent
+  buildAIIntent, normalizeAISemantics, validateAIIntent,
+  needsModelInterpretation, parseStructuredAIIntent
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9373,6 +9374,33 @@ function extractToolBlocks(raw) {
   return { blocks, text: text.trim() };
 }
 
+// Interpretación semántica condicional por el modelo (solo cuando el clasificador local no es claro).
+// Devuelve una intención estructurada validada, o null para usar el fallback local.
+async function aiInterpretRequest(message, cfg, ctx) {
+  const prompt = [
+    'Interpreta esta solicitud humana. Devuelve ÚNICAMENTE JSON válido.',
+    'No respondas en lenguaje natural. No inventes IDs, fechas, montos ni nombres.',
+    'No ejecutes acciones. No decidas permisos: el backend los validará.',
+    '',
+    'Esquema obligatorio (solo estos campos):',
+    '{"intent":"read|write|delete|chat|clarify","domain":"students|payments|classes|users|billing|attendance|notifications|reports|unknown","operation":"list|search|count|latest_per_student|create|update|delete|explain|unknown","filters":{},"data":{},"scope":"current_establishment|own_records|global","needs_confirmation":false,"missing":[],"confidence":0}',
+    '',
+    'Intents: read (consultar/revisar/mostrar/buscar/listar/contar/mirar), write (crear/registrar/agregar/guardar/editar/actualizar), delete (borrar/eliminar/quitar), chat, clarify.',
+    'Si la solicitud no es clara, usa intent=clarify y llena missing.',
+    'Devuelve solo el JSON, sin markdown ni comentarios.'
+  ].join('\n');
+  const call = await aiCallWithFailover(cfg, {
+    messages: [{ role: 'system', content: prompt }, { role: 'user', content: String(message) }],
+    temperature: 0.1,
+    max_tokens: 300
+  });
+  const parsed = parseStructuredAIIntent(call.content);
+  if (!parsed) return null;
+  const validated = validateAIIntent(parsed, ctx);
+  if (!validated.ok) return null;
+  return parsed;
+}
+
 // Texto que describe las herramientas disponibles según el rol → se inyecta al prompt.
 function buildAIToolsSuffix(role) {
   const allowed = Object.keys(AI_TOOLS).filter(t => aiToolAllowed(t, role, 'read'));
@@ -9442,8 +9470,12 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const aiRole = await getAIContextRole(req, establishmentId);
     const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
     const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
-    // Intención estructurada determinística (fallback sin IA). El backend valida y ejecuta.
-    const intent = buildAIIntent(message);
+    // Modo híbrido: clasificador local primero; el modelo solo interpreta si hay ambigüedad.
+    let intent = buildAIIntent(message);
+    if (needsModelInterpretation(intent, message)) {
+      const modelIntent = await aiInterpretRequest(message, cfg, ctx).catch(() => null);
+      if (modelIntent) intent = modelIntent;
+    }
 
     // Cargar memoria reciente del usuario (Fase 1)
     let messages = [{ role: 'system', content: systemPrompt }];

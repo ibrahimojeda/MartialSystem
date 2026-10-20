@@ -124,6 +124,33 @@ function validateAIIntent(intent, ctx) {
   return { ok: errors.length === 0, errors, intent };
 }
 
+// Decide si una intención local requiere interpretación adicional por el modelo.
+function needsModelInterpretation(intent, message) {
+  const text = String(message || '').toLowerCase();
+  if (!intent) return true;
+  if (intent.intent === 'chat') return false; // conversación simple, sin interpretación
+  if (intent.intent === 'clarify' || intent.intent === 'unknown') return true;
+  if (!intent.domain || intent.domain === 'unknown') return true;
+  const conf = Number(intent.confidence);
+  if (!Number.isFinite(conf) || conf < 0.70) return true;
+  if (/(ellos|ellas|ese|esa|aqu[eé]l|aquella|lo anterior|el anterior|la anterior)/.test(text)) return true;
+  return false;
+}
+
+// Parsea la salida JSON del modelo de interpretación y rechaza campos desconocidos.
+function parseStructuredAIIntent(raw) {
+  if (!raw) return null;
+  let cleaned = String(raw).trim();
+  const m = cleaned.match(/\{[\s\S]*\}/);
+  if (m) cleaned = m[0];
+  let obj;
+  try { obj = JSON.parse(cleaned); } catch (_) { return null; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const allowed = ['intent', 'domain', 'operation', 'filters', 'data', 'scope', 'needs_confirmation', 'missing', 'confidence'];
+  for (const k of Object.keys(obj)) if (!allowed.includes(k)) return null;
+  return obj;
+}
+
 function detectImageType(buffer) {
   if (!buffer || buffer.length < 12) return null;
   const b = buffer;
@@ -264,6 +291,7 @@ module.exports = {
   AI_PROVIDERS, AI_TOOLS, aiToolAllowed, detectImageType, aiParseToolBlock,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
-  aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent
+  aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
+  needsModelInterpretation, parseStructuredAIIntent
 };
 

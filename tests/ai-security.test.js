@@ -6,7 +6,8 @@ const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
-  aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent
+  aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
+  needsModelInterpretation, parseStructuredAIIntent
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -268,6 +269,32 @@ test('validateAIIntent rechaza escritura sin confirmación', () => {
   const r = validateAIIntent(w, { isSuperadmin: false, establishmentId: 'est-1' });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some(e => e.includes('confirmación')));
+});
+
+// ─── needsModelInterpretation: modo híbrido ───
+test('needsModelInterpretation: consultas claras no requieren modelo', () => {
+  const a = buildAIIntent('revisa todos los alumnos y mira sus ultimas fechas de pago de cualquier monto superior a 0');
+  assert.equal(needsModelInterpretation(a, 'revisa todos los alumnos y mira sus ultimas fechas de pago de cualquier monto superior a 0'), false);
+  const b = buildAIIntent('qué clases hay mañana');
+  assert.equal(needsModelInterpretation(b, 'qué clases hay mañana'), false);
+  const c = buildAIIntent('muéstrame mis alumnos');
+  assert.equal(needsModelInterpretation(c, 'muéstrame mis alumnos'), false);
+});
+
+test('needsModelInterpretation: ambigua o con referencias requiere modelo', () => {
+  const a = buildAIIntent('haz algo con Juan');
+  assert.equal(needsModelInterpretation(a, 'haz algo con Juan'), true);
+  const b = buildAIIntent('muéstrame los pagos de ellos');
+  assert.equal(needsModelInterpretation(b, 'muéstrame los pagos de ellos'), true);
+});
+
+// ─── parseStructuredAIIntent ───
+test('parseStructuredAIIntent acepta JSON válido y rechaza campos desconocidos', () => {
+  const p = parseStructuredAIIntent('{"intent":"read","domain":"payments","operation":"list","filters":{},"data":{},"scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":0.9}');
+  assert.equal(p.intent, 'read');
+  assert.equal(p.domain, 'payments');
+  assert.equal(parseStructuredAIIntent('{"intent":"read","hack":"x"}'), null);
+  assert.equal(parseStructuredAIIntent('no es json'), null);
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

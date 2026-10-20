@@ -317,6 +317,23 @@ test('formatDeterministicAIResult produce texto legible sin IDs', () => {
   assert.ok(empty.includes('No encontré pagos'));
 });
 
+// ─── parseStructuredAIIntent: español válido vs contenido peligroso ───
+test('parseStructuredAIIntent no bloquea español válido', () => {
+  const mk = (filters) => '{"intent":"read","domain":"students","operation":"list","scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":0.9,"filters":' + JSON.stringify(filters) + '}';
+  assert.ok(parseStructuredAIIntent(mk({ q: 'selecciona los alumnos' })));
+  assert.ok(parseStructuredAIIntent(mk({ q: 'muéstrame los pagos' })));
+  assert.ok(parseStructuredAIIntent(mk({ q: 'el alumno se llama Carlos' })));
+  assert.ok(parseStructuredAIIntent(mk({ q: 'revisa la disciplina de Juan' })));
+});
+
+test('parseStructuredAIIntent rechaza contenido peligroso claro', () => {
+  const mk = (filters) => '{"intent":"read","domain":"students","operation":"list","scope":"current_establishment","needs_confirmation":false,"missing":[],"confidence":0.9,"filters":' + JSON.stringify(filters) + '}';
+  assert.equal(parseStructuredAIIntent(mk({ q: 'DROP TABLE students' })), null);
+  assert.equal(parseStructuredAIIntent(mk({ q: 'SELECT * FROM users' })), null);
+  assert.equal(parseStructuredAIIntent(mk({ q: '<script>alert(1)</script>' })), null);
+  assert.equal(parseStructuredAIIntent(mk({ q: 'javascript:alert(1)' })), null);
+});
+
 console.log('Suite ai-security: ejecutada con node:test');
 
 

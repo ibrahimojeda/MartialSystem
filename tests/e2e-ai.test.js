@@ -86,8 +86,8 @@ after(async () => {
 });
 
 beforeEach(() => {
-  providerA.clear();
-  providerB.clear();
+  providerA.reset();
+  providerB.reset();
   require('../server/index.js').__resetAICooldown();
 });
 
@@ -292,5 +292,31 @@ test('Q. Frase reportada → búsqueda de pagos, nunca prefill', async () => {
   assert.equal(search.rows.length, 1, 'una fila por alumno (latestPerStudent)');
   assert.equal(search.rows[0].student_id, 'stu-1');
   assert.equal(search.rows[0].amount, 100, 'excluye amount=0 y usa el último pago');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'consulta clara: cero interpretaciones');
+});
+
+test('D. Ambigua usa exactamente una interpretación', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  providerA.push('{"intent":"clarify","domain":"unknown","operation":"unknown","filters":{},"data":{},"scope":"current_establishment","needs_confirmation":false,"missing":["acción"],"confidence":0.2}');
+  providerA.push('¿Qué deseas hacer con Juan?');
+
+  const res = await aiChat('tok_owner_1', 'haz algo con Juan', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(providerA.metrics.interpretationCalls, 1, 'una llamada de interpretación');
+  assert.ok(String(json.data.content).includes('¿Qué deseas'), 'pregunta de aclaración');
+});
+
+test('G. Lectura con amount no activa prefill', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  providerA.push('<<<TOOL>>>{"tool":"payments","params":{"amount":0}}');
+  providerA.push('Aquí están los pagos.');
+
+  const res = await aiChat('tok_owner_1', 'muéstrame los pagos mayores a cero', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const prefill = (json.data.tools || []).find(t => t.action === 'prefill');
+  assert.ok(!prefill, 'nunca prefill');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'sin interpretación');
 });
 

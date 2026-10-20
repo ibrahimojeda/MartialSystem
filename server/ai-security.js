@@ -176,7 +176,7 @@ function parseStructuredAIIntent(raw) {
       const v = section[k];
       if (typeof v === 'string') {
         if (v.length > 200) return null;
-        if (/https?:\/\/|javascript:|<\s*script|\b(select|drop|truncate|alter|union)\b\s|--/.test(v)) return null;
+        if (/https?:\/\/|javascript:|<\s*script|\b(select|drop|truncate|alter|union)\b\s|--/i.test(v)) return null;
       } else if (v && typeof v === 'object') {
         return null; // no anidados
       }

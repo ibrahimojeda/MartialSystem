@@ -149,6 +149,7 @@ async function aiFailoverWith(providers, requestFn, labelFor) {
   for (const p of providers) {
     try {
       const res = await requestFn(p);
+      if (!res || !String(res.content || '').trim()) { const e = new Error('AI_EMPTY_RESPONSE'); e.status = 502; e.code = 'AI_EMPTY_RESPONSE'; throw e; }
       const label = labelFor ? labelFor(p) : (p.provider || p.id || 'IA');
       return { content: res.content, model: res.model, baseUrl: res.baseUrl, providerId: p.id || p.provider || 'p1', providerLabel: label };
     } catch (err) {

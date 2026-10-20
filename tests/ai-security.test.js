@@ -182,6 +182,17 @@ test('aiFailoverWith lanza cuando todas fallan', async () => {
   });
 });
 
+test('aiFailoverWith trata content vacío como fallo y usa el siguiente', async () => {
+  const providers = [{ id: 'p1', provider: 'gemini' }, { id: 'p2', provider: 'openai' }];
+  const requestFn = async (p) => {
+    if (p.id === 'p1') return { content: '   ', model: 'x', baseUrl: 'https://x' };
+    return { content: 'respuesta real', model: 'gpt-4o-mini', baseUrl: 'https://api.openai.com/v1' };
+  };
+  const res = await aiFailoverWith(providers, requestFn, (p) => p.id);
+  assert.equal(res.providerId, 'p2');
+  assert.equal(res.content, 'respuesta real');
+});
+
 console.log('Suite ai-security: ejecutada con node:test');
 
 

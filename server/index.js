@@ -8463,6 +8463,12 @@ async function aiProviderRequest(provider, body, apiKey) {
     throw e;
   }
   const content = aiJson?.choices?.[0]?.message?.content || '';
+  if (!String(content || '').trim()) {
+    const e = new Error('El proveedor devolvió una respuesta vacía.');
+    e.status = 502;
+    e.code = 'AI_EMPTY_RESPONSE';
+    throw e;
+  }
   aiTrackUsage(
     (provider && provider.id) || ((provider && provider.provider) ? provider.provider + '-' + model : 'p1'),
     (provider && AI_PROVIDERS[provider.provider]) ? AI_PROVIDERS[provider.provider].label : (provider ? provider.provider : 'openai'),
@@ -8471,6 +8477,15 @@ async function aiProviderRequest(provider, body, apiKey) {
   );
   return { content, model, baseUrl, raw: aiJson };
 }
+
+// Cooldown en memoria (60s) para proveedores que devuelven 429 (cuota agotada).
+const aiProviderCooldown = new Map();
+const aiProviderCooldownStatus = () => {
+  const now = Date.now();
+  const out = [];
+  for (const [id, until] of aiProviderCooldown.entries()) if (until > now) out.push({ id, until });
+  return out;
+};
 
 // Llama a la IA con failover automático: si el proveedor seleccionado falla (cuota,
 // key inválida, modelo inexistente, red...), prueba con la siguiente IA activa.
@@ -8488,17 +8503,22 @@ async function aiCallWithFailover(cfg, body, opts) {
   const errors = [];
   let lastErr = null;
   for (const provider of tries) {
+    const pid = provider.id || provider.provider || 'p1';
+    const cdUntil = aiProviderCooldown.get(pid);
+    if (cdUntil && cdUntil > Date.now()) continue; // en cooldown por 429 → saltar
     try {
       const res = await aiProviderRequest(provider, body);
+      aiProviderCooldown.delete(pid);
       return {
         content: res.content,
         model: res.model,
         baseUrl: res.baseUrl,
-        providerId: provider.id || provider.provider || 'p1',
+        providerId: pid,
         providerLabel: (AI_PROVIDERS[provider.provider] && AI_PROVIDERS[provider.provider].label) || provider.provider || 'IA'
       };
     } catch (err) {
       lastErr = err;
+      if (err.status === 429) aiProviderCooldown.set(pid, Date.now() + 60 * 1000); // cooldown 60s ante cuota agotada
       errors.push((AI_PROVIDERS[provider.provider] && AI_PROVIDERS[provider.provider].label) || provider.provider || provider.id || 'IA' + ': ' + (err.message || ''));
     }
   }
@@ -8676,7 +8696,7 @@ async function buildAIContext(req, establishmentId) {
       const stRes = await supabaseAdmin.from('students').select('id', { count: 'exact', head: true }).eq('establishment_id', establishmentId);
       const discRes = await supabaseAdmin.from('students').select('discipline_code').eq('establishment_id', establishmentId).limit(500);
       const payRes = await supabaseAdmin.from('payments').select('amount, student_id, paid_at').eq('establishment_id', establishmentId).gte('paid_at', day30).limit(1000);
-      const clsRes = await supabaseAdmin.from('classes').select('scheduled_date, start_time, end_time, discipline_code, title').eq('establishment_id', establishmentId).gte('scheduled_date', new Date().toISOString().slice(0, 10)).limit(20);
+      const clsRes = await supabaseAdmin.from('class_sessions').select('scheduled_date, start_time, end_time, title').eq('establishment_id', establishmentId).gte('scheduled_date', new Date().toISOString().slice(0, 10)).limit(20);
       const memRes = await supabaseAdmin.from('establishment_members').select('role').eq('establishment_id', establishmentId).limit(2000);
       const disc = discRes.data || [];
       const byDisc = {};
@@ -8695,7 +8715,7 @@ async function buildAIContext(req, establishmentId) {
       if (discTop) lines.push('Alumnos por disciplina: ' + discTop + '.');
       if (roleTxt) lines.push('Usuarios del dojo por rol: ' + roleTxt + '.');
       if (totalMes) lines.push('Pagos últimos 30 días: $' + totalMes.toLocaleString() + ' (' + pay.length + ' movimientos).');
-      if (cls.length) lines.push('Próximas clases: ' + cls.map(c => (c.scheduled_date || '') + ' ' + (c.start_time || '') + (c.end_time ? '-' + c.end_time : '') + ' ' + (c.title || c.discipline_code || '')).join(' · '));
+      if (cls.length) lines.push('Próximas clases: ' + cls.map(c => (c.scheduled_date || '') + ' ' + (c.start_time || '') + (c.end_time ? '-' + c.end_time : '') + ' ' + (c.title || '')).join(' · '));
     } else if ((role === 'sensei' || role === 'instructor') && establishmentId) {
       const discRes = await supabaseAdmin.from('instructor_disciplines').select('discipline_code, discipline:disciplines(name)').eq('establishment_id', establishmentId).eq('instructor_profile_id', profileId).limit(50);
       const stuRes = await supabaseAdmin.from('students').select('discipline_code').eq('establishment_id', establishmentId).overlaps('instructor_profile_ids', [profileId]).limit(500);
@@ -8934,7 +8954,8 @@ app.get('/api/ai/status', requireAuth, async (req, res) => {
     const enabled = Boolean(cfg.enabled);
     const hasKey = aiHasConfiguredProvider(cfg);
     const allowed = enabled && hasKey && planOk && !billing.severeOverdue;
-    return res.json({ ok: true, data: { allowed, enabled, hasKey, planOk, role, establishmentId, billing } });
+    const cooldown = aiProviderCooldownStatus();
+    return res.json({ ok: true, data: { allowed, enabled, hasKey, planOk, role, establishmentId, billing, cooldown } });
   } catch (err) { return res.status(500).json({ ok: false, error: err.message }); }
 });
 
@@ -9010,14 +9031,26 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
         if (resolved) keepIds = new Set((enrollments || []).filter(e => e.discipline_id === resolved.id).map(e => e.student_id));
       }
     }
+    // Mapa discipline_id -> {code,name} para rellenar discipline_code/name reales.
+    let discMap = {};
+    const discIds = [...new Set(Object.values(enrMap).map(e => e.discipline_id).filter(Boolean))];
+    if (discIds.length) {
+      const { data: discRows } = await supabaseAdmin.from('disciplines').select('id, code, name').in('id', discIds).limit(200);
+      (discRows || []).forEach(d => { discMap[d.id] = d; });
+    }
     return {
-      rows: rows0.filter(r => !keepIds || keepIds.has(r.id)).map(r => ({
-        id: r.id, full_name: r.full_name, email: r.email, phone: r.phone, birth_date: r.birth_date,
-        current_rank: (enrMap[r.id] && enrMap[r.id].current_rank) || null,
-        discipline_code: disc || null,
-        status: (enrMap[r.id] && enrMap[r.id].status) || null,
-        establishment_id: r.establishment_id, created_at: r.created_at
-      })),
+      rows: rows0.filter(r => !keepIds || keepIds.has(r.id)).map(r => {
+        const enr = enrMap[r.id] || {};
+        const dd = enr.discipline_id ? discMap[enr.discipline_id] : null;
+        return {
+          id: r.id, full_name: r.full_name, email: r.email, phone: r.phone, birth_date: r.birth_date,
+          current_rank: enr.current_rank || null,
+          discipline_code: disc || (dd ? dd.code : null),
+          discipline_name: dd ? dd.name : null,
+          status: enr.status || null,
+          establishment_id: r.establishment_id, created_at: r.created_at
+        };
+      }),
       meta: { count: rows0.filter(r => !keepIds || keepIds.has(r.id)).length, query: q }
     };
   }
@@ -9244,7 +9277,7 @@ async function aiProposeDelete(tool, params, ctx, establishmentId) {
   } else if (tool === 'classes') {
     const id = String((params && (params.id || params.classId)) || '').trim();
     if (!id) return { ok: false, error: 'Falta el ID de la clase.' };
-    let q = supabaseAdmin.from('classes').select('id, title, scheduled_date, establishment_id');
+    let q = supabaseAdmin.from('class_sessions').select('id, title, scheduled_date, establishment_id');
     if (estId) q = q.eq('establishment_id', estId);
     const { data } = await q.eq('id', id).maybeSingle();
     if (!data) return { ok: false, error: 'Clase no encontrada.' };
@@ -9261,6 +9294,18 @@ async function aiProposeDelete(tool, params, ctx, establishmentId) {
     return { ok: false, error: 'No se pueden borrar elementos de este tipo.' };
   }
   return { ok: true, target };
+}
+
+// Router determinístico por palabras clave: si el modelo no emite herramienta para
+// una pregunta claramente de datos, se fuerza la búsqueda real (respeta rol/establecimiento).
+function aiRouteKeyword(message) {
+  const m = String(message || '').toLowerCase();
+  if (/mensualidad|mensualidades|factura|facturas|billing/.test(m)) return 'billing';
+  if (/alumno|alumnos|estudiante|estudiantes|estudiantado/.test(m)) return 'students';
+  if (/pago|pagos|cobro|cobros|debe|deben|adeuda|adeudan|cuota|ingreso/.test(m)) return 'payments';
+  if (/clase|clases|horario|horarios|agenda/.test(m)) return 'classes';
+  if (/usuario|usuarios|roles|owner|sensei|instructor|instructores/.test(m)) return 'users';
+  return null;
 }
 
 // Texto que describe las herramientas disponibles según el rol → se inyecta al prompt.
@@ -9285,6 +9330,8 @@ function buildAIToolsSuffix(role) {
     '- Para CREAR o EDITAR: NO guardes nada. Emite <<<TOOL>>>{"tool":"students","params":{...}} con los campos del formulario (fullName, email, phone, birthDate, currentRank, disciplineCode). Mismo patrón para classes/payments/notificaciones. NUNCA simules haber guardado.',
     '- Para CREAR USUARIOS (solo si tu rol lo permite: superadmin/owner/sensei): emite <<<TOOL>>>{"tool":"users","params":{"fullName":"...","username":"...","role":"...","password":"..."}}. Para instructor agrega "disciplineCodes":["..."] y, si crea superadmin/owner, "senseiProfileId":"...". El sistema genera una contraseña segura si no la indicas; nunca guardes la cuenta tú.',
     '- Para BORRAR: emite <<<TOOL>>>{"tool":"students","params":{"id":"<uuid>"}} (según el tipo). Solo lo propones; el sistema pedirá confirmación.',
+    '- Toda pregunta sobre DATOS (alumnos, pagos, clases, usuarios, mensualidades, conteos como "cuántos") DEBE resolverse con una herramienta. NUNCA respondas de memoria ni inventes cifras.',
+    '- Emite <<<TOOL>>> INCLUSO si crees que la respuesta ya está en el contexto: el sistema hará la búsqueda real.',
     '- Si NO necesitas buscar datos (solo saludar, explicar o conversar), NO emitas ninguna <<<TOOL>>>.',
     '- Si el usuario no dio toda la información para una acción de escritura, pregúntale qué falta ANTES y no emitas <<<TOOL>>>.'
   ].join('\n');
@@ -9381,7 +9428,18 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       while ((m = re.exec(rawContent)) !== null) toolBlocks.push(m[1]);
       const text = String(rawContent).replace(/<<<TOOL>>>(\{[\s\S]*?\})/g, '').trim();
 
-      if (!toolBlocks.length) { content = text || String(rawContent); break; }
+      if (!toolBlocks.length) {
+        const routed = aiRouteKeyword(message);
+        if (routed && aiToolAllowed(routed, aiRole, 'read')) {
+          const searchRes = await aiSearchTool(routed, { query: String(message) }, ctx, establishmentId);
+          const rowsArr = (searchRes.rows || []).slice(0, 50);
+          searchResults.push({ tool: routed, label: AI_TOOLS[routed].label, rows: rowsArr, meta: searchRes.meta });
+          hasSearch = true;
+        } else {
+          content = text || String(rawContent);
+        }
+        break;
+      }
 
       // Ejecutar cada herramienta (respetando permisos y límites)
       const searchResults = [];
@@ -9447,6 +9505,27 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       // Sin búsqueda (solo prefill/borrado o texto): finalizar.
       if (!content) content = text;
       break;
+    }
+
+    // Validación final: nunca devolver vacío, JSON roto o "}\n}" con HTTP 200.
+    const looksGarbage = (s) => !s || /^[\s{}[\],:."']*$/.test(String(s));
+    if (looksGarbage(content) && searchResults.length) {
+      // Respuesta determinística a partir de los resultados reales (sin volver a llamar a la IA).
+      content = searchResults.map(r => {
+        const n = r.rows.length;
+        const lbl = (r.label || 'resultados').toLowerCase();
+        if (!n) return 'No encontré ' + lbl + ' para tu consulta.';
+        const items = r.rows.slice(0, 10).map(x => {
+          if (x.full_name) return '· ' + x.full_name + (x.current_rank ? ' (' + x.current_rank + ')' : '') + (x.discipline_name ? ' — ' + x.discipline_name : '');
+          if (x.title) return '· ' + x.title + (x.scheduled_date ? ' — ' + x.scheduled_date : '');
+          if (x.amount !== undefined) return '· $' + Number(x.amount || 0).toLocaleString() + (x.concept ? ' — ' + x.concept : '');
+          try { return '· ' + JSON.stringify(x).slice(0, 140); } catch (_e) { return '· (resultado)'; }
+        }).join('\n');
+        return 'Encontré ' + n + ' ' + lbl + ':\n' + items;
+      }).join('\n\n');
+    }
+    if (looksGarbage(content)) {
+      return res.status(502).json({ ok: false, error: 'La IA no produjo una respuesta válida', code: 'AI_INVALID_RESPONSE' });
     }
 
     // Guardar en la memoria del usuario (Fase 1)

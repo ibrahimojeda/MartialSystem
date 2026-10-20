@@ -27,6 +27,36 @@ function aiToolAllowed(tool, role, mode) {
   return false;
 }
 
+// Detecta la intención del mensaje: lectura (read_*), escritura (write) o charla.
+function aiDetectIntent(message) {
+  const text = String(message || '').toLowerCase().trim();
+  const readWords = /revisa|revisar|busca|buscar|muestra|mostrar|consulta|consultar|lista|listar|mira|mirar|cu[aá]les|qui[eé]nes|[úu]ltim|historial|cu[aá]ntos/.test(text);
+  const writeWords = /crear|crea|registrar|registra|agregar|agrega|guardar|guarda|ingresar|cobra|cobrar|editar|actualizar/.test(text);
+  if (writeWords && !readWords) return 'write';
+  if (/pago|pagos|cobro|cobros|monto|importe|fecha de pago|pagaron|deben|adeudan/.test(text)) return 'read_payments';
+  if (/alumno|alumnos|estudiante|estudiantes/.test(text)) return 'read_students';
+  if (/clase|clases|horario|horarios|agenda/.test(text)) return 'read_classes';
+  if (/usuario|usuarios|rol|roles|instructor|sensei|owner/.test(text)) return 'read_users';
+  return 'chat';
+}
+
+// Extrae parámetros de búsqueda determinísticos desde lenguaje natural (sin llamar a la IA).
+function aiExtractSearchParams(message, tool) {
+  const text = String(message || '').toLowerCase();
+  const params = { limit: 80 };
+  if (tool === 'payments') {
+    if (/monto\s+(superior|mayor)\s+a\s+cero|mayor\s+que\s+cero|amount\s*>\s*0|cualquier\s+monto\s+superior\s+a\s+0|superior\s+a\s+cero|m[aá]s\s+de\s+0/.test(text)) {
+      params.amountMin = 0;
+    }
+    if (/[úu]ltim[oa].*(pago|pagos|fecha)|fecha[s]?\s+de\s+pagos?|[úu]ltimos?\s+pagos?|cada\s+alumno/.test(text)) {
+      params.latestPerStudent = true;
+    }
+    const m = text.match(/(?:[úu]ltimos?)\s+(\d+)/);
+    if (m) params.limit = Math.min(Math.max(Number(m[1]), 1), 80);
+  }
+  return params;
+}
+
 function detectImageType(buffer) {
   if (!buffer || buffer.length < 12) return null;
   const b = buffer;
@@ -166,6 +196,7 @@ async function aiFailoverWith(providers, requestFn, labelFor) {
 module.exports = {
   AI_PROVIDERS, AI_TOOLS, aiToolAllowed, detectImageType, aiParseToolBlock,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
-  hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith
+  hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
+  aiDetectIntent, aiExtractSearchParams
 };
 

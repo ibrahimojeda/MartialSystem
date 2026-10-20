@@ -9,7 +9,7 @@ let { supabaseAdmin, supabasePublic } = require('./supabaseClient');
 const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
-  hasAIFeatureWith, shouldBlockBilling
+  hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -67,7 +67,7 @@ app.use(express.json({ limit: '5mb' }));
 // ── Rate limiting en memoria (sin dependencias) ──
 const rateLimitBuckets = new Map();
 const rateLimit = (max, windowMs) => (req, res, next) => {
-  const key = String(req.ip || (req.socket && req.socket.remoteAddress) || 'unknown');
+  const key = String(req.ip || (req.socket && req.socket.remoteAddress) || 'unknown') + ':' + max + ':' + windowMs;
   const now = Date.now();
   if (rateLimitBuckets.size > 20000) rateLimitBuckets.clear();
   let b = rateLimitBuckets.get(key);
@@ -9099,18 +9099,43 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
     if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
     const sid = String((params && (params.studentId || params.student_id)) || '').trim();
     if (sid) query = query.eq('student_id', sid);
+    const sname = String((params && params.studentName) || '').trim();
+    if (sname) {
+      const { data: smatch } = await supabaseAdmin.from('students').select('id').ilike('full_name', '%' + sname + '%').limit(200);
+      const sids = [...new Set((smatch || []).map(s => s.id))];
+      if (!sids.length) return { rows: [], meta: { count: 0, query: q } };
+      query = query.in('student_id', sids);
+    }
     if (disc) {
       const resolved = await resolveDisciplineByCode(estId, disc).catch(() => null);
       if (resolved) query = query.eq('discipline_id', resolved.id);
     }
+    const amountMin = Number(params && params.amountMin);
+    if (Number.isFinite(amountMin)) query = query.gt('amount', amountMin); // amountMin:0 → amount > 0 (excluye 0)
+    const amountMax = Number(params && params.amountMax);
+    if (Number.isFinite(amountMax)) query = query.lt('amount', amountMax);
+    const fromDate = String((params && params.fromDate) || '').trim();
+    if (fromDate) query = query.gte('paid_at', fromDate);
+    const toDate = String((params && params.toDate) || '').trim();
+    if (toDate) query = query.lte('paid_at', toDate);
     const days = parseInt((params && params.days) || 0, 10);
     if (days && days > 0) {
       const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
       query = query.gte('paid_at', since);
     }
-    const { data, error } = await query.order('paid_at', { ascending: false }).limit(MAX);
+    const latestPerStudent = Boolean(params && params.latestPerStudent);
+    const { data, error } = await query.order('paid_at', { ascending: false }).limit(latestPerStudent ? 2000 : MAX);
     if (error) throw new Error(error.message);
-    const rows = data || [];
+    let rows = data || [];
+    if (latestPerStudent) {
+      const seen = new Set();
+      rows = rows.filter(r => {
+        if (!r.student_id || seen.has(r.student_id)) return false;
+        seen.add(r.student_id);
+        return true;
+      });
+      rows = rows.slice(0, MAX);
+    }
     const studentIds = [...new Set(rows.map(r => r.student_id).filter(Boolean))];
     const stuMap = {};
     if (studentIds.length) {
@@ -9315,10 +9340,12 @@ async function aiProposeDelete(tool, params, ctx, establishmentId) {
 function aiRouteKeyword(message) {
   const m = String(message || '').toLowerCase();
   if (/mensualidad|mensualidades|factura|facturas|billing/.test(m)) return 'billing';
-  if (/alumno|alumnos|estudiante|estudiantes|estudiantado/.test(m)) return 'students';
-  if (/pago|pagos|cobro|cobros|debe|deben|adeuda|adeudan|cuota|ingreso/.test(m)) return 'payments';
-  if (/clase|clases|horario|horarios|agenda/.test(m)) return 'classes';
-  if (/usuario|usuarios|roles|owner|sensei|instructor|instructores/.test(m)) return 'users';
+  // Prioridad de intención: pagos > clases > usuarios > alumnos (la acción principal manda).
+  const intent = aiDetectIntent(message);
+  if (intent === 'read_payments') return 'payments';
+  if (intent === 'read_classes') return 'classes';
+  if (intent === 'read_users') return 'users';
+  if (intent === 'read_students') return 'students';
   return null;
 }
 
@@ -9414,6 +9441,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const aiRole = await getAIContextRole(req, establishmentId);
     const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
     const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
+    const intent = aiDetectIntent(message); // lectura vs escritura, por verbo y objetivo (no por campos)
 
     // Cargar memoria reciente del usuario (Fase 1)
     let messages = [{ role: 'system', content: systemPrompt }];
@@ -9465,11 +9493,12 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       if (!toolBlocks.length) {
         const routed = aiRouteKeyword(message);
         if (routed && !searchResults.length && aiToolAllowed(routed, aiRole, 'read')) {
-          const searchRes = await aiSearchTool(routed, { limit: 50 }, ctx, establishmentId);
+          const searchParams = aiExtractSearchParams(message, routed);
+          const searchRes = await aiSearchTool(routed, searchParams, ctx, establishmentId);
           const rowsArr = (searchRes.rows || []).slice(0, 50);
           const item = { tool: routed, label: AI_TOOLS[routed].label, rows: rowsArr, meta: searchRes.meta };
           searchResults.push(item);
-          toolActions.push({ action: 'search', tool: routed, params: { limit: 50 }, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
+          toolActions.push({ action: 'search', tool: routed, params: searchParams, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
         } else {
           content = text || String(rawContent);
         }
@@ -9490,14 +9519,19 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
           continue;
         }
 
-        const looksLikeSearch = !params.fullName && !params.title && !params.amount && !params.body && (params.query || params.q || params.name || params.date || params.studentName || params.studentId || params.limit);
-        if (looksLikeSearch) {
-          const searchRes = await aiSearchTool(tool, params, ctx, establishmentId);
+        const isSearch = intent.startsWith('read_') || (
+          intent !== 'write' &&
+          !params.fullName && !params.title && !params.body &&
+          (params.query || params.q || params.name || params.date || params.studentName || params.studentId || params.limit || params.amountMin || params.amountMax || params.latestPerStudent || params.fromDate || params.toDate)
+        );
+        if (isSearch) {
+          const searchParams = Object.assign({}, aiExtractSearchParams(message, tool), params);
+          const searchRes = await aiSearchTool(tool, searchParams, ctx, establishmentId);
           const rowsArr = (searchRes.rows || []).slice(0, 50);
           searchResults.push({ tool, label: def.label, rows: rowsArr, meta: searchRes.meta });
-          toolActions.push({ action: 'search', tool, params, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
+          toolActions.push({ action: 'search', tool, params: searchParams, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
           hasSearch = true;
-        } else if (aiToolAllowed(tool, aiRole, 'write')) {
+        } else if (intent === 'write' && aiToolAllowed(tool, aiRole, 'write')) {
           const validated = await aiValidatePrefill(tool, params, ctx, establishmentId);
           toolActions.push({ action: 'prefill', tool, formId: def.formId, values: validated.values, missing: validated.missing });
           if (validated.missing && validated.missing.length) {

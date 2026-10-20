@@ -55,6 +55,11 @@ before(async () => {
   supabaseMock.setToken('tok_instructor_1', { id: 'instructor-1', email: null, role: 'instructor', user_metadata: {} });
   supabaseMock._tables.profiles.push({ id: 'superadmin-1', username: 'sa1', role: 'superadmin', full_name: 'Superadmin Perfil', is_active: true, auth_email: 'sa1@users.martialsystem.local' });
   supabaseMock.setToken('tok_superadmin_profile', { id: 'superadmin-1', email: null, role: 'superadmin', user_metadata: {} });
+  supabaseMock._tables.payments.push(
+    { id: 'pay-2', establishment_id: 'est-1', student_id: 'stu-1', discipline_id: 'disc-karate', amount: 50, currency: 'USD', method: 'cash', concept: 'Cuota', paid_at: '2026-09-15', created_by: 'owner-1' },
+    { id: 'pay-3', establishment_id: 'est-1', student_id: 'stu-1', discipline_id: 'disc-karate', amount: 0, currency: 'USD', method: 'cash', concept: 'Ajuste', paid_at: '2026-10-25', created_by: 'owner-1' },
+    { id: 'pay-4', establishment_id: 'est-2', student_id: 'stu-2', discipline_id: 'disc-bjj', amount: 200, currency: 'USD', method: 'cash', concept: 'Ajeno', paid_at: '2026-10-21', created_by: 'owner-2' }
+  );
 
   setConfig([{ id: 'p1', baseUrl: providerA.url }]);
 
@@ -269,5 +274,23 @@ test('P. Superadmin (perfil) puede ver pagos', async () => {
   const json = await res.json();
   const search = (json.data.tools || []).find(t => t.action === 'search' && t.tool === 'payments');
   assert.ok(search, 'superadmin debe poder buscar pagos');
+});
+
+test('Q. Frase reportada → búsqueda de pagos, nunca prefill', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  providerA.push('<<<TOOL>>>{"tool":"payments","params":{"amount":0}}');
+  providerA.push('Aquí están los últimos pagos.');
+
+  const res = await aiChat('tok_owner_1', 'revisa todos los alumnos y mira sus ultimas fechas de pago de cualquier monto superior a 0', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const search = (json.data.tools || []).find(t => t.action === 'search');
+  const prefill = (json.data.tools || []).find(t => t.action === 'prefill');
+  assert.ok(search, 'debe ser búsqueda');
+  assert.ok(!prefill, 'nunca prefill');
+  assert.equal(search.tool, 'payments');
+  assert.equal(search.rows.length, 1, 'una fila por alumno (latestPerStudent)');
+  assert.equal(search.rows[0].student_id, 'stu-1');
+  assert.equal(search.rows[0].amount, 100, 'excluye amount=0 y usa el último pago');
 });
 

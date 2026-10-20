@@ -5,7 +5,8 @@ const assert = require('node:assert');
 const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
-  hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith
+  hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
+  aiDetectIntent, aiExtractSearchParams
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -191,6 +192,27 @@ test('aiFailoverWith trata content vacío como fallo y usa el siguiente', async 
   const res = await aiFailoverWith(providers, requestFn, (p) => p.id);
   assert.equal(res.providerId, 'p2');
   assert.equal(res.content, 'respuesta real');
+});
+
+// ─── aiDetectIntent: lectura vs escritura ───
+test('aiDetectIntent distingue lectura de escritura por verbo', () => {
+  assert.equal(aiDetectIntent('revisa todos los alumnos y mira sus ultimas fechas de pago de cualquier monto superior a 0'), 'read_payments');
+  assert.equal(aiDetectIntent('¿Quiénes pagaron este mes?'), 'read_payments');
+  assert.equal(aiDetectIntent('Muéstrame los últimos pagos de mis alumnos'), 'read_payments');
+  assert.equal(aiDetectIntent('¿Cuántos alumnos pagaron más de 0?'), 'read_payments');
+  assert.equal(aiDetectIntent('Registra un pago de 50 para Juan Pérez'), 'write');
+  assert.equal(aiDetectIntent('Crea un estudiante nuevo'), 'write');
+  assert.equal(aiDetectIntent('hola'), 'chat');
+});
+
+// ─── aiExtractSearchParams: filtros desde lenguaje natural ───
+test('aiExtractSearchParams extrae amountMin y latestPerStudent', () => {
+  const p = aiExtractSearchParams('revisa todos los alumnos y mira sus ultimas fechas de pago de cualquier monto superior a 0', 'payments');
+  assert.equal(p.amountMin, 0);
+  assert.equal(p.latestPerStudent, true);
+  const p2 = aiExtractSearchParams('Muéstrame los últimos pagos de mis alumnos', 'payments');
+  assert.equal(p2.latestPerStudent, true);
+  assert.equal(p2.amountMin, undefined);
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

@@ -19,6 +19,8 @@ function createSupabaseMock(seed = {}) {
         else if (f.type === 'in') out = out.filter(r => (f.val || []).includes(r[f.col]));
         else if (f.type === 'gte') out = out.filter(r => r[f.col] >= f.val);
         else if (f.type === 'lte') out = out.filter(r => r[f.col] <= f.val);
+        else if (f.type === 'gt') out = out.filter(r => r[f.col] > f.val);
+        else if (f.type === 'lt') out = out.filter(r => r[f.col] < f.val);
       }
       if (state.limit != null) out = out.slice(0, state.limit);
       return out;
@@ -31,6 +33,8 @@ function createSupabaseMock(seed = {}) {
     q.in = (col, val) => { state.filters.push({ type: 'in', col, val }); return q; };
     q.gte = (col, val) => { state.filters.push({ type: 'gte', col, val }); return q; };
     q.lte = (col, val) => { state.filters.push({ type: 'lte', col, val }); return q; };
+    q.gt = (col, val) => { state.filters.push({ type: 'gt', col, val }); return q; };
+    q.lt = (col, val) => { state.filters.push({ type: 'lt', col, val }); return q; };
     q.order = () => q;
     q.limit = (n) => { state.limit = n; return q; };
     q.range = () => q;

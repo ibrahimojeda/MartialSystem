@@ -34,6 +34,7 @@ if (GIT_BRANCH === 'unknown') {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Render/proxy: usar IP real del cliente (X-Forwarded-For) en rate limiting
 const PORT = Number(process.env.PORT || 8010);
 const MEDIA_BUCKET = String(process.env.SUPABASE_MEDIA_BUCKET || 'martial-media').trim();
 
@@ -78,7 +79,7 @@ const rateLimit = (max, windowMs) => (req, res, next) => {
   next();
 };
 app.use('/api', rateLimit(600, 60 * 1000));               // límite global del API
-app.use('/api/login', rateLimit(10, 60 * 1000));          // anti fuerza bruta
+app.use('/api/login', rateLimit(20, 60 * 1000));          // anti fuerza bruta (20/min por IP real vía trust proxy)
 app.use('/api/ai/chat', rateLimit(30, 60 * 1000));        // control de costo de la IA
 app.use('/api/ai/welcome', rateLimit(30, 60 * 1000));
 app.use('/api/change-password', rateLimit(10, 60 * 1000));

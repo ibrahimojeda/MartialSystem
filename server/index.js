@@ -571,6 +571,17 @@ const requireAuth = async (req, res, next) => {
   if (error || !data?.user) return res.status(401).json({ ok: false, error: 'Invalid access token' });
 
   req.authUser = data.user;
+
+  // El superadmin también puede autenticarse como usuario de Supabase (no solo token sa_).
+  // Su rol vive en profiles; lo reconocemos para que isSuperadmin sea consistente en toda la app.
+  try {
+    const { data: prof } = await supabaseAdmin.from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+    if (prof && prof.role === ROLE_SUPERADMIN) {
+      req.isSuperadmin = true;
+      req.authUser.role = ROLE_SUPERADMIN;
+    }
+  } catch (_) { /* best-effort */ }
+
   return next();
 };
 

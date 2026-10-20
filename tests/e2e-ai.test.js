@@ -53,6 +53,8 @@ before(async () => {
   supabaseMock = createSupabaseMock();
   supabaseMock.setToken('tok_owner_1', { id: 'owner-1', email: null, role: 'owner', user_metadata: {} });
   supabaseMock.setToken('tok_instructor_1', { id: 'instructor-1', email: null, role: 'instructor', user_metadata: {} });
+  supabaseMock._tables.profiles.push({ id: 'superadmin-1', username: 'sa1', role: 'superadmin', full_name: 'Superadmin Perfil', is_active: true, auth_email: 'sa1@users.martialsystem.local' });
+  supabaseMock.setToken('tok_superadmin_profile', { id: 'superadmin-1', email: null, role: 'superadmin', user_metadata: {} });
 
   setConfig([{ id: 'p1', baseUrl: providerA.url }]);
 
@@ -255,5 +257,17 @@ test('O. Instructor no accede a datos globales de usuarios', async () => {
   const json = await res.json();
   const search = (json.data.tools || []).find(t => t.action === 'search' && t.tool === 'users');
   assert.ok(!search, 'instructor no debe poder buscar usuarios globales');
+});
+
+test('P. Superadmin (perfil) puede ver pagos', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  providerA.push('<<<TOOL>>>{"tool":"payments","params":{"limit":3}}');
+  providerA.push('Aquí están los pagos.');
+
+  const res = await aiChat('tok_superadmin_profile', '¿Qué pagos hay?', null);
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const search = (json.data.tools || []).find(t => t.action === 'search' && t.tool === 'payments');
+  assert.ok(search, 'superadmin debe poder buscar pagos');
 });
 

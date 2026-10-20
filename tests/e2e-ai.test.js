@@ -408,3 +408,36 @@ test('W. Error de Supabase no inventa el número', async () => {
   assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
 });
 
+test('X. Conteo de pagos excluye negativos y amount=0', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.payments.push(
+    { id: 'pay-neg', establishment_id: 'est-1', student_id: 'stu-1', discipline_id: 'disc-karate', amount: -10, currency: 'USD', method: 'cash', concept: 'Reembolso', paid_at: '2026-10-22', created_by: 'owner-1' }
+  );
+
+  const res = await aiChat('tok_owner_1', '¿Cuántos pagos mayores a cero hay?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 2, 'pay-1 y pay-2; excluye pay-3(0) y pay-neg(-10)');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('Y. student_id null no cuenta como alumno único', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.payments.push(
+    { id: 'pay-null', establishment_id: 'est-1', student_id: null, discipline_id: 'disc-karate', amount: 30, currency: 'USD', method: 'cash', concept: 'Pago sin alumno', paid_at: '2026-10-23', created_by: 'owner-1' }
+  );
+
+  const res = await aiChat('tok_owner_1', '¿Cuántos alumnos pagaron más de 0?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 1, 'solo stu-1; el pago con student_id null se descarta');
+  assert.equal(json.data.count.uniqueBy, 'student_id');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+

@@ -21,7 +21,7 @@ set -uo pipefail
 BASE_URL="${BASE_URL%/}"
 EXPECTED_VERSION="2.11.3"
 EXPECTED_BUILD="27"
-EXPECTED_COMMIT="69ae900"
+EXPECTED_COMMIT="${EXPECTED_COMMIT:-7e5fe65}"
 EXPECTED_BRANCH="master"
 
 PASS=0; FAIL=0
@@ -73,11 +73,14 @@ echo "URL: $BASE_URL"
 
 echo ""
 echo "== 1) /api/health =="
-H="$(curl -s "$BASE_URL/api/health")"
+HEALTH_RAW="$(curl -s -w '\n%{http_code}' "$BASE_URL/api/health")"
+H_CODE="$(printf '%s' "$HEALTH_RAW" | tail -n1)"
+H="$(printf '%s' "$HEALTH_RAW" | sed '$d')"
+if [ "$H_CODE" = "200" ]; then ok "health HTTP 200"; else fail "health HTTP 200 (obtenido $H_CODE)"; fi
 if [ -n "$H" ]; then
   printf '%s' "$H" | grep -Fq "\"version\":\"$EXPECTED_VERSION\"" && ok "version $EXPECTED_VERSION" || fail "version (esperada $EXPECTED_VERSION)"
   printf '%s' "$H" | grep -Fq "\"build\":\"$EXPECTED_BUILD\""     && ok "build $EXPECTED_BUILD"       || fail "build (esperado $EXPECTED_BUILD)"
-  printf '%s' "$H" | grep -Fq "\"commit\":\"$EXPECTED_COMMIT\""   && ok "commit $EXPECTED_COMMIT"     || fail "commit (esperado $EXPECTED_COMMIT)"
+  printf '%s' "$H" | grep -Fq "\"commit\":\"$EXPECTED_COMMIT"      && ok "commit $EXPECTED_COMMIT (prefijo)" || fail "commit (esperado prefijo $EXPECTED_COMMIT)"
   printf '%s' "$H" | grep -Fq "\"branch\":\"$EXPECTED_BRANCH\""   && ok "branch $EXPECTED_BRANCH"     || fail "branch (esperada $EXPECTED_BRANCH)"
 else
   fail "health no respondió"

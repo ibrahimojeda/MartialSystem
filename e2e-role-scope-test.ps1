@@ -1,7 +1,7 @@
 Set-Location "C:\Users\venta\Desktop\MartialSystem"
 $ErrorActionPreference = 'Stop'
 
-$saLogin = Invoke-RestMethod -Method Post -Uri "http://localhost:8010/api/login" -ContentType "application/json" -Body '{"username":"venta","password":"Venta@Dojo2026!"}'
+$saLogin = Invoke-RestMethod -Method Post -Uri "http://localhost:8010/api/login" -ContentType "application/json" -Body '{"username":"venta","password":"REDACTED"}'
 $saToken = $saLogin.data.access_token
 $me = Invoke-RestMethod -Uri "http://localhost:8010/api/me" -Headers @{ Authorization = "Bearer $saToken" }
 $estId = $me.data.memberships[0].establishment.id

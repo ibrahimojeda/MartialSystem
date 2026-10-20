@@ -11,7 +11,8 @@ const {
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
   buildAIIntent, normalizeAISemantics, validateAIIntent,
-  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult
+  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
+  aiDetectCountQuery, formatCountResult
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9215,6 +9216,106 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
   return { rows: [], meta: { count: 0, note: 'Herramienta de búsqueda no soportada.' } };
 }
 
+// ── Conteos determinísticos eficientes ────────────────────────────────────────
+// Resuelve "¿cuántos...?" directamente en Supabase sin traer filas (count:'exact',
+// head:true) y sin llamar al proveedor IA. Respeta rol/establecimiento y NUNCA escribe.
+async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
+  const estId = ctx.isSuperadmin && !establishmentId ? null : (establishmentId || null);
+  const f = filters || {};
+
+  if (tool === 'students') {
+    let query = supabaseAdmin.from('students').select('id', { count: 'exact', head: true });
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('profile_id', ctx.profileId);
+    if ((ctx.role === 'sensei' || ctx.role === 'instructor') && estId) {
+      const { data: enr } = await supabaseAdmin.from('student_enrollments').select('student_id').eq('instructor_profile_id', ctx.profileId).limit(2000);
+      const ids = [...new Set((enr || []).map(e => e.student_id).filter(Boolean))];
+      query = query.in('id', ids.length ? ids : ['__none__']);
+    }
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { count: count || 0, uniqueBy: null, tool, filters: f };
+  }
+
+  if (tool === 'classes') {
+    let query = supabaseAdmin.from('class_sessions').select('id', { count: 'exact', head: true });
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'sensei' || ctx.role === 'instructor') query = query.eq('instructor_profile_id', ctx.profileId);
+    const date = resolveCountDate(f);
+    if (date) query = query.eq('scheduled_date', date);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { count: count || 0, uniqueBy: null, tool, filters: f };
+  }
+
+  if (tool === 'payments') {
+    const amountMin = (f.amountMin == null || f.amountMin === '') ? NaN : Number(f.amountMin);
+    const amountMax = (f.amountMax == null || f.amountMax === '') ? NaN : Number(f.amountMax);
+    const { fromDate, toDate } = resolveCountDateRange(f);
+
+    if (kind === 'unique_students') {
+      // Alumnos únicos con pagos que cumplen el filtro: traer SOLO student_id y deduplicar.
+      let query = supabaseAdmin.from('payments').select('student_id');
+      if (estId) query = query.eq('establishment_id', estId);
+      if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
+      if (Number.isFinite(amountMin)) query = query.gt('amount', amountMin);
+      if (Number.isFinite(amountMax)) query = query.lt('amount', amountMax);
+      if (fromDate) query = query.gte('paid_at', fromDate);
+      if (toDate) query = query.lte('paid_at', toDate);
+      const { data, error } = await query.limit(50000);
+      if (error) throw new Error(error.message);
+      const unique = [...new Set((data || []).map(r => r.student_id).filter(Boolean))];
+      return { count: unique.length, uniqueBy: 'student_id', tool, filters: f };
+    }
+
+    // Total de pagos (conteo simple, sin traer filas).
+    let query = supabaseAdmin.from('payments').select('id', { count: 'exact', head: true });
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
+    if (Number.isFinite(amountMin)) query = query.gt('amount', amountMin);
+    if (Number.isFinite(amountMax)) query = query.lt('amount', amountMax);
+    if (fromDate) query = query.gte('paid_at', fromDate);
+    if (toDate) query = query.lte('paid_at', toDate);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { count: count || 0, uniqueBy: null, tool, filters: f };
+  }
+
+  if (tool === 'billing') {
+    let query = supabaseAdmin.from('system_usage_bills').select('id', { count: 'exact', head: true });
+    if (estId) query = query.eq('establishment_id', estId);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { count: count || 0, uniqueBy: null, tool, filters: f };
+  }
+
+  throw new Error('Herramienta de conteo no soportada.');
+}
+
+function toIsoDate(d) {
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+function resolveCountDate(f) {
+  if (!f) return null;
+  if (f.date === 'tomorrow') return toIsoDate(new Date(Date.now() + 86400000));
+  if (f.date === 'today') return toIsoDate(new Date());
+  return null;
+}
+function resolveCountDateRange(f) {
+  let fromDate = null, toDate = null;
+  if (!f) return { fromDate, toDate };
+  if (f.period === 'this_month') {
+    const now = new Date();
+    fromDate = now.getUTCFullYear() + '-' + String(now.getUTCMonth() + 1).padStart(2, '0') + '-01';
+    const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+    toDate = toIsoDate(last);
+  } else if (f.date === 'tomorrow' || f.date === 'today') {
+    const d = f.date === 'tomorrow' ? new Date(Date.now() + 86400000) : new Date();
+    fromDate = toIsoDate(d); toDate = toIsoDate(d);
+  }
+  return { fromDate, toDate };
+}
+
 // Genera una contraseña segura para SUGERIR al crear usuarios. La IA solo propone;
 // el creador humano la revisa/edita y la confirma en el formulario real.
 function generateSecurePassword() {
@@ -9468,8 +9569,23 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     }
 
     const aiRole = await getAIContextRole(req, establishmentId);
-    const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
     const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
+
+    // ── Conteos determinísticos eficientes ─────────────────────────────
+    // "¿Cuántos...?" se resuelve en backend con count:'exact', head:true (sin traer
+    // filas, sin llamar al proveedor IA y sin escribir en la base).
+    const countQuery = aiDetectCountQuery(message);
+    if (countQuery && aiToolAllowed(countQuery.tool, aiRole, 'read')) {
+      try {
+        const countRes = await aiCountTool(countQuery.tool, countQuery.kind, countQuery.filters, ctx, establishmentId);
+        const countContent = formatCountResult(countQuery, countRes);
+        return res.json({ ok: true, data: { content: countContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, count: countRes } });
+      } catch (countErr) {
+        return res.status(500).json({ ok: false, error: 'No pude contar los datos solicitados: ' + (countErr && countErr.message || 'error de base de datos') });
+      }
+    }
+
+    const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
     // Modo híbrido: clasificador local primero; el modelo solo interpreta si hay ambigüedad.
     let intent = buildAIIntent(message);
     if (needsModelInterpretation(intent, message)) {

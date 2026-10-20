@@ -216,6 +216,90 @@ function formatDeterministicAIResult(intent, rows, ctx) {
   return 'Encontré ' + n + ' resultados:\n' + lines;
 }
 
+// Detecta consultas de CONTEO determinísticas ("¿cuántos...?") para resolverlas en
+// backend sin enviar listados al modelo ni llamar al proveedor de IA.
+// Devuelve { tool, kind, filters } o null si no es una consulta de conteo.
+function aiDetectCountQuery(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!/cu[aá]nt[oa]s?|n[uú]mero\s+de|total\s+de|cantidad\s+de/.test(text)) return null;
+
+  const hasStudents = /alumno|alumnos|estudiante|estudiantes/.test(text);
+  const hasPayments = /pago|pagos|pagaron|pag[aó]|cobro|cobros/.test(text);
+  const hasClasses = /clase|clases/.test(text);
+  const hasBilling = /mensualidad|mensualidades|factura|facturas|billing/.test(text);
+
+  // "¿Cuántos alumnos pagaron más de 0?" → alumnos únicos con al menos un pago > 0.
+  if (hasStudents && hasPayments) {
+    return { tool: 'payments', kind: 'unique_students', filters: { amountMin: 0, amountMax: null, period: null, date: null } };
+  }
+
+  if (hasPayments) {
+    const filters = { amountMin: null, amountMax: null, period: null, date: null };
+    if (/mayor\s+a\s+0|superior\s+a\s+0|m[aá]s\s+de\s+cero|mayores?\s+a\s+cero|positivos?/.test(text)) filters.amountMin = 0;
+    if (/este\s+mes/.test(text)) filters.period = 'this_month';
+    else if (/hoy/.test(text)) filters.date = 'today';
+    else if (/ma[nñ]ana/.test(text)) filters.date = 'tomorrow';
+    return { tool: 'payments', kind: 'total', filters };
+  }
+
+  if (hasClasses) {
+    const filters = { period: null, date: null };
+    if (/ma[nñ]ana/.test(text)) filters.date = 'tomorrow';
+    else if (/hoy/.test(text)) filters.date = 'today';
+    return { tool: 'classes', kind: 'total', filters };
+  }
+
+  if (hasStudents) {
+    return { tool: 'students', kind: 'total', filters: {} };
+  }
+
+  if (hasBilling) {
+    return { tool: 'billing', kind: 'total', filters: {} };
+  }
+
+  return null;
+}
+
+// Formatea una respuesta determinística de conteo (sin llamar al modelo).
+function formatCountResult(query, result) {
+  const n = Math.max(0, Number(result && result.count) || 0);
+  const tool = (query && query.tool) || 'students';
+  const kind = (query && query.kind) || 'total';
+  const filters = (query && query.filters) || {};
+  const tp = filters.period === 'this_month' ? ' este mes'
+    : filters.date === 'tomorrow' ? ' para mañana'
+    : filters.date === 'today' ? ' para hoy' : '';
+
+  if (tool === 'payments' && kind === 'unique_students') {
+    return n === 0
+      ? 'No encontré alumnos con pagos superiores a 0 dentro de tu alcance autorizado.'
+      : 'Encontré ' + n + (n === 1 ? ' alumno' : ' alumnos') + ' con al menos un pago superior a 0.';
+  }
+  if (tool === 'payments') {
+    return n === 0
+      ? 'No encontré pagos' + tp + ' dentro de tu alcance autorizado.'
+      : 'Encontré ' + n + (n === 1 ? ' pago' : ' pagos') + ' registrado' + (n === 1 ? '' : 's') + tp + '.';
+  }
+  if (tool === 'classes') {
+    return n === 0
+      ? 'No encontré clases programadas' + tp + ' dentro de tu alcance autorizado.'
+      : 'Hay ' + n + (n === 1 ? ' clase' : ' clases') + ' programada' + (n === 1 ? '' : 's') + tp + '.';
+  }
+  if (tool === 'students') {
+    return n === 0
+      ? 'No encontré alumnos dentro de tu alcance autorizado.'
+      : 'Encontré ' + n + (n === 1 ? ' alumno' : ' alumnos') + ' en tu dojo.';
+  }
+  if (tool === 'billing') {
+    return n === 0
+      ? 'No encontré facturas dentro de tu alcance autorizado.'
+      : 'Encontré ' + n + (n === 1 ? ' factura' : ' facturas') + '.';
+  }
+  return n === 0
+    ? 'No encontré resultados dentro de tu alcance autorizado.'
+    : 'Encontré ' + n + (n === 1 ? ' resultado' : ' resultados') + '.';
+}
+
 function detectImageType(buffer) {
   if (!buffer || buffer.length < 12) return null;
   const b = buffer;
@@ -357,6 +441,7 @@ module.exports = {
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
-  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult
+  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
+  aiDetectCountQuery, formatCountResult
 };
 

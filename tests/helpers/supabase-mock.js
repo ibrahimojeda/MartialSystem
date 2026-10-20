@@ -3,11 +3,11 @@
 // Registra escrituras en mock.writes (cada insert/update/delete).
 
 function createSupabaseMock(seed = {}) {
-  const mock = { writes: [], tokenMap: {} };
+  const mock = { writes: [], tokenMap: {}, _errors: {} };
   const tables = Object.assign({}, defaultSeed(), seed);
 
   function makeQuery(table, rows) {
-    const state = { filters: [], limit: null };
+    const state = { filters: [], limit: null, count: null, head: false };
     const q = {};
     const filtered = () => {
       let out = rows.slice();
@@ -25,7 +25,11 @@ function createSupabaseMock(seed = {}) {
       if (state.limit != null) out = out.slice(0, state.limit);
       return out;
     };
-    q.select = () => q;
+    q.select = (cols, opts) => {
+      if (opts && opts.count) state.count = opts.count;
+      if (opts && opts.head) state.head = opts.head;
+      return q;
+    };
     q.eq = (col, val) => { state.filters.push({ type: 'eq', col, val }); return q; };
     q.neq = (col, val) => { state.filters.push({ type: 'neq', col, val }); return q; };
     q.is = (col, val) => { state.filters.push({ type: 'is', col, val }); return q; };
@@ -40,7 +44,13 @@ function createSupabaseMock(seed = {}) {
     q.range = () => q;
     q.single = () => { const r = filtered(); return Promise.resolve(r.length ? { data: r[0], error: null } : { data: null, error: { message: 'not found' } }); };
     q.maybeSingle = () => { const r = filtered(); return Promise.resolve({ data: r.length ? r[0] : null, error: null }); };
-    q.then = (resolve, reject) => { const r = filtered(); return Promise.resolve({ data: r, error: null }).then(resolve, reject); };
+    q.then = (resolve, reject) => {
+      if (mock._errors[table]) return Promise.resolve({ data: null, error: { message: mock._errors[table] } }).then(resolve, reject);
+      const r = filtered();
+      const result = { data: state.head ? [] : r, error: null };
+      if (state.count === 'exact') result.count = r.length;
+      return Promise.resolve(result).then(resolve, reject);
+    };
     q.insert = (payload) => {
       const recs = Array.isArray(payload) ? payload : [payload];
       recs.forEach(p => { mock.writes.push({ table, operation: 'insert', payload: p }); rows.push(p); });
@@ -72,6 +82,8 @@ function createSupabaseMock(seed = {}) {
     rpc: () => Promise.resolve({ data: null, error: null }),
     writes: mock.writes,
     setToken: (token, user) => { mock.tokenMap[token] = user; },
+    setError: (table, message) => { mock._errors[table] = message; },
+    clearErrors: () => { mock._errors = {}; },
     _tables: tables
   };
 }

@@ -7,7 +7,8 @@ const {
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
-  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult
+  needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
+  aiDetectCountQuery, formatCountResult
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -332,6 +333,40 @@ test('parseStructuredAIIntent rechaza contenido peligroso claro', () => {
   assert.equal(parseStructuredAIIntent(mk({ q: 'SELECT * FROM users' })), null);
   assert.equal(parseStructuredAIIntent(mk({ q: '<script>alert(1)</script>' })), null);
   assert.equal(parseStructuredAIIntent(mk({ q: 'javascript:alert(1)' })), null);
+});
+
+// ─── aiDetectCountQuery / formatCountResult (conteos determinísticos) ───
+test('aiDetectCountQuery detecta los 4 casos de conteo', () => {
+  assert.deepEqual(aiDetectCountQuery('¿Cuántos alumnos tiene mi dojo?'), { tool: 'students', kind: 'total', filters: {} });
+  assert.deepEqual(aiDetectCountQuery('¿Cuántos pagos hubo este mes?'), { tool: 'payments', kind: 'total', filters: { amountMin: null, amountMax: null, period: 'this_month', date: null } });
+  assert.deepEqual(aiDetectCountQuery('¿Cuántos alumnos pagaron más de 0?'), { tool: 'payments', kind: 'unique_students', filters: { amountMin: 0, amountMax: null, period: null, date: null } });
+  assert.deepEqual(aiDetectCountQuery('¿Cuántas clases hay mañana?'), { tool: 'classes', kind: 'total', filters: { period: null, date: 'tomorrow' } });
+});
+
+test('aiDetectCountQuery devuelve null para consultas no conteo', () => {
+  assert.equal(aiDetectCountQuery('Muéstrame los pagos'), null);
+  assert.equal(aiDetectCountQuery('Registra un pago de 50'), null);
+  assert.equal(aiDetectCountQuery('Hola'), null);
+});
+
+test('formatCountResult produce plantillas determinísticas legibles', () => {
+  assert.equal(
+    formatCountResult({ tool: 'payments', kind: 'unique_students' }, { count: 12 }),
+    'Encontré 12 alumnos con al menos un pago superior a 0.'
+  );
+  assert.equal(
+    formatCountResult({ tool: 'payments', kind: 'unique_students' }, { count: 0 }),
+    'No encontré alumnos con pagos superiores a 0 dentro de tu alcance autorizado.'
+  );
+  assert.equal(
+    formatCountResult({ tool: 'payments', kind: 'total', filters: { period: 'this_month' } }, { count: 8 }),
+    'Encontré 8 pagos registrados este mes.'
+  );
+  assert.equal(
+    formatCountResult({ tool: 'classes', kind: 'total', filters: { date: 'tomorrow' } }, { count: 5 }),
+    'Hay 5 clases programadas para mañana.'
+  );
+  assert.ok(formatCountResult({ tool: 'students', kind: 'total' }, { count: 1 }).includes('1 alumno'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

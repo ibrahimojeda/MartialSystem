@@ -171,7 +171,7 @@ test('H. Router determinístico: alumnos sin herramienta', async () => {
   setConfig([{ id: 'p1', baseUrl: providerA.url }]);
   providerA.push('No tengo datos en memoria'); // sin <<<TOOL>>>
 
-  const res = await aiChat('tok_owner_1', '¿Cuántos alumnos tiene mi dojo?', 'est-1');
+  const res = await aiChat('tok_owner_1', '¿Qué alumnos hay en mi dojo?', 'est-1');
   assert.equal(res.status, 200);
   const json = await res.json();
   const search = (json.data.tools || []).find(t => t.action === 'search');
@@ -318,5 +318,93 @@ test('G. Lectura con amount no activa prefill', async () => {
   const prefill = (json.data.tools || []).find(t => t.action === 'prefill');
   assert.ok(!prefill, 'nunca prefill');
   assert.equal(providerA.metrics.interpretationCalls, 0, 'sin interpretación');
+});
+
+// ─── Conteos determinísticos eficientes (backend, sin IA) ───
+
+test('R. Conteo de alumnos respeta el establecimiento', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', '¿Cuántos alumnos tiene mi dojo?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 1, 'solo alumnos de est-1 (stu-2 es de est-2)');
+  assert.equal(json.data.count.tool, 'students');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('S. Conteo de pagos mayores a cero', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', '¿Cuántos pagos mayores a cero hay?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 2, 'pay-1 y pay-2 (excluye amount=0 y est-2)');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('T. Conteo de alumnos únicos con pagos (deduplicación)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', '¿Cuántos alumnos pagaron más de 0?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 1, 'stu-1 pagó dos veces pero es un único alumno');
+  assert.equal(json.data.count.uniqueBy, 'student_id');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('U. Conteo de clases para mañana', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  const tomorrow = new Date(Date.now() + 86400000);
+  const iso = tomorrow.getUTCFullYear() + '-' + String(tomorrow.getUTCMonth() + 1).padStart(2, '0') + '-' + String(tomorrow.getUTCDate()).padStart(2, '0');
+  supabaseMock._tables.class_sessions.push(
+    { id: 'cls-t1', establishment_id: 'est-1', discipline_id: 'disc-karate', instructor_profile_id: 'instructor-1', title: 'Karate Mañana A', scheduled_date: iso, start_time: '10:00', end_time: '11:00', location: 'Sala 1', notes: null, status: 'scheduled', created_at: '2026-01-01' },
+    { id: 'cls-t2', establishment_id: 'est-1', discipline_id: 'disc-karate', instructor_profile_id: 'instructor-1', title: 'Karate Mañana B', scheduled_date: iso, start_time: '11:00', end_time: '12:00', location: 'Sala 1', notes: null, status: 'scheduled', created_at: '2026-01-01' },
+    { id: 'cls-t3', establishment_id: 'est-2', discipline_id: 'disc-bjj', instructor_profile_id: 'instructor-2', title: 'BJJ Ajeno Mañana', scheduled_date: iso, start_time: '10:00', end_time: '11:00', location: 'Sala 2', notes: null, status: 'scheduled', created_at: '2026-01-01' }
+  );
+
+  const res = await aiChat('tok_owner_1', '¿Cuántas clases hay mañana?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 2, 'solo clases de est-1 para mañana');
+  assert.equal(json.data.count.tool, 'classes');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  const prefill = (json.data.tools || []).find(t => t.action === 'prefill');
+  assert.ok(!prefill, 'nunca prefill');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('V. Owner de est-1 no ve conteos de est-2', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', '¿Cuántos pagos hubo?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 3, 'pay-1, pay-2, pay-3 de est-1; excluye pay-4 de est-2');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('W. Error de Supabase no inventa el número', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock.setError('payments', 'mock query error');
+  const res = await aiChat('tok_owner_1', '¿Cuántos pagos hubo?', 'est-1');
+  supabaseMock.clearErrors();
+  assert.equal(res.status, 500);
+  const json = await res.json();
+  assert.equal(json.ok, false);
+  assert.equal(json.data, undefined, 'no devuelve un conteo inventado');
+  assert.ok(String(json.error).includes('mock query error'), 'error controlado');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
 });
 

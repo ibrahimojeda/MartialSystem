@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const { supabaseAdmin, supabasePublic } = require('./supabaseClient');
+let { supabaseAdmin, supabasePublic } = require('./supabaseClient');
 const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
@@ -8393,8 +8393,10 @@ function aiSelectProvider(cfg) {
 
 function aiProviderBaseUrl(p) {
   const b = String((p && p.baseUrl) || '').trim();
+  // En modo test se permite loopback local para el proveedor mock (sin red externa).
+  const testLoopback = process.env.NODE_ENV === 'test' && /^http:\/\/localhost(:\d+)?/i.test(b);
   // Solo URLs absolutas y sin riesgo SSRF; si no, se usa la URL por defecto del proveedor.
-  if (/^https?:\/\//i.test(b) && !isSSRFUnsafeUrl(b)) return b;
+  if (/^https?:\/\//i.test(b) && (testLoopback || !isSSRFUnsafeUrl(b))) return b;
   const def = p && AI_PROVIDERS[p.provider];
   return (def && def.baseUrl) || AI_PROVIDERS.openai.baseUrl;
 }
@@ -8524,7 +8526,7 @@ async function aiCallWithFailover(cfg, body, opts) {
   }
   const e = lastErr || new Error('No hay ninguna IA disponible');
   e.status = (e && e.status) || 502;
-  e.message = (tries.length > 1 ? 'Todas las IAs fallaron. ' : '') + (e.message || '');
+  e.message = (tries.length > 1 ? 'La IA no está disponible temporalmente. Revisa las cuotas o configura otro proveedor.' : (e.message || ''));
   e.providerErrors = errors;
   throw e;
 }
@@ -8583,6 +8585,7 @@ function aiLoadUsage() {
   } catch (_) { return aiUsageEmpty(); }
 }
 function aiTrackUsage(providerId, providerLabel, model, usageJson) {
+  if (process.env.NODE_ENV === 'test') return; // no persistir consumo en tests
   try {
     if (!providerId) return;
     const st = aiLoadUsage();
@@ -9308,6 +9311,29 @@ function aiRouteKeyword(message) {
   return null;
 }
 
+// Extrae bloques <<<TOOL>>> con balance de llaves (soporta JSON anidado en params).
+function extractToolBlocks(raw) {
+  const blocks = [];
+  let text = String(raw || '');
+  const marker = '<<<TOOL>>>';
+  let idx = text.indexOf(marker);
+  while (idx !== -1) {
+    let j = idx + marker.length;
+    while (j < text.length && /\s/.test(text[j])) j++;
+    if (text[j] !== '{') break;
+    let depth = 0, k = j;
+    for (; k < text.length; k++) {
+      if (text[k] === '{') depth++;
+      else if (text[k] === '}') { depth--; if (depth === 0) break; }
+    }
+    if (depth !== 0) break;
+    blocks.push(text.slice(j, k + 1));
+    text = text.slice(0, idx) + text.slice(k + 1);
+    idx = text.indexOf(marker);
+  }
+  return { blocks, text: text.trim() };
+}
+
 // Texto que describe las herramientas disponibles según el rol → se inyecta al prompt.
 function buildAIToolsSuffix(role) {
   const allowed = Object.keys(AI_TOOLS).filter(t => aiToolAllowed(t, role, 'read'));
@@ -9403,6 +9429,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     // BORRAR siempre pide confirmación.
     const MAX_STEPS = 4;
     const toolActions = [];
+    const searchResults = [];
     let content = '';
     let finalModel = '';
     let finalProvider = '';
@@ -9421,20 +9448,17 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       const rawContent = aiCall.content || '';
       if (!rawContent && step === 0) return res.status(502).json({ ok: false, error: 'El proveedor IA devolvió una respuesta vacía.' });
 
-      // Extraer TODAS las líneas <<<TOOL>>>{json} (una por herramienta)
-      const toolBlocks = [];
-      const re = /<<<TOOL>>>(\{[\s\S]*?\})/g;
-      let m;
-      while ((m = re.exec(rawContent)) !== null) toolBlocks.push(m[1]);
-      const text = String(rawContent).replace(/<<<TOOL>>>(\{[\s\S]*?\})/g, '').trim();
+      // Extraer TODAS las líneas <<<TOOL>>>{json} (una por herramienta), con balance de llaves.
+      const { blocks: toolBlocks, text } = extractToolBlocks(rawContent);
 
       if (!toolBlocks.length) {
         const routed = aiRouteKeyword(message);
-        if (routed && aiToolAllowed(routed, aiRole, 'read')) {
-          const searchRes = await aiSearchTool(routed, { query: String(message) }, ctx, establishmentId);
+        if (routed && !searchResults.length && aiToolAllowed(routed, aiRole, 'read')) {
+          const searchRes = await aiSearchTool(routed, { limit: 50 }, ctx, establishmentId);
           const rowsArr = (searchRes.rows || []).slice(0, 50);
-          searchResults.push({ tool: routed, label: AI_TOOLS[routed].label, rows: rowsArr, meta: searchRes.meta });
-          hasSearch = true;
+          const item = { tool: routed, label: AI_TOOLS[routed].label, rows: rowsArr, meta: searchRes.meta };
+          searchResults.push(item);
+          toolActions.push({ action: 'search', tool: routed, params: { limit: 50 }, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
         } else {
           content = text || String(rawContent);
         }
@@ -9442,7 +9466,6 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       }
 
       // Ejecutar cada herramienta (respetando permisos y límites)
-      const searchResults = [];
       let hasSearch = false;
       for (const block of toolBlocks) {
         const parsed = aiParseToolBlock(block);
@@ -10023,6 +10046,23 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`MartialSystem running at http://localhost:${PORT}`);
-});
+// ── Inyección de test (sin romper producción) y arranque ──
+// Permite sobrescribir los clientes Supabase y exportar la app para pruebas E2E locales.
+if (globalThis.__TEST_SUPABASE_ADMIN__) supabaseAdmin = globalThis.__TEST_SUPABASE_ADMIN__;
+if (globalThis.__TEST_SUPABASE_PUBLIC__) supabasePublic = globalThis.__TEST_SUPABASE_PUBLIC__;
+
+module.exports = {
+  app,
+  createApp: (o = {}) => {
+    if (o.supabaseAdmin) supabaseAdmin = o.supabaseAdmin;
+    if (o.supabasePublic) supabasePublic = o.supabasePublic;
+    return app;
+  },
+  __resetAICooldown: () => aiProviderCooldown.clear()
+};
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`MartialSystem running at http://localhost:${PORT}`);
+  });
+}

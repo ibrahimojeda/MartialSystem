@@ -21,7 +21,7 @@ set -uo pipefail
 BASE_URL="${BASE_URL%/}"
 EXPECTED_VERSION="2.11.3"
 EXPECTED_BUILD="27"
-EXPECTED_COMMIT="40a4459"
+EXPECTED_COMMIT="69ae900"
 EXPECTED_BRANCH="master"
 
 PASS=0; FAIL=0
@@ -109,6 +109,39 @@ echo "== 4) Superadmin -> 200 (dashboard global) =="
 SA_TOK="$(login_token "$(read_secret SUPERADMIN_USER 'Superadmin username')" "$(read_secret SUPERADMIN_PASS 'Superadmin password')")"
 if [ -z "$SA_TOK" ]; then fail "superadmin login (no se obtuvo token)"; else assert_status "superadmin /api/dashboard/stats" GET "/api/dashboard/stats" 200 "$SA_TOK"; fi
 unset SA_TOK
+
+echo ""
+echo "== 5) IA solo-lectura: conteo determinístico (opcional) =="
+# Requiere credenciales OWNER (rol con lectura IA). Si no están, se omite y se documenta.
+if [ -n "$(printenv OWNER_USER 2>/dev/null || true)" ] && [ -n "$(printenv OWNER_PASS 2>/dev/null || true)" ]; then
+  OWNER_TOK="$(login_token "$OWNER_USER" "$OWNER_PASS")"
+else
+  OWNER_TOK=""
+fi
+if [ -z "$OWNER_TOK" ]; then
+  echo "  [SKIP] OWNER_USER/OWNER_PASS no configurados; prueba IA omitida (opcional)."
+else
+  if [ -n "${EST_OWN_ID:-}" ]; then
+    AI_BODY="{\"message\":\"¿Cuántos alumnos tiene mi dojo?\",\"establishmentId\":\"${EST_OWN_ID}\"}"
+  else
+    AI_BODY='{"message":"¿Cuántos alumnos tiene mi dojo?"}'
+  fi
+  AI_RAW="$(curl -s -w '\n%{http_code}' -X POST "$BASE_URL/api/ai/chat" \
+    -H "Authorization: Bearer $OWNER_TOK" -H 'Content-Type: application/json' \
+    -d "$AI_BODY")"
+  AI_CODE="$(printf '%s' "$AI_RAW" | tail -n1)"
+  AI_RESP="$(printf '%s' "$AI_RAW" | sed '$d')"
+
+  if [ "$AI_CODE" = "200" ]; then ok "IA conteo HTTP 200"; else fail "IA conteo HTTP 200 (obtenido $AI_CODE)"; fi
+  if [ -n "$AI_RESP" ] && printf '%s' "$AI_RESP" | grep -Fq '"ok":true'; then ok "IA conteo respuesta no vacía"; else fail "IA conteo respuesta no vacía"; fi
+  if [ -n "${EST_OTHER_ID:-}" ]; then
+    if printf '%s' "$AI_RESP" | grep -Fq "$EST_OTHER_ID"; then fail "IA conteo sin IDs de otro establecimiento"; else ok "IA conteo sin IDs de otro establecimiento"; fi
+  else
+    echo "  [SKIP] EST_OTHER_ID no configurado; no se verifica aislamiento de IDs."
+  fi
+  if printf '%s' "$AI_RESP" | grep -Fq '"action":"prefill"'; then fail "IA conteo sin prefill/escritura"; else ok "IA conteo sin prefill/escritura (no crea registros)"; fi
+  unset OWNER_TOK AI_BODY AI_RAW AI_CODE AI_RESP
+fi
 
 echo ""
 echo "== Resumen =="

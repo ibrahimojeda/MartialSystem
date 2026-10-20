@@ -57,6 +57,73 @@ function aiExtractSearchParams(message, tool) {
   return params;
 }
 
+// Construye una intención estructurada determinística (fallback sin IA y base para validar).
+function buildAIIntent(message) {
+  const text = String(message || '').toLowerCase().trim();
+  const base = aiDetectIntent(message);
+  const out = { intent: 'chat', domain: 'unknown', operation: 'explain', filters: {}, data: {}, scope: 'current_establishment', needs_confirmation: false, missing: [], confidence: 0.9 };
+
+  if (/haz\s+algo|no\s+s[eé]\s+qu[eé]\s+hacer|algo\s+con/.test(text) && base === 'chat') {
+    out.intent = 'clarify'; out.domain = 'unknown'; out.operation = 'unknown'; out.missing = ['acción']; out.confidence = 0.4; return out;
+  }
+
+  if (base === 'write') {
+    out.intent = 'write'; out.needs_confirmation = true;
+    if (/pago|pagos|cobro|cobros|monto|importe/.test(text)) { out.domain = 'payments'; out.operation = 'create'; }
+    else if (/alumno|alumnos|estudiante|estudiantes/.test(text)) { out.domain = 'students'; out.operation = 'create'; out.missing = ['full_name', 'discipline']; }
+    else if (/usuario|usuarios|instructor|sensei|owner/.test(text)) { out.domain = 'users'; out.operation = 'create'; out.missing = ['full_name', 'username', 'role']; }
+    else if (/clase|clases/.test(text)) { out.domain = 'classes'; out.operation = 'create'; }
+    else { out.intent = 'clarify'; out.domain = 'unknown'; out.operation = 'unknown'; out.needs_confirmation = false; out.missing = ['acción']; out.confidence = 0.5; }
+    return out;
+  }
+
+  if (base === 'read_payments' || base === 'read_students' || base === 'read_classes' || base === 'read_users') {
+    out.intent = 'read';
+    out.domain = base.slice(5);
+    const sem = normalizeAISemantics(text);
+    Object.assign(out.filters, sem.filters);
+    out.operation = (out.domain === 'payments') ? (sem.operation || 'list') : 'list';
+    return out;
+  }
+
+  if (/mensualidad|mensualidades|factura|facturas|billing/.test(text)) {
+    out.intent = 'read'; out.domain = 'billing'; out.operation = 'list'; return out;
+  }
+
+  return out;
+}
+
+// Normaliza filtros y operación desde lenguaje natural.
+function normalizeAISemantics(message) {
+  const text = String(message || '').toLowerCase();
+  const out = { filters: {}, operation: null };
+  if (/mayor\s+a\s+0|superior\s+a\s+0|m[aá]s\s+de\s+cero|amount\s*>\s*0|cualquier\s+pago\s+positivo|monto\s+(superior|mayor)\s+a\s+cero/.test(text)) {
+    out.filters.amount = { operator: '>', value: 0 };
+  }
+  if (/[úu]ltim[oa].*(pago|pagos|fecha)|fecha[s]?\s+de\s+pagos?|[úu]ltimos?\s+pagos?|cu[aá]ndo\s+pag[oó]\s+cada\s+alumno|cada\s+alumno/.test(text)) {
+    out.operation = 'latest_per_student';
+  }
+  return out;
+}
+
+// Valida la intención estructurada contra el contexto (rol/establecimiento).
+function validateAIIntent(intent, ctx) {
+  const errors = [];
+  const allowedIntents = ['read', 'write', 'delete', 'chat', 'clarify'];
+  const allowedDomains = ['students', 'payments', 'classes', 'users', 'billing', 'attendance', 'notifications', 'reports', 'unknown'];
+  if (!intent || typeof intent !== 'object') return { ok: false, errors: ['intención inválida'] };
+  if (!allowedIntents.includes(intent.intent)) errors.push('intent no permitido: ' + intent.intent);
+  if (!allowedDomains.includes(intent.domain)) errors.push('domain no permitido: ' + intent.domain);
+  const conf = Number(intent.confidence);
+  if (!Number.isFinite(conf) || conf < 0 || conf > 1) errors.push('confidence inválido');
+  if (intent.scope === 'global' && !(ctx && ctx.isSuperadmin)) errors.push('scope global no permitido');
+  if (intent.filters && intent.filters.establishmentId && ctx && !ctx.isSuperadmin && intent.filters.establishmentId !== ctx.establishmentId) errors.push('establishmentId ajeno');
+  if (intent.intent === 'write' && !intent.needs_confirmation) errors.push('escritura requiere confirmación');
+  if (intent.filters && intent.filters.amount && !Number.isFinite(Number(intent.filters.amount.value))) errors.push('amount no numérico');
+  if (intent.filters && intent.filters.limit !== undefined && (Number(intent.filters.limit) < 1 || Number(intent.filters.limit) > 80)) errors.push('limit fuera de rango');
+  return { ok: errors.length === 0, errors, intent };
+}
+
 function detectImageType(buffer) {
   if (!buffer || buffer.length < 12) return null;
   const b = buffer;
@@ -197,6 +264,6 @@ module.exports = {
   AI_PROVIDERS, AI_TOOLS, aiToolAllowed, detectImageType, aiParseToolBlock,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
-  aiDetectIntent, aiExtractSearchParams
+  aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent
 };
 

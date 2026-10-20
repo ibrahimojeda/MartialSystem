@@ -9,7 +9,8 @@ let { supabaseAdmin, supabasePublic } = require('./supabaseClient');
 const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
-  hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams
+  hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
+  buildAIIntent, normalizeAISemantics, validateAIIntent
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9441,7 +9442,8 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const aiRole = await getAIContextRole(req, establishmentId);
     const systemPrompt = await buildAIContext(req, establishmentId) + buildAIToolsSuffix(aiRole);
     const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
-    const intent = aiDetectIntent(message); // lectura vs escritura, por verbo y objetivo (no por campos)
+    // Intención estructurada determinística (fallback sin IA). El backend valida y ejecuta.
+    const intent = buildAIIntent(message);
 
     // Cargar memoria reciente del usuario (Fase 1)
     let messages = [{ role: 'system', content: systemPrompt }];
@@ -9519,8 +9521,8 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
           continue;
         }
 
-        const isSearch = intent.startsWith('read_') || (
-          intent !== 'write' &&
+        const isSearch = intent.intent === 'read' || (
+          intent.intent !== 'write' &&
           !params.fullName && !params.title && !params.body &&
           (params.query || params.q || params.name || params.date || params.studentName || params.studentId || params.limit || params.amountMin || params.amountMax || params.latestPerStudent || params.fromDate || params.toDate)
         );
@@ -9531,7 +9533,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
           searchResults.push({ tool, label: def.label, rows: rowsArr, meta: searchRes.meta });
           toolActions.push({ action: 'search', tool, params: searchParams, rows: rowsArr, meta: searchRes.meta || { count: rowsArr.length } });
           hasSearch = true;
-        } else if (intent === 'write' && aiToolAllowed(tool, aiRole, 'write')) {
+        } else if (intent.intent === 'write' && aiToolAllowed(tool, aiRole, 'write')) {
           const validated = await aiValidatePrefill(tool, params, ctx, establishmentId);
           toolActions.push({ action: 'prefill', tool, formId: def.formId, values: validated.values, missing: validated.missing });
           if (validated.missing && validated.missing.length) {

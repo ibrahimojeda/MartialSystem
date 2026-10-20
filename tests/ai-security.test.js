@@ -6,7 +6,7 @@ const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
-  aiDetectIntent, aiExtractSearchParams
+  aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -213,6 +213,61 @@ test('aiExtractSearchParams extrae amountMin y latestPerStudent', () => {
   const p2 = aiExtractSearchParams('Muéstrame los últimos pagos de mis alumnos', 'payments');
   assert.equal(p2.latestPerStudent, true);
   assert.equal(p2.amountMin, undefined);
+});
+
+// ─── buildAIIntent: intención estructurada ───
+test('buildAIIntent A: lectura de pagos latest_per_student con amount>0', () => {
+  const i = buildAIIntent('revisa todos los alumnos y mira sus ultimas fechas de pago de cualquier monto superior a 0');
+  assert.equal(i.intent, 'read');
+  assert.equal(i.domain, 'payments');
+  assert.equal(i.operation, 'latest_per_student');
+  assert.deepEqual(i.filters.amount, { operator: '>', value: 0 });
+});
+
+test('buildAIIntent B: escritura de pago con confirmación', () => {
+  const i = buildAIIntent('registra un pago de 50 para Juan Pérez');
+  assert.equal(i.intent, 'write');
+  assert.equal(i.domain, 'payments');
+  assert.equal(i.operation, 'create');
+  assert.equal(i.needs_confirmation, true);
+});
+
+test('buildAIIntent C: alumnos que pagaron → payments, no students', () => {
+  const i = buildAIIntent('muestra los alumnos que pagaron este mes');
+  assert.equal(i.intent, 'read');
+  assert.equal(i.domain, 'payments');
+});
+
+test('buildAIIntent D: ambigua → clarify', () => {
+  const i = buildAIIntent('haz algo con Juan');
+  assert.equal(i.intent, 'clarify');
+});
+
+test('buildAIIntent E: clases → classes', () => {
+  const i = buildAIIntent('qué clases hay mañana');
+  assert.equal(i.intent, 'read');
+  assert.equal(i.domain, 'classes');
+});
+
+// ─── validateAIIntent ───
+test('validateAIIntent rechaza scope global sin superadmin y establishmentId ajeno', () => {
+  const base = { intent: 'read', domain: 'payments', operation: 'list', filters: {}, data: {}, scope: 'global', needs_confirmation: false, missing: [], confidence: 0.9 };
+  const ownerCtx = { isSuperadmin: false, establishmentId: 'est-1' };
+  const r1 = validateAIIntent(base, ownerCtx);
+  assert.equal(r1.ok, false);
+  assert.ok(r1.errors.some(e => e.includes('global')));
+
+  const base2 = { ...base, scope: 'current_establishment', filters: { establishmentId: 'est-2' } };
+  const r2 = validateAIIntent(base2, ownerCtx);
+  assert.equal(r2.ok, false);
+  assert.ok(r2.errors.some(e => e.includes('ajeno')));
+});
+
+test('validateAIIntent rechaza escritura sin confirmación', () => {
+  const w = { intent: 'write', domain: 'payments', operation: 'create', filters: {}, data: {}, scope: 'current_establishment', needs_confirmation: false, missing: [], confidence: 0.9 };
+  const r = validateAIIntent(w, { isSuperadmin: false, establishmentId: 'est-1' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => e.includes('confirmación')));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

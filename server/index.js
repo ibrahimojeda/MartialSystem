@@ -9216,6 +9216,21 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
   return { rows: [], meta: { count: 0, note: 'Herramienta de búsqueda no soportada.' } };
 }
 
+// Devuelve los student_id autorizados para instructor/sensei dentro del
+// establecimiento efectivo (misma regla que aiSearchTool('students')).
+// - null: no aplica restricción (owner/admin/superadmin/student/guardian).
+// - []:   el rol no tiene alumnos autorizados → no debe consultar pagos globales.
+async function getInstructorAuthorizedStudentIds(ctx, estId) {
+  if (ctx.role !== 'sensei' && ctx.role !== 'instructor') return null;
+  if (!estId) return [];
+  const { data: enr } = await supabaseAdmin
+    .from('student_enrollments')
+    .select('student_id')
+    .eq('instructor_profile_id', ctx.profileId)
+    .limit(2000);
+  return [...new Set((enr || []).map(e => e.student_id).filter(Boolean))];
+}
+
 // ── Conteos determinísticos eficientes ────────────────────────────────────────
 // Resuelve "¿cuántos...?" directamente en Supabase sin traer filas (count:'exact',
 // head:true) y sin llamar al proveedor IA. Respeta rol/establecimiento y NUNCA escribe.
@@ -9258,6 +9273,11 @@ async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
       let query = supabaseAdmin.from('payments').select('student_id');
       if (estId) query = query.eq('establishment_id', estId);
       if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
+      const authorizedIds = await getInstructorAuthorizedStudentIds(ctx, estId);
+      if (authorizedIds !== null) {
+        if (!authorizedIds.length) return { count: 0, uniqueBy: 'student_id', tool, filters: f };
+        query = query.in('student_id', authorizedIds);
+      }
       if (Number.isFinite(amountMin)) query = query.gt('amount', amountMin);
       if (Number.isFinite(amountMax)) query = query.lt('amount', amountMax);
       if (fromDate) query = query.gte('paid_at', fromDate);
@@ -9272,6 +9292,11 @@ async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
     let query = supabaseAdmin.from('payments').select('id', { count: 'exact', head: true });
     if (estId) query = query.eq('establishment_id', estId);
     if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
+    const authorizedIds = await getInstructorAuthorizedStudentIds(ctx, estId);
+    if (authorizedIds !== null) {
+      if (!authorizedIds.length) return { count: 0, uniqueBy: null, tool, filters: f };
+      query = query.in('student_id', authorizedIds);
+    }
     if (Number.isFinite(amountMin)) query = query.gt('amount', amountMin);
     if (Number.isFinite(amountMax)) query = query.lt('amount', amountMax);
     if (fromDate) query = query.gte('paid_at', fromDate);

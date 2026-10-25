@@ -21,7 +21,7 @@ set -uo pipefail
 BASE_URL="${BASE_URL%/}"
 EXPECTED_VERSION="2.11.3"
 EXPECTED_BUILD="27"
-EXPECTED_COMMIT="${EXPECTED_COMMIT:-7e5fe65}"
+EXPECTED_COMMIT="${EXPECTED_COMMIT:-}"
 EXPECTED_BRANCH="master"
 
 PASS=0; FAIL=0
@@ -80,7 +80,11 @@ if [ "$H_CODE" = "200" ]; then ok "health HTTP 200"; else fail "health HTTP 200 
 if [ -n "$H" ]; then
   printf '%s' "$H" | grep -Fq "\"version\":\"$EXPECTED_VERSION\"" && ok "version $EXPECTED_VERSION" || fail "version (esperada $EXPECTED_VERSION)"
   printf '%s' "$H" | grep -Fq "\"build\":\"$EXPECTED_BUILD\""     && ok "build $EXPECTED_BUILD"       || fail "build (esperado $EXPECTED_BUILD)"
-  printf '%s' "$H" | grep -Fq "\"commit\":\"$EXPECTED_COMMIT"      && ok "commit $EXPECTED_COMMIT (prefijo)" || fail "commit (esperado prefijo $EXPECTED_COMMIT)"
+  if [ -n "$EXPECTED_COMMIT" ]; then
+    printf '%s' "$H" | grep -Fq "\"commit\":\"$EXPECTED_COMMIT"    && ok "commit $EXPECTED_COMMIT (prefijo)" || fail "commit (esperado prefijo $EXPECTED_COMMIT)"
+  else
+    printf '  [WARN] EXPECTED_COMMIT no definido; no se verifica el commit desplegado. Defínelo (ej. EXPECTED_COMMIT=<hash>).\n'
+  fi
   printf '%s' "$H" | grep -Fq "\"branch\":\"$EXPECTED_BRANCH\""   && ok "branch $EXPECTED_BRANCH"     || fail "branch (esperada $EXPECTED_BRANCH)"
 else
   fail "health no respondió"

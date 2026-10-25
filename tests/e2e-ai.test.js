@@ -61,6 +61,21 @@ before(async () => {
     { id: 'pay-4', establishment_id: 'est-2', student_id: 'stu-2', discipline_id: 'disc-bjj', amount: 200, currency: 'USD', method: 'cash', concept: 'Ajeno', paid_at: '2026-10-21', created_by: 'owner-2' }
   );
 
+  // Sensei (con alumno autorizado) e instructor sin alumnos, para tests de aislamiento de conteos de pagos.
+  supabaseMock._tables.profiles.push(
+    { id: 'sensei-1', username: 'sensei1', role: 'sensei', full_name: 'Sensei 1', is_active: true, auth_email: 'sensei1@users.martialsystem.local' },
+    { id: 'instructor-3', username: 'inst3', role: 'instructor', full_name: 'Instructor 3', is_active: true, auth_email: 'inst3@users.martialsystem.local' }
+  );
+  supabaseMock._tables.establishment_members.push(
+    { id: 'm4', establishment_id: 'est-1', profile_id: 'sensei-1', role: 'sensei', created_at: '2026-01-01' },
+    { id: 'm5', establishment_id: 'est-1', profile_id: 'instructor-3', role: 'instructor', created_at: '2026-01-01' }
+  );
+  supabaseMock._tables.student_enrollments.push(
+    { id: 'e-sensei', student_id: 'stu-1', discipline_id: 'disc-karate', current_rank: 'Blanco', status: 'active', instructor_profile_id: 'sensei-1' }
+  );
+  supabaseMock.setToken('tok_sensei_1', { id: 'sensei-1', email: null, role: 'sensei', user_metadata: {} });
+  supabaseMock.setToken('tok_instructor_3', { id: 'instructor-3', email: null, role: 'instructor', user_metadata: {} });
+
   setConfig([{ id: 'p1', baseUrl: providerA.url }]);
 
   globalThis.__TEST_SUPABASE_ADMIN__ = supabaseMock;
@@ -436,6 +451,59 @@ test('Y. student_id null no cuenta como alumno único', async () => {
   const json = await res.json();
   assert.equal(json.data.count.count, 1, 'solo stu-1; el pago con student_id null se descarta');
   assert.equal(json.data.count.uniqueBy, 'student_id');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('Z. Instructor solo cuenta pagos de sus alumnos autorizados', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  // alumno no autorizado de est-1 + su pago (no debe contarse ni exponerse)
+  supabaseMock._tables.students.push({ id: 'stu-3', establishment_id: 'est-1', full_name: 'Alumno No Autorizado', email: 's3@ex.invalid', phone: '333', profile_id: null, birth_date: null, created_at: '2026-01-01', discipline_code: null });
+  supabaseMock._tables.payments.push({ id: 'pay-5', establishment_id: 'est-1', student_id: 'stu-3', discipline_id: 'disc-karate', amount: 100, currency: 'USD', method: 'cash', concept: 'Cuota ajena', paid_at: '2026-10-24', created_by: 'owner-1' });
+
+  const res = await aiChat('tok_instructor_1', '¿Cuántos alumnos pagaron más de 0?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 1, 'solo stu-1 (autorizado); excluye stu-3 y est-2');
+  assert.equal(json.data.count.uniqueBy, 'student_id');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+  const raw = JSON.stringify(json);
+  assert.ok(!raw.includes('stu-3'), 'no expone stu-3');
+  assert.ok(!raw.includes('stu-2'), 'no expone stu-2');
+  assert.ok(!raw.includes('pay-5'), 'no expone pay-5');
+  assert.ok(!raw.includes('pay-4'), 'no expone pay-4');
+});
+
+test('AA. Sensei solo cuenta pagos de sus alumnos autorizados', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_sensei_1', '¿Cuántos alumnos pagaron más de 0?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 1, 'solo stu-1 (autorizado para sensei-1)');
+  assert.equal(json.data.count.uniqueBy, 'student_id');
+  assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+  const raw = JSON.stringify(json);
+  assert.ok(!raw.includes('stu-3'), 'no expone stu-3');
+  assert.ok(!raw.includes('stu-2'), 'no expone stu-2');
+  assert.ok(!raw.includes('pay-4'), 'no expone pay-4');
+});
+
+test('AB. Instructor sin alumnos autorizados cuenta 0 sin consultar pagos globales', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_instructor_3', '¿Cuántos alumnos pagaron más de 0?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.count, 0, 'sin alumnos autorizados → 0');
   assert.equal(json.data.count.tool, 'payments');
   assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
   assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');

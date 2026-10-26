@@ -644,3 +644,26 @@ test('AI. Error de Supabase en listado → error controlado', async () => {
   assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
 });
 
+test('AJ. IA consulta cargos vencidos sin llamar al modelo', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.student_charges.push(
+    { id: 'ch-ia1', establishment_id: 'est-1', student_id: 'stu-1', charge_type: 'membership', period_key: '2026-09', description: 'Mensualidad atrasada', amount: 50, currency: 'ARS', due_date: '2020-01-01', status: 'overdue', paid_amount: 0 }
+  );
+
+  const c = await aiChat('tok_owner_1', '¿Cuántos cargos están vencidos?', 'est-1');
+  assert.equal(c.status, 200);
+  const cj = await c.json();
+  assert.equal(cj.data.count.tool, 'charges');
+  assert.equal(cj.data.count.count, 1);
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+
+  const l = await aiChat('tok_owner_1', '¿Quiénes tienen mensualidad vencida?', 'est-1');
+  assert.equal(l.status, 200);
+  const lj = await l.json();
+  assert.equal(lj.data.list.meta.domain, 'charges');
+  assert.ok(lj.data.list.rows.some(r => r.status === 'overdue'), 'lista de vencidos');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+

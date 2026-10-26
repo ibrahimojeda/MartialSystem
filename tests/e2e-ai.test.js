@@ -104,6 +104,8 @@ beforeEach(() => {
   providerA.reset();
   providerB.reset();
   require('../server/index.js').__resetAICooldown();
+  require('../server/index.js').__resetDetailedListState();
+  require('../server/index.js').__resetRateLimit();
 });
 
 test('A. /api/health responde 200', async () => {
@@ -505,6 +507,139 @@ test('AB. Instructor sin alumnos autorizados cuenta 0 sin consultar pagos global
   const json = await res.json();
   assert.equal(json.data.count.count, 0, 'sin alumnos autorizados → 0');
   assert.equal(json.data.count.tool, 'payments');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+// ─── Consultas detalladas genéricas (paginadas, determinísticas) ───
+
+test('AC. Conteo de instructores (detailed=false)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_owner_1', '¿Cuántos instructores hay?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.tool, 'users');
+  assert.equal(json.data.count.count, 2, 'instructor-1 e instructor-3 en est-1');
+  assert.ok(String(json.data.content).includes('2 instructores'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AD. Lista detallada de instructores (academia y disciplinas)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_owner_1', 'Me gustaría la lista detallada de cada instructor por favor', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.list.meta.domain, 'users');
+  assert.equal(json.data.list.meta.page, 1);
+  assert.equal(json.data.list.meta.pageSize, 25);
+  assert.equal(json.data.list.meta.total, 2);
+  const row = json.data.list.rows.find(r => r.full_name === 'Instructor 1');
+  assert.ok(row, 'instructor-1 presente');
+  assert.equal(row.establishment_name, 'Dojo Bushido');
+  assert.ok(row.disciplines.includes('Karate'), 'disciplina Karate presente');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+  const raw = JSON.stringify(json);
+  assert.ok(!raw.includes('instructor-1'), 'no expone IDs internos');
+  assert.ok(!raw.includes('profile_id'), 'no expone profile_id');
+});
+
+test('AE. Filtro por disciplina (instructores de Karate)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_owner_1', 'Muéstrame los instructores de Karate', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.list.meta.total, 1, 'solo instructor-1 tiene Karate');
+  assert.ok(json.data.list.rows.some(r => r.full_name === 'Instructor 1'));
+  assert.ok(!json.data.list.rows.some(r => r.full_name === 'Instructor 3'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AF. Filtro por academia (instructores del Dojo Bushido)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_owner_1', 'Muéstrame los instructores del Dojo Bushido', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.list.meta.total, 2);
+  assert.ok(json.data.list.rows.every(r => r.establishment_name === 'Dojo Bushido'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AG. Tenancy: owner est-1 no ve est-2; superadmin global; student sin listado', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const owner = await aiChat('tok_owner_1', 'Quiero la lista detallada de cada instructor', 'est-1');
+  assert.equal(owner.status, 200);
+  const ownerJson = await owner.json();
+  assert.equal(ownerJson.data.list.meta.total, 2);
+  assert.ok(!ownerJson.data.list.rows.some(r => r.full_name === 'Instructor 2'), 'no expone instructor de est-2');
+
+  const sa = await aiChat('tok_superadmin_profile', 'Quiero la lista detallada de cada instructor', null);
+  assert.equal(sa.status, 200);
+  const saJson = await sa.json();
+  assert.equal(saJson.data.list.meta.total, 3, 'superadmin ve los 3 instructores globales');
+  assert.ok(saJson.data.list.rows.some(r => r.full_name === 'Instructor 2'), 'superadmin incluye est-2');
+
+  supabaseMock._tables.profiles.push({ id: 'student-1', username: 'stu1', role: 'student', full_name: 'Estudiante 1', is_active: true, auth_email: 'stu1@x.invalid' });
+  supabaseMock._tables.establishment_members.push({ id: 'm6', establishment_id: 'est-1', profile_id: 'student-1', role: 'student', created_at: '2026-01-01' });
+  supabaseMock.setToken('tok_student_1', { id: 'student-1', email: null, role: 'student', user_metadata: {} });
+  const stu = await aiChat('tok_student_1', 'Quiero la lista detallada de cada instructor', 'est-1');
+  assert.equal(stu.status, 200);
+  const stuJson = await stu.json();
+  assert.equal(stuJson.data.list, undefined, 'student no obtiene listado de usuarios');
+});
+
+test('AH. Paginación: siguiente página', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  for (let i = 0; i < 26; i++) {
+    const pid = 'inst-bulk-' + i;
+    supabaseMock._tables.profiles.push({ id: pid, username: 'bulk' + i, role: 'instructor', full_name: 'Instructor Bulk ' + i, is_active: true, auth_email: 'bulk' + i + '@x.invalid' });
+    supabaseMock._tables.establishment_members.push({ id: 'mb' + i, establishment_id: 'est-1', profile_id: pid, role: 'instructor', created_at: '2026-01-01' });
+  }
+
+  const res1 = await aiChat('tok_owner_1', 'Me gustaría la lista detallada de cada instructor por favor', 'est-1');
+  assert.equal(res1.status, 200);
+  const json1 = await res1.json();
+  assert.equal(json1.data.list.meta.page, 1);
+  assert.equal(json1.data.list.meta.pageSize, 25);
+  assert.equal(json1.data.list.meta.total, 28, 'instructor-1 + instructor-3 + 26 bulk');
+  assert.equal(json1.data.list.rows.length, 25);
+  assert.equal(json1.data.list.meta.hasNextPage, true);
+
+  const res2 = await aiChat('tok_owner_1', 'siguiente página', 'est-1');
+  assert.equal(res2.status, 200);
+  const json2 = await res2.json();
+  assert.equal(json2.data.list.meta.page, 2);
+  assert.equal(json2.data.list.rows.length, 3);
+  assert.equal(json2.data.list.meta.hasNextPage, false);
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AI. Error de Supabase en listado → error controlado', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock.setError('establishment_members', 'mock query error');
+
+  const res = await aiChat('tok_owner_1', 'Quiero la lista detallada de cada instructor', 'est-1');
+  supabaseMock.clearErrors();
+  assert.equal(res.status, 500);
+  const json = await res.json();
+  assert.equal(json.ok, false);
+  assert.ok(String(json.error).includes('No pude consultar el detalle'), 'error controlado, sin stack');
   assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
   assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
 });

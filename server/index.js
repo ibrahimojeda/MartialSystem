@@ -12,7 +12,7 @@ const {
   hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
   buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
-  aiDetectCountQuery, formatCountResult
+  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9314,6 +9314,15 @@ async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
     return { count: count || 0, uniqueBy: null, tool, filters: f };
   }
 
+  if (tool === 'users') {
+    let query = supabaseAdmin.from('establishment_members').select('id', { count: 'exact', head: true });
+    if (estId) query = query.eq('establishment_id', estId);
+    if (f.role) query = query.eq('role', f.role);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { count: count || 0, uniqueBy: null, tool, filters: f };
+  }
+
   throw new Error('Herramienta de conteo no soportada.');
 }
 
@@ -9339,6 +9348,311 @@ function resolveCountDateRange(f) {
     fromDate = toIsoDate(d); toDate = toIsoDate(d);
   }
   return { fromDate, toDate };
+}
+
+// ── Consultas detalladas genéricas (paginadas, determinísticas) ────────────────
+// Estado de la última consulta detallada por perfil (solo metadatos mínimos,
+// en memoria de sesión; no guarda filas ni datos sensibles).
+const detailedListState = new Map();
+
+function listMeta(total, page, pageSize, domain, filters) {
+  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 0;
+  return {
+    total, page, pageSize, totalPages,
+    hasNextPage: page < totalPages,
+    hasPreviousPage: page > 1,
+    domain, filters
+  };
+}
+
+function emptyList(page, pageSize, domain, filters) {
+  return { rows: [], meta: listMeta(0, page, pageSize, domain, filters) };
+}
+
+async function aiListTool(tool, params, ctx, establishmentId) {
+  const estId = ctx.isSuperadmin && !establishmentId ? null : (establishmentId || null);
+  const page = Math.max(Number(params && params.page) || 1, 1);
+  const pageSize = Math.min(Math.max(Number(params && params.pageSize) || 25, 1), 50);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  if (tool === 'users') return aiListUsers(params, ctx, estId, page, pageSize, from, to);
+  if (tool === 'students') return aiListStudents(params, ctx, estId, page, pageSize, from, to);
+  if (tool === 'payments') return aiListPayments(params, ctx, estId, page, pageSize, from, to);
+  if (tool === 'classes') return aiListClasses(params, ctx, estId, page, pageSize, from, to);
+  if (tool === 'billing') return aiListBilling(params, ctx, estId, page, pageSize, from, to);
+  throw new Error('Dominio de listado no soportado.');
+}
+
+// USERS / INSTRUCTORS / SENSEIS: consulta controlada (sin join anidado frágil).
+async function aiListUsers(params, ctx, estId, page, pageSize, from, to) {
+  const roleFilter = (params && params.role) || null;
+  const discCode = (params && params.disciplineCode) || null;
+  const estName = (params && params.establishmentName) || null;
+
+  // 1) Filtro por disciplina → profile_ids con esa disciplina (sin join anidado).
+  let disciplineProfileIds = null;
+  if (discCode) {
+    const { data: discRows } = await supabaseAdmin.from('disciplines').select('id, code, name').limit(200);
+    const resolved = (discRows || []).find(d =>
+      String(d.code).toLowerCase() === String(discCode).toLowerCase()
+      || String(d.name).toLowerCase() === String(discCode).toLowerCase()
+    );
+    if (!resolved) return emptyList(page, pageSize, 'users', params);
+    const { data: idRows } = await supabaseAdmin.from('instructor_disciplines').select('instructor_profile_id').eq('discipline_id', resolved.id).limit(5000);
+    disciplineProfileIds = [...new Set((idRows || []).map(r => r.instructor_profile_id).filter(Boolean))];
+    if (!disciplineProfileIds.length) return emptyList(page, pageSize, 'users', params);
+  }
+
+  // 2) Filtro por academia → establishment_ids.
+  let estIds = estId ? [estId] : null;
+  if (estName) {
+    const { data: estRows } = await supabaseAdmin.from('establishments').select('id').ilike('name', '%' + estName + '%').limit(100);
+    const found = (estRows || []).map(e => e.id);
+    if (!found.length) return emptyList(page, pageSize, 'users', params);
+    estIds = estIds ? estIds.filter(id => found.includes(id)) : found;
+    if (!estIds.length) return emptyList(page, pageSize, 'users', params);
+  }
+
+  const applyFilters = (q) => {
+    if (roleFilter) q = q.eq('role', roleFilter);
+    if (estIds) q = q.in('establishment_id', estIds);
+    if (disciplineProfileIds) q = q.in('profile_id', disciplineProfileIds);
+    return q;
+  };
+
+  const { count: total, error: totalErr } = await applyFilters(supabaseAdmin.from('establishment_members').select('id', { count: 'exact', head: true }));
+  if (totalErr) throw new Error(totalErr.message);
+  const totalN = total || 0;
+
+  const { data, error } = await applyFilters(supabaseAdmin.from('establishment_members').select('id, role, profile_id, establishment_id')).order('created_at', { ascending: false }).range(from, to);
+  if (error) throw new Error(error.message);
+  const rows0 = data || [];
+
+  // 3) Enriquecer con mapas en memoria (profiles, establishments, disciplines).
+  const profileIds = [...new Set(rows0.map(r => r.profile_id).filter(Boolean))];
+  const memberEstIds = [...new Set(rows0.map(r => r.establishment_id).filter(Boolean))];
+
+  const profilesById = {};
+  if (profileIds.length) {
+    const { data: profs } = await supabaseAdmin.from('profiles').select('id, full_name, username, role, is_active').in('id', profileIds);
+    (profs || []).forEach(p => { profilesById[p.id] = p; });
+  }
+  const establishmentsById = {};
+  if (memberEstIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', memberEstIds);
+    (ests || []).forEach(e => { establishmentsById[e.id] = e; });
+  }
+  const discById = {};
+  const disciplinesByProfile = {};
+  if (profileIds.length) {
+    const { data: ids } = await supabaseAdmin.from('instructor_disciplines').select('instructor_profile_id, discipline_id').in('instructor_profile_id', profileIds).limit(5000);
+    const discIds = [...new Set((ids || []).map(r => r.discipline_id).filter(Boolean))];
+    if (discIds.length) {
+      const { data: discs } = await supabaseAdmin.from('disciplines').select('id, name').in('id', discIds);
+      (discs || []).forEach(d => { discById[d.id] = d; });
+    }
+    (ids || []).forEach(r => {
+      if (!discById[r.discipline_id]) return;
+      disciplinesByProfile[r.instructor_profile_id] = disciplinesByProfile[r.instructor_profile_id] || [];
+      disciplinesByProfile[r.instructor_profile_id].push(discById[r.discipline_id].name);
+    });
+  }
+
+  const rows = rows0.map(r => {
+    const p = profilesById[r.profile_id] || {};
+    const est = establishmentsById[r.establishment_id] || {};
+    return {
+      full_name: p.full_name || null,
+      username: p.username || null,
+      role: r.role || roleFilter || null,
+      is_active: p.is_active !== undefined ? p.is_active : null,
+      establishment_name: est.name || null,
+      disciplines: disciplinesByProfile[r.profile_id] || []
+    };
+  });
+
+  return { rows, meta: listMeta(totalN, page, pageSize, 'users', params) };
+}
+
+async function aiListStudents(params, ctx, estId, page, pageSize, from, to) {
+  const q = String((params && (params.query || params.name)) || '').trim();
+  let authorizedIds = null;
+  if ((ctx.role === 'sensei' || ctx.role === 'instructor') && estId) authorizedIds = await getInstructorAuthorizedStudentIds(ctx, estId);
+
+  const build = (sel, opts) => {
+    let query = supabaseAdmin.from('students').select(sel, opts);
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('profile_id', ctx.profileId);
+    if (authorizedIds !== null) query = query.in('id', authorizedIds.length ? authorizedIds : ['__none__']);
+    if (q) query = query.ilike('full_name', '%' + q + '%');
+    return query;
+  };
+
+  const { count: total, error: totalErr } = await build('id', { count: 'exact', head: true });
+  if (totalErr) throw new Error(totalErr.message);
+  const totalN = total || 0;
+
+  const { data, error } = await build('id, full_name, email, phone, profile_id, establishment_id').order('full_name', { ascending: true }).range(from, to);
+  if (error) throw new Error(error.message);
+  const rows0 = data || [];
+
+  const estIds = [...new Set(rows0.map(r => r.establishment_id).filter(Boolean))];
+  const studentIds = rows0.map(r => r.id);
+  const establishmentsById = {};
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds);
+    (ests || []).forEach(e => { establishmentsById[e.id] = e; });
+  }
+  const discById = {};
+  const enrByStudent = {};
+  if (studentIds.length) {
+    const { data: enrs } = await supabaseAdmin.from('student_enrollments').select('student_id, discipline_id, current_rank, status').in('student_id', studentIds);
+    const discIds = [...new Set((enrs || []).map(e => e.discipline_id).filter(Boolean))];
+    if (discIds.length) {
+      const { data: discs } = await supabaseAdmin.from('disciplines').select('id, name').in('id', discIds);
+      (discs || []).forEach(d => { discById[d.id] = d; });
+    }
+    (enrs || []).forEach(e => { if (!enrByStudent[e.student_id]) enrByStudent[e.student_id] = e; });
+  }
+
+  const rows = rows0.map(r => {
+    const enr = enrByStudent[r.id] || {};
+    return {
+      full_name: r.full_name || null,
+      email: r.email || null,
+      phone: r.phone || null,
+      current_rank: enr.current_rank || null,
+      discipline_name: (enr.discipline_id && discById[enr.discipline_id]) ? discById[enr.discipline_id].name : null,
+      status: enr.status || null,
+      establishment_name: establishmentsById[r.establishment_id] ? establishmentsById[r.establishment_id].name : null
+    };
+  });
+
+  return { rows, meta: listMeta(totalN, page, pageSize, 'students', params) };
+}
+
+async function aiListPayments(params, ctx, estId, page, pageSize, from, to) {
+  const amountMin = (params && params.amountMin != null && params.amountMin !== '') ? Number(params.amountMin) : NaN;
+
+  const build = (sel, opts) => {
+    let query = supabaseAdmin.from('payments').select(sel, opts);
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'student' || ctx.role === 'guardian') query = query.eq('student_id', ctx.profileId);
+    if (Number.isFinite(amountMin)) query = query.gt('amount', amountMin);
+    return query;
+  };
+
+  const { count: total, error: totalErr } = await build('id', { count: 'exact', head: true });
+  if (totalErr) throw new Error(totalErr.message);
+  const totalN = total || 0;
+
+  const { data, error } = await build('id, student_id, amount, currency, concept, paid_at, establishment_id').order('paid_at', { ascending: false }).range(from, to);
+  if (error) throw new Error(error.message);
+  const rows0 = data || [];
+
+  const studentIds = [...new Set(rows0.map(r => r.student_id).filter(Boolean))];
+  const estIds = [...new Set(rows0.map(r => r.establishment_id).filter(Boolean))];
+  const studentsById = {};
+  if (studentIds.length) {
+    const { data: stus } = await supabaseAdmin.from('students').select('id, full_name').in('id', studentIds);
+    (stus || []).forEach(s => { studentsById[s.id] = s; });
+  }
+  const establishmentsById = {};
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds);
+    (ests || []).forEach(e => { establishmentsById[e.id] = e; });
+  }
+
+  const rows = rows0.map(r => ({
+    student_name: studentsById[r.student_id] ? studentsById[r.student_id].full_name : null,
+    amount: r.amount,
+    currency: r.currency || 'USD',
+    concept: r.concept || null,
+    paid_at: r.paid_at || null,
+    establishment_name: establishmentsById[r.establishment_id] ? establishmentsById[r.establishment_id].name : null
+  }));
+
+  return { rows, meta: listMeta(totalN, page, pageSize, 'payments', params) };
+}
+
+async function aiListClasses(params, ctx, estId, page, pageSize, from, to) {
+  const date = (params && params.date) || null;
+
+  const build = (sel, opts) => {
+    let query = supabaseAdmin.from('class_sessions').select(sel, opts);
+    if (estId) query = query.eq('establishment_id', estId);
+    if (ctx.role === 'sensei' || ctx.role === 'instructor') query = query.eq('instructor_profile_id', ctx.profileId);
+    if (date) query = query.eq('scheduled_date', date);
+    return query;
+  };
+
+  const { count: total, error: totalErr } = await build('id', { count: 'exact', head: true });
+  if (totalErr) throw new Error(totalErr.message);
+  const totalN = total || 0;
+
+  const { data, error } = await build('id, discipline_id, title, scheduled_date, start_time, end_time, location, establishment_id').order('scheduled_date', { ascending: true }).range(from, to);
+  if (error) throw new Error(error.message);
+  const rows0 = data || [];
+
+  const discIds = [...new Set(rows0.map(r => r.discipline_id).filter(Boolean))];
+  const estIds = [...new Set(rows0.map(r => r.establishment_id).filter(Boolean))];
+  const discById = {};
+  if (discIds.length) {
+    const { data: discs } = await supabaseAdmin.from('disciplines').select('id, name').in('id', discIds);
+    (discs || []).forEach(d => { discById[d.id] = d; });
+  }
+  const establishmentsById = {};
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds);
+    (ests || []).forEach(e => { establishmentsById[e.id] = e; });
+  }
+
+  const rows = rows0.map(r => ({
+    title: r.title || null,
+    scheduled_date: r.scheduled_date || null,
+    start_time: r.start_time || null,
+    end_time: r.end_time || null,
+    location: r.location || null,
+    discipline_name: discById[r.discipline_id] ? discById[r.discipline_id].name : null,
+    establishment_name: establishmentsById[r.establishment_id] ? establishmentsById[r.establishment_id].name : null
+  }));
+
+  return { rows, meta: listMeta(totalN, page, pageSize, 'classes', params) };
+}
+
+async function aiListBilling(params, ctx, estId, page, pageSize, from, to) {
+  const build = (sel, opts) => {
+    let query = supabaseAdmin.from('system_usage_bills').select(sel, opts);
+    if (estId) query = query.eq('establishment_id', estId);
+    return query;
+  };
+
+  const { count: total, error: totalErr } = await build('id', { count: 'exact', head: true });
+  if (totalErr) throw new Error(totalErr.message);
+  const totalN = total || 0;
+
+  const { data, error } = await build('id, establishment_id, billing_month, amount, currency, status, due_date').order('due_date', { ascending: false }).range(from, to);
+  if (error) throw new Error(error.message);
+  const rows0 = data || [];
+
+  const estIds = [...new Set(rows0.map(r => r.establishment_id).filter(Boolean))];
+  const establishmentsById = {};
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds);
+    (ests || []).forEach(e => { establishmentsById[e.id] = e; });
+  }
+
+  const rows = rows0.map(r => ({
+    billing_month: r.billing_month || null,
+    amount: r.amount,
+    currency: r.currency || 'USD',
+    status: r.status || null,
+    due_date: r.due_date || null,
+    establishment_name: establishmentsById[r.establishment_id] ? establishmentsById[r.establishment_id].name : null
+  }));
+
+  return { rows, meta: listMeta(totalN, page, pageSize, 'billing', params) };
 }
 
 // Genera una contraseña segura para SUGERIR al crear usuarios. La IA solo propone;
@@ -9607,6 +9921,36 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
         return res.json({ ok: true, data: { content: countContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, count: countRes } });
       } catch (countErr) {
         return res.status(500).json({ ok: false, error: 'No pude contar los datos solicitados: ' + (countErr && countErr.message || 'error de base de datos') });
+      }
+    }
+
+    // ── Listados detallados determinísticos (paginados, sin llamar a la IA) ──
+    if (isPaginationRequest(message)) {
+      const last = detailedListState.get(profileId);
+      if (last && aiToolAllowed(last.tool, aiRole, 'read') && String(last.establishmentId || '') === String(establishmentId || '')) {
+        try {
+          const nextParams = Object.assign({}, last.filters, { page: (last.page || 1) + 1, pageSize: last.pageSize || 25 });
+          const listRes = await aiListTool(last.tool, nextParams, ctx, establishmentId);
+          const listContent = formatDetailedListResult(listRes, { tool: last.tool, filters: last.filters }, ctx);
+          detailedListState.set(profileId, { tool: last.tool, filters: last.filters, page: nextParams.page, pageSize: nextParams.pageSize, establishmentId: establishmentId || null });
+          return res.json({ ok: true, data: { content: listContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, list: listRes } });
+        } catch (listErr) {
+          return res.status(500).json({ ok: false, error: 'No pude consultar el detalle en este momento. Intenta nuevamente.' });
+        }
+      }
+      return res.json({ ok: true, data: { content: '¿Qué lista deseas consultar?', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+    }
+
+    const listQuery = aiDetectDetailedQuery(message);
+    if (listQuery && aiToolAllowed(listQuery.tool, aiRole, 'read')) {
+      try {
+        const listParams = Object.assign({}, listQuery.filters, { page: listQuery.options.page, pageSize: listQuery.options.pageSize });
+        const listRes = await aiListTool(listQuery.tool, listParams, ctx, establishmentId);
+        const listContent = formatDetailedListResult(listRes, listQuery, ctx);
+        detailedListState.set(profileId, { tool: listQuery.tool, filters: listQuery.filters, page: 1, pageSize: listQuery.options.pageSize, establishmentId: establishmentId || null });
+        return res.json({ ok: true, data: { content: listContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, list: listRes } });
+      } catch (listErr) {
+        return res.status(500).json({ ok: false, error: 'No pude consultar el detalle en este momento. Intenta nuevamente.' });
       }
     }
 
@@ -10268,7 +10612,9 @@ module.exports = {
     if (o.supabasePublic) supabasePublic = o.supabasePublic;
     return app;
   },
-  __resetAICooldown: () => aiProviderCooldown.clear()
+  __resetAICooldown: () => aiProviderCooldown.clear(),
+  __resetDetailedListState: () => detailedListState.clear(),
+  __resetRateLimit: () => rateLimitBuckets.clear()
 };
 
 if (require.main === module) {

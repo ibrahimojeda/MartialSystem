@@ -7,7 +7,7 @@ function createSupabaseMock(seed = {}) {
   const tables = Object.assign({}, defaultSeed(), seed);
 
   function makeQuery(table, rows) {
-    const state = { filters: [], limit: null, count: null, head: false };
+    const state = { filters: [], limit: null, count: null, head: false, range: null };
     const q = {};
     const filtered = () => {
       let out = rows.slice();
@@ -23,6 +23,7 @@ function createSupabaseMock(seed = {}) {
         else if (f.type === 'lt') out = out.filter(r => r[f.col] < f.val);
       }
       if (state.limit != null) out = out.slice(0, state.limit);
+      if (state.range) out = out.slice(state.range[0], state.range[1] + 1);
       return out;
     };
     q.select = (cols, opts) => {
@@ -41,7 +42,7 @@ function createSupabaseMock(seed = {}) {
     q.lt = (col, val) => { state.filters.push({ type: 'lt', col, val }); return q; };
     q.order = () => q;
     q.limit = (n) => { state.limit = n; return q; };
-    q.range = () => q;
+    q.range = (from, to) => { state.range = [from, to]; return q; };
     q.single = () => { const r = filtered(); return Promise.resolve(r.length ? { data: r[0], error: null } : { data: null, error: { message: 'not found' } }); };
     q.maybeSingle = () => { const r = filtered(); return Promise.resolve({ data: r.length ? r[0] : null, error: null }); };
     q.then = (resolve, reject) => {

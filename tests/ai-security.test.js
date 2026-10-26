@@ -8,7 +8,7 @@ const {
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
-  aiDetectCountQuery, formatCountResult
+  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -367,6 +367,56 @@ test('formatCountResult produce plantillas determinísticas legibles', () => {
     'Hay 5 clases programadas para mañana.'
   );
   assert.ok(formatCountResult({ tool: 'students', kind: 'total' }, { count: 1 }).includes('1 alumno'));
+});
+
+// ─── aiDetectDetailedQuery / isPaginationRequest / formatDetailedListResult ───
+test('aiDetectDetailedQuery detecta instructores/senseis/alumnos y filtros', () => {
+  assert.deepEqual(
+    aiDetectDetailedQuery('Me gustaría la lista detallada de cada instructor por favor'),
+    { tool: 'users', kind: 'list', filters: { role: 'instructor' }, options: { detailed: true, paginated: true, page: 1, pageSize: 25 } }
+  );
+  const karate = aiDetectDetailedQuery('Muéstrame los instructores de Karate');
+  assert.equal(karate.tool, 'users');
+  assert.equal(karate.filters.role, 'instructor');
+  assert.equal(karate.filters.disciplineCode, 'karate');
+  const sensei = aiDetectDetailedQuery('Quiero la lista detallada de senseis');
+  assert.equal(sensei.tool, 'users');
+  assert.equal(sensei.filters.role, 'sensei');
+  const students = aiDetectDetailedQuery('Quiero ver la lista detallada de estudiantes');
+  assert.equal(students.tool, 'students');
+});
+
+test('aiDetectDetailedQuery devuelve null para no-listados', () => {
+  assert.equal(aiDetectDetailedQuery('¿Cuántos instructores hay?'), null);
+  assert.equal(aiDetectDetailedQuery('revisa todos los alumnos y mira sus pagos'), null);
+  assert.equal(aiDetectDetailedQuery('hola'), null);
+});
+
+test('isPaginationRequest detecta continuación', () => {
+  assert.ok(isPaginationRequest('siguiente página'));
+  assert.ok(isPaginationRequest('muéstrame más'));
+  assert.ok(isPaginationRequest('continúa'));
+  assert.ok(!isPaginationRequest('Muéstrame los instructores'));
+});
+
+test('formatDetailedListResult produce texto paginado legible', () => {
+  const res = {
+    rows: [
+      { full_name: 'Ana López', username: 'ana', establishment_name: 'Dojo Bushido', disciplines: ['Karate', 'Judo'], is_active: true },
+      { full_name: 'Carlos Pérez', username: 'carlos', establishment_name: 'Academia MMA', disciplines: ['MMA'], is_active: true }
+    ],
+    meta: { total: 474, page: 1, pageSize: 25, totalPages: 19, hasNextPage: true, hasPreviousPage: false, domain: 'users' }
+  };
+  const s = formatDetailedListResult(res, { tool: 'users', filters: { role: 'instructor' } }, {});
+  assert.ok(s.includes('Encontré 474 instructores'));
+  assert.ok(s.includes('página 1 de 19'));
+  assert.ok(s.includes('Ana López'));
+  assert.ok(s.includes('Dojo Bushido'));
+  assert.ok(s.includes('Karate, Judo'));
+  assert.ok(s.includes('siguiente página'));
+  assert.ok(!s.includes('profile_id'));
+  const empty = formatDetailedListResult({ rows: [], meta: { total: 0 } }, { tool: 'users', filters: { role: 'instructor' } }, {});
+  assert.ok(empty.includes('No encontré instructores'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

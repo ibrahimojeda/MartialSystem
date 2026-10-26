@@ -257,6 +257,16 @@ function aiDetectCountQuery(message) {
     return { tool: 'billing', kind: 'total', filters: {} };
   }
 
+  if (/instructor|instructores|profesor|profesores|maestro|maestros/.test(text)) {
+    return { tool: 'users', kind: 'total', filters: { role: 'instructor' } };
+  }
+  if (/sensei|senseis/.test(text)) {
+    return { tool: 'users', kind: 'total', filters: { role: 'sensei' } };
+  }
+  if (/usuario|usuarios/.test(text)) {
+    return { tool: 'users', kind: 'total', filters: {} };
+  }
+
   return null;
 }
 
@@ -295,9 +305,113 @@ function formatCountResult(query, result) {
       ? 'No encontré facturas dentro de tu alcance autorizado.'
       : 'Encontré ' + n + (n === 1 ? ' factura' : ' facturas') + '.';
   }
+  if (tool === 'users') {
+    const ulabel = (query && query.filters && query.filters.role === 'instructor') ? 'instructores'
+      : (query && query.filters && query.filters.role === 'sensei') ? 'senseis' : 'usuarios';
+    return n === 0
+      ? 'No encontré ' + ulabel + ' dentro de tu alcance autorizado.'
+      : 'Hay ' + n + ' ' + ulabel + '.';
+  }
   return n === 0
     ? 'No encontré resultados dentro de tu alcance autorizado.'
     : 'Encontré ' + n + (n === 1 ? ' resultado' : ' resultados') + '.';
+}
+
+// ─── Consultas detalladas genéricas (listados paginados determinísticos) ───────
+// Disciplinas reconocibles en lenguaje natural para filtrar listados.
+const DETAILED_LIST_DISCIPLINES = ['karate', 'judo', 'bjj', 'taekwondo', 'kickboxing', 'mma', 'kung fu', 'aikido'];
+
+// Detecta una petición de LISTADO DETALLADO. Devuelve
+// { tool, kind:'list', filters, options:{ detailed, paginated, page, pageSize } } o null.
+function aiDetectDetailedQuery(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!text) return null;
+
+  const detailedMarkers = /lista\s+detallada|listado\s+detallado|detalle\s+completo|cada\s+(instructor|sensei|alumno|estudiante|usuario|pago|clase|profesor|maestro)|todos\s+los\s+(instructores|senseis|usuarios|pagos|profesores|maestros)|lista\s+completa|nombres\s+y\s+(disciplinas|academias)|relaci[oó]n\s+completa|desglose|informaci[oó]n\s+individual/;
+  const hasFilter = new RegExp('de\\s+(' + DETAILED_LIST_DISCIPLINES.join('|') + ')').test(text)
+    || /del?\s+(?:dojo|academia|gimnasio)\s+[a-z0-9áéíóúñü]/.test(text);
+  const listVerb = /mu[eé]strame|l[ií]stame|quiero\s+(?:ver|la\s+lista)|dame\s+la\s+lista|lista\s+de\b|listado\s+de\b/.test(text);
+
+  if (!detailedMarkers.test(text) && !(listVerb && hasFilter)) return null;
+
+  const filters = {};
+  let tool = null;
+
+  if (/instructor|instructores|profesor|profesores|maestro|maestros/.test(text)) { tool = 'users'; filters.role = 'instructor'; }
+  else if (/sensei|senseis/.test(text)) { tool = 'users'; filters.role = 'sensei'; }
+  else if (/pago|pagos/.test(text)) { tool = 'payments'; }
+  else if (/clase|clases|horario|horarios/.test(text)) { tool = 'classes'; }
+  else if (/mensualidad|mensualidades|factura|facturas|billing/.test(text)) { tool = 'billing'; }
+  else if (/alumno|alumnos|estudiante|estudiantes/.test(text)) { tool = 'students'; }
+  else if (/usuario|usuarios/.test(text)) { tool = 'users'; }
+
+  if (!tool) return null;
+
+  const discMatch = text.match(new RegExp('de\\s+(' + DETAILED_LIST_DISCIPLINES.join('|') + ')'));
+  if (discMatch) filters.disciplineCode = discMatch[1];
+
+  const estMatch = text.match(/del?\s+(?:dojo|academia|gimnasio)\s+([a-z0-9áéíóúñü\s]+?)(?:\s*(?:por\s+favor|$|,|\?|\.))/);
+  if (estMatch) filters.establishmentName = estMatch[1].trim();
+
+  return { tool, kind: 'list', filters, options: { detailed: true, paginated: true, page: 1, pageSize: 25 } };
+}
+
+// Detecta una petición de paginación conversacional ("siguiente página").
+function isPaginationRequest(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!text) return false;
+  return /^(siguiente|ver\s+m[aá]s|mu[eé]strame\s+m[aá]s|contin[uú]a|dame\s+m[aá]s|m[aá]s\s+resultados)/.test(text)
+    || /siguiente\s+p[aá]gina|p[aá]gina\s+siguiente/.test(text);
+}
+
+// Formatea un listado detallado de forma determinística (sin llamar al modelo).
+function formatDetailedListResult(listRes, query, ctx) {
+  const meta = (listRes && listRes.meta) || {};
+  const rows = (listRes && listRes.rows) || [];
+  const total = (meta.total === null || meta.total === undefined) ? null : meta.total;
+  const page = meta.page || 1;
+  const totalPages = meta.totalPages || 0;
+  const domain = (query && query.tool) || meta.domain || 'users';
+  const role = (query && query.filters && query.filters.role) || null;
+
+  const label = role === 'instructor' ? 'instructores'
+    : role === 'sensei' ? 'senseis'
+    : { students: 'alumnos', payments: 'pagos', classes: 'clases', billing: 'facturas', users: 'usuarios' }[domain] || 'registros';
+
+  if (!rows.length) {
+    return 'No encontré ' + label + ' dentro de tu alcance autorizado.';
+  }
+
+  const header = total != null
+    ? 'Encontré ' + total + ' ' + label + '. Mostrando ' + rows.length + ' de ' + total + ', página ' + page + ' de ' + totalPages + '.'
+    : 'Mostrando ' + rows.length + ' ' + label + ' (página ' + page + ').';
+
+  const body = rows.map((r, i) => formatDetailedRow(r, domain, i)).join('\n\n');
+  const footer = (meta.hasNextPage ? 'Escribe "siguiente página" para ver más ' + label + '.' : 'Fin de la lista.')
+    + ' También puedes filtrar por academia, disciplina o nombre.';
+
+  return header + '\n\n' + body + '\n\n' + footer;
+}
+
+function formatDetailedRow(r, domain, idx) {
+  const name = r.full_name || r.student_name || r.title || r.username || 'Registro';
+  const lines = [(idx + 1) + '. ' + name];
+  if (r.establishment_name) lines.push('   Academia: ' + r.establishment_name);
+  if (Array.isArray(r.disciplines) && r.disciplines.length) lines.push('   Disciplinas: ' + r.disciplines.join(', '));
+  else if (r.discipline_name) lines.push('   Disciplina: ' + r.discipline_name);
+  if (r.is_active !== undefined && r.is_active !== null) lines.push('   Estado: ' + (r.is_active ? 'Activo' : 'Inactivo'));
+  if (r.username && r.username !== name) lines.push('   Usuario: ' + r.username);
+  if (r.email) lines.push('   Email: ' + r.email);
+  if (r.phone) lines.push('   Teléfono: ' + r.phone);
+  if (r.current_rank) lines.push('   Rango: ' + r.current_rank);
+  if (r.status && r.status !== r.is_active) lines.push('   Estado: ' + r.status);
+  if (r.amount !== undefined && r.amount !== null) lines.push('   Monto: $' + Number(r.amount).toLocaleString());
+  if (r.paid_at) lines.push('   Fecha: ' + String(r.paid_at).slice(0, 10));
+  if (r.concept) lines.push('   Concepto: ' + r.concept);
+  if (r.scheduled_date) lines.push('   Fecha: ' + String(r.scheduled_date).slice(0, 10));
+  if (r.start_time && r.end_time) lines.push('   Horario: ' + r.start_time + ' – ' + r.end_time);
+  if (r.location) lines.push('   Lugar: ' + r.location);
+  return lines.join('\n');
 }
 
 function detectImageType(buffer) {
@@ -442,6 +556,6 @@ module.exports = {
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
-  aiDetectCountQuery, formatCountResult
+  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult
 };
 

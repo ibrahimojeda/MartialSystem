@@ -9,7 +9,8 @@ const {
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
-  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
+  formatCurrencyAmount, formatEstablishmentBilling
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -490,16 +491,38 @@ test('systemBillingScope aplica permisos por rol', () => {
 test('formatCountResult billing summary combina vencidos y pendientes', () => {
   const s = formatCountResult(
     { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } },
-    { overdueCount: 3, pendingCount: 2, overdueTotal: 147, pendingTotal: 0 }
+    { overdueCount: 3, pendingCount: 2, overdueTotals: { ARS: 147 }, pendingTotals: {} }
   );
   assert.ok(s.includes('Hay 3 dojos con facturas vencidas'));
   assert.ok(s.includes('2 dojos con facturas pendientes'));
-  assert.ok(s.includes('$147'));
+  assert.ok(s.includes('ARS 147'));
 });
 
-test('formatCountResult billing sin resultados', () => {
-  const s = formatCountResult({ tool: 'billing', kind: 'summary' }, { overdueCount: 0, pendingCount: 0, overdueTotal: 0 });
-  assert.ok(s.includes('No encontré facturas pendientes o vencidas'));
+test('formatCountResult billing separa saldos por moneda (no suma monedas distintas)', () => {
+  const s = formatCountResult(
+    { tool: 'billing', kind: 'summary' },
+    { overdueCount: 2, pendingCount: 0, overdueTotals: { ARS: 98000, USD: 120 } }
+  );
+  assert.ok(s.includes('ARS '));
+  assert.ok(s.includes('USD 120'));
+  assert.ok(!s.includes('$'), 'no usa $ genérico');
+});
+
+test('formatCurrencyAmount usa el código de moneda real', () => {
+  assert.ok(formatCurrencyAmount('ARS', 98000).startsWith('ARS '));
+  assert.equal(formatCurrencyAmount('USD', 120), 'USD 120');
+});
+
+test('formatEstablishmentBilling sin deuda', () => {
+  assert.equal(formatEstablishmentBilling('Dojo Bushido', 0, 0, {}), 'Dojo Bushido no tiene facturas pendientes ni vencidas.');
+});
+
+test('formatEstablishmentBilling con deuda y factura vencida más antigua', () => {
+  const s = formatEstablishmentBilling('Dojo Bushido', 1, 1, { ARS: 98000 }, { billing_month: '2026-08', due_date: '2026-08-05' });
+  assert.ok(s.includes('Dojo Bushido tiene 2 facturas'));
+  assert.ok(s.includes('ARS '));
+  assert.ok(s.includes('2026-08'));
+  assert.ok(s.includes('2026-08-05'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

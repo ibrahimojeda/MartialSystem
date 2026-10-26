@@ -13,7 +13,7 @@ const {
   buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
-  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope, formatEstablishmentBilling
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9001,6 +9001,28 @@ const getAIContextRole = async (req, establishmentId) => {
   return 'user';
 };
 
+// Resuelve el nombre de una academia mencionada en el mensaje a su id,
+// respetando el alcance autorizado del rol.
+// Devuelve: { status: 'general' } | { status: 'specific', id, name }
+//         | { status: 'ambiguous', names } | { status: 'not_authorized' }.
+async function resolveEstablishmentByName(message, ctx, establishmentId) {
+  const text = String(message || '').toLowerCase();
+  const { data: ests, error } = await supabaseAdmin.from('establishments').select('id, name').limit(300);
+  if (error) throw new Error(error.message);
+  const mentioned = (ests || []).filter(e => e.name && text.includes(String(e.name).toLowerCase()));
+  if (!mentioned.length) return { status: 'general' };
+  if (mentioned.length > 1) return { status: 'ambiguous', names: mentioned.map(m => m.name) };
+  const target = mentioned[0];
+  const scope = systemBillingScope(ctx);
+  if (scope === 'all') return { status: 'specific', id: target.id, name: target.name };
+  if (scope === 'own') {
+    const ownId = ctx.establishmentId || establishmentId;
+    if (target.id === ownId) return { status: 'specific', id: target.id, name: target.name };
+    return { status: 'not_authorized', name: target.name };
+  }
+  return { status: 'none' };
+}
+
 // Constructor de contexto Fase 1: datos REALES y acotados según rol/establecimiento.
 // La regla de oro: la IA solo recibe datos que el rol puede ver.
 async function buildAIContext(req, establishmentId) {
@@ -9686,20 +9708,21 @@ async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
     }
 
     if (kind === 'summary') {
-      let query = supabaseAdmin.from('system_usage_bills').select('establishment_id, amount, status');
+      let query = supabaseAdmin.from('system_usage_bills').select('establishment_id, amount, currency, status');
       if (effectiveEstId) query = query.eq('establishment_id', effectiveEstId);
       query = query.in('status', ['pending', 'overdue']);
       const { data, error } = await query.limit(50000);
       if (error) throw new Error(error.message);
       const rows = data || [];
       const overdueSet = new Set(); const pendingSet = new Set();
-      let overdueTotal = 0, pendingTotal = 0;
+      const overdueTotals = {}; const pendingTotals = {};
       rows.forEach(b => {
+        const cur = b.currency || 'USD';
         const amt = Number(b.amount || 0);
-        if (b.status === 'overdue') { overdueSet.add(b.establishment_id); overdueTotal += amt; }
-        else if (b.status === 'pending') { pendingSet.add(b.establishment_id); pendingTotal += amt; }
+        if (b.status === 'overdue') { overdueSet.add(b.establishment_id); overdueTotals[cur] = (overdueTotals[cur] || 0) + amt; }
+        else if (b.status === 'pending') { pendingSet.add(b.establishment_id); pendingTotals[cur] = (pendingTotals[cur] || 0) + amt; }
       });
-      return { count: overdueSet.size + pendingSet.size, uniqueBy: 'establishment_id', tool, kind, filters: f, overdueCount: overdueSet.size, pendingCount: pendingSet.size, overdueTotal, pendingTotal };
+      return { count: overdueSet.size + pendingSet.size, uniqueBy: 'establishment_id', tool, kind, filters: f, overdueCount: overdueSet.size, pendingCount: pendingSet.size, overdueTotals, pendingTotals };
     }
 
     const statuses = (f.status && f.status.length) ? f.status : ['pending', 'overdue'];
@@ -10395,6 +10418,35 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       const scope = systemBillingScope(ctx);
       if (scope === 'none') {
         return res.json({ ok: true, data: { content: 'No tienes permisos para consultar la facturación de la plataforma.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+      }
+      try {
+        const nameRes = await resolveEstablishmentByName(message, ctx, establishmentId);
+        if (nameRes.status === 'ambiguous') {
+          return res.json({ ok: true, data: { content: 'Encontré varias academias con ese nombre: ' + nameRes.names.join(', ') + '. ¿A cuál te refieres?', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+        }
+        if (nameRes.status === 'not_authorized') {
+          return res.json({ ok: true, data: { content: 'No encontré una academia con ese nombre dentro de tu alcance autorizado.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+        }
+        if (nameRes.status === 'specific') {
+          const { data: bills, error: billsErr } = await supabaseAdmin.from('system_usage_bills')
+            .select('billing_month, amount, currency, status, due_date')
+            .eq('establishment_id', nameRes.id)
+            .in('status', ['pending', 'overdue'])
+            .order('due_date', { ascending: true })
+            .limit(500);
+          if (billsErr) throw new Error(billsErr.message);
+          const rows = bills || [];
+          const pendingCount = rows.filter(b => b.status === 'pending').length;
+          const overdueList = rows.filter(b => b.status === 'overdue');
+          const overdueCount = overdueList.length;
+          const totals = {};
+          rows.forEach(b => { const c = b.currency || 'USD'; totals[c] = (totals[c] || 0) + Number(b.amount || 0); });
+          const oldestOverdue = overdueList[0] || null;
+          const content = formatEstablishmentBilling(nameRes.name, pendingCount, overdueCount, totals, oldestOverdue);
+          return res.json({ ok: true, data: { content, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, count: { tool: 'billing', establishmentName: nameRes.name, pendingCount, overdueCount, totals } } });
+        }
+      } catch (countErr) {
+        return res.status(500).json({ ok: false, error: 'No pude contar los datos solicitados: ' + (countErr && countErr.message || 'error de base de datos') });
       }
       if (scope === 'own' && !ctx.establishmentId) {
         return res.json({ ok: true, data: { content: 'No encontré facturas pendientes o vencidas de los dojos dentro de tu alcance autorizado.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });

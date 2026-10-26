@@ -330,13 +330,18 @@ function formatCountResult(query, result) {
     if (kind === 'summary') {
       const oc = Math.max(0, Number(result && result.overdueCount) || 0);
       const pc = Math.max(0, Number(result && result.pendingCount) || 0);
-      const ot = Math.max(0, Number(result && result.overdueTotal) || 0);
       if (oc === 0 && pc === 0) return 'No encontré facturas pendientes o vencidas de los dojos dentro de tu alcance autorizado.';
       const parts = [];
       if (oc) parts.push('Hay ' + oc + (oc === 1 ? ' dojo' : ' dojos') + ' con facturas vencidas');
       if (pc) parts.push(pc + (pc === 1 ? ' dojo' : ' dojos') + ' con facturas pendientes');
       let msg = parts.join(' y ') + '.';
-      if (ot > 0) msg += ' El saldo vencido total es de $' + ot.toLocaleString('en-US') + '.';
+      const overdueTotals = (result && result.overdueTotals) || {};
+      const curEntries = Object.keys(overdueTotals).filter(c => Number(overdueTotals[c]) > 0);
+      if (curEntries.length === 1) {
+        msg += ' El saldo vencido total es de ' + formatCurrencyAmount(curEntries[0], overdueTotals[curEntries[0]]) + '.';
+      } else if (curEntries.length > 1) {
+        msg += ' Saldo vencido: ' + curEntries.map(c => formatCurrencyAmount(c, overdueTotals[c])).join(' · ') + '.';
+      }
       return msg;
     }
     return n === 0
@@ -644,6 +649,30 @@ function systemBillingScope(ctx) {
   return 'none';
 }
 
+// Formatea un importe con su moneda real (nunca "$" genérico).
+function formatCurrencyAmount(cur, amount) {
+  const c = String(cur || 'USD').toUpperCase();
+  const amt = Number(amount) || 0;
+  let s;
+  try { s = amt.toLocaleString('es-AR', { maximumFractionDigits: 2 }); } catch (_) { s = String(amt); }
+  return c + ' ' + s;
+}
+
+// Formatea el resumen de deuda de una academia específica.
+function formatEstablishmentBilling(name, pendingCount, overdueCount, totals, oldestOverdue) {
+  const n = (Number(pendingCount) || 0) + (Number(overdueCount) || 0);
+  if (n === 0) return name + ' no tiene facturas pendientes ni vencidas.';
+  const curEntries = Object.keys(totals || {}).filter(c => Number(totals[c]) > 0);
+  let msg = name + ' tiene ' + n + (n === 1 ? ' factura' : ' facturas');
+  if (Number(overdueCount) > 0) msg += ' (' + overdueCount + ' vencida' + (overdueCount === 1 ? '' : 's') + ')';
+  if (curEntries.length) msg += ' por un total de ' + curEntries.map(c => formatCurrencyAmount(c, totals[c])).join(' · ');
+  msg += '.';
+  if (oldestOverdue && oldestOverdue.billing_month && oldestOverdue.due_date) {
+    msg += ' La factura vencida más antigua corresponde a ' + oldestOverdue.billing_month + ' y venció el ' + oldestOverdue.due_date + '.';
+  }
+  return msg;
+}
+
 module.exports = {
   AI_PROVIDERS, AI_TOOLS, aiToolAllowed, detectImageType, aiParseToolBlock,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
@@ -651,6 +680,7 @@ module.exports = {
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
-  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
+  formatCurrencyAmount, formatEstablishmentBilling
 };
 

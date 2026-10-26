@@ -34,6 +34,7 @@ function aiDetectIntent(message) {
   const readWords = /revisa|revisar|busca|buscar|muestra|mostrar|consulta|consultar|lista|listar|mira|mirar|cu[aá]les|qui[eé]nes|[úu]ltim|historial|cu[aá]ntos/.test(text);
   const writeWords = /crear|crea|registrar|registra|agregar|agrega|guardar|guarda|ingresar|cobra|cobrar|editar|actualizar/.test(text);
   if (writeWords && !readWords) return 'write';
+  if (/(dojo|dojos|academia|academias|dueñ|propietario|plataforma|martialsystem|moros).*(deben|debe|deuda|factura|mensualidad|cuota|vencid|saldo)|(deuda|factura|mensualidad|cuota de la plataforma).*(dojo|academia|plataforma|sistema)/.test(text)) return 'read_billing';
   if (/pago|pagos|cobro|cobros|monto|importe|fecha de pago|pagaron|deben|adeudan/.test(text)) return 'read_payments';
   if (/alumno|alumnos|estudiante|estudiantes/.test(text)) return 'read_students';
   if (/clase|clases|horario|horarios|agenda/.test(text)) return 'read_classes';
@@ -78,7 +79,7 @@ function buildAIIntent(message) {
     return out;
   }
 
-  if (base === 'read_payments' || base === 'read_students' || base === 'read_classes' || base === 'read_users') {
+  if (base === 'read_payments' || base === 'read_students' || base === 'read_classes' || base === 'read_users' || base === 'read_billing') {
     out.intent = 'read';
     out.domain = base.slice(5);
     const sem = normalizeAISemantics(text);
@@ -254,6 +255,16 @@ function aiDetectCountQuery(message) {
     return { tool: 'students', kind: 'total', filters: {} };
   }
 
+  const hasDojoDebt = /dojo|dojos|academia|academias|dueñ|propietario|plataforma|martialsystem|moros/.test(text);
+
+  // Deuda de los dojos con MartialSystem → system_usage_bills (NO student_charges).
+  if (hasDojoDebt && /deben|debe|deuda|vencid|atrasad|factura|mensualidad|cuota|saldo|adeudan/.test(text)) {
+    const overdue = /vencid|atrasad|moros/.test(text);
+    if (overdue) return { tool: 'billing', kind: 'overdue_establishments', filters: { status: ['overdue'] } };
+    if (/pendiente|pendientes/.test(text)) return { tool: 'billing', kind: 'pending_establishments', filters: { status: ['pending'] } };
+    return { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } };
+  }
+
   if (hasBilling) {
     return { tool: 'billing', kind: 'total', filters: {} };
   }
@@ -306,6 +317,28 @@ function formatCountResult(query, result) {
       : 'Encontré ' + n + (n === 1 ? ' alumno' : ' alumnos') + ' en tu dojo.';
   }
   if (tool === 'billing') {
+    if (kind === 'overdue_establishments') {
+      return n === 0
+        ? 'No encontré dojos con facturas vencidas dentro de tu alcance autorizado.'
+        : 'Hay ' + n + (n === 1 ? ' dojo' : ' dojos') + ' con facturas vencidas.';
+    }
+    if (kind === 'pending_establishments') {
+      return n === 0
+        ? 'No encontré dojos con facturas pendientes dentro de tu alcance autorizado.'
+        : 'Hay ' + n + (n === 1 ? ' dojo' : ' dojos') + ' con facturas pendientes.';
+    }
+    if (kind === 'summary') {
+      const oc = Math.max(0, Number(result && result.overdueCount) || 0);
+      const pc = Math.max(0, Number(result && result.pendingCount) || 0);
+      const ot = Math.max(0, Number(result && result.overdueTotal) || 0);
+      if (oc === 0 && pc === 0) return 'No encontré facturas pendientes o vencidas de los dojos dentro de tu alcance autorizado.';
+      const parts = [];
+      if (oc) parts.push('Hay ' + oc + (oc === 1 ? ' dojo' : ' dojos') + ' con facturas vencidas');
+      if (pc) parts.push(pc + (pc === 1 ? ' dojo' : ' dojos') + ' con facturas pendientes');
+      let msg = parts.join(' y ') + '.';
+      if (ot > 0) msg += ' El saldo vencido total es de $' + ot.toLocaleString('en-US') + '.';
+      return msg;
+    }
     return n === 0
       ? 'No encontré facturas dentro de tu alcance autorizado.'
       : 'Encontré ' + n + (n === 1 ? ' factura' : ' facturas') + '.';
@@ -570,12 +603,54 @@ async function aiFailoverWith(providers, requestFn, labelFor) {
   throw e;
 }
 
+// ─── Identidad del usuario autenticado (determinística, sin modelo ni búsqueda) ───
+function aiDetectIdentityQuery(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (/qu[eé] usuario soy|qui[eé]n soy|cu[aá]l es mi rol|qu[eé] rol tengo|cu[aá]l es mi usuario|mi identidad|qu[eé] cuenta est[aá] conectada|qu[eé] cuenta soy|cu[aá]l es mi nombre/.test(text)) {
+    return { intent: 'read', domain: 'identity', operation: 'current_user', filters: {}, detailed: false, confidence: 1 };
+  }
+  return null;
+}
+
+function getCurrentUserIdentity(ctx) {
+  return {
+    profileId: (ctx && ctx.profileId) || null,
+    username: (ctx && ctx.username) || '',
+    fullName: (ctx && ctx.fullName) || '',
+    role: (ctx && ctx.role) || '',
+    establishmentId: (ctx && ctx.establishmentId) || null
+  };
+}
+
+function formatIdentityResult(identity) {
+  const role = String((identity && identity.role) || '').toLowerCase();
+  const name = String((identity && identity.fullName) || '').trim();
+  const username = String((identity && identity.username) || '').trim();
+  const displayName = name || username || 'usuario';
+  if (role === 'superadmin') {
+    return 'Eres ' + displayName + ', con rol Superadmin. Tienes acceso administrativo global.';
+  }
+  const parts = ['Eres ' + displayName];
+  if (username && username.toLowerCase() !== displayName.toLowerCase()) parts.push('usuario ' + username);
+  if (role) parts.push('con rol ' + role);
+  return parts.join(', ') + '.';
+}
+
+// Alcance de acceso a la facturación del sistema (system_usage_bills).
+function systemBillingScope(ctx) {
+  const role = String((ctx && ctx.role) || '').toLowerCase();
+  if (role === 'superadmin') return 'all';
+  if (role === 'owner' || role === 'admin') return 'own';
+  return 'none';
+}
+
 module.exports = {
   AI_PROVIDERS, AI_TOOLS, aiToolAllowed, detectImageType, aiParseToolBlock,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
-  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult
+  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope
 };
 

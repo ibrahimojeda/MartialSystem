@@ -12,7 +12,8 @@ const {
   hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
   buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
-  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult
+  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9487,9 +9488,18 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
 
   if (tool === 'billing') {
     // Mensualidades de los dojos (system_usage_bills) con el nombre del establecimiento.
+    const scope = systemBillingScope(ctx);
+    if (scope === 'none') return { rows: [], meta: { count: 0, note: 'Sin permisos para facturación del sistema.' } };
+    let effectiveEstId = null;
+    if (scope === 'own') {
+      effectiveEstId = ctx.establishmentId || null;
+      if (!effectiveEstId) return { rows: [], meta: { count: 0 } };
+    } else {
+      effectiveEstId = estId || null;
+    }
     const sel = 'id,establishment_id,billing_month,plan_code,amount,currency,status,due_date,paid_at,confirmed_at,establishments(name)';
     let query = supabaseAdmin.from('system_usage_bills').select(sel);
-    if (!ctx.isSuperadmin && estId) query = query.eq('establishment_id', estId);
+    if (effectiveEstId) query = query.eq('establishment_id', effectiveEstId);
     const st = String((params && (params.status || params.estado)) || '').trim().toLowerCase();
     if (st) query = query.eq('status', st);
     const { data, error } = await query.order('due_date', { ascending: false }).limit(MAX);
@@ -9665,11 +9675,41 @@ async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
   }
 
   if (tool === 'billing') {
-    let query = supabaseAdmin.from('system_usage_bills').select('id', { count: 'exact', head: true });
-    if (estId) query = query.eq('establishment_id', estId);
-    const { count, error } = await query;
+    const scope = systemBillingScope(ctx);
+    if (scope === 'none') throw new Error('Sin permisos para facturación del sistema.');
+    let effectiveEstId = null;
+    if (scope === 'own') {
+      effectiveEstId = ctx.establishmentId || null;
+      if (!effectiveEstId) return { count: 0, uniqueBy: 'establishment_id', tool, kind, filters: f };
+    } else {
+      effectiveEstId = estId || null;
+    }
+
+    if (kind === 'summary') {
+      let query = supabaseAdmin.from('system_usage_bills').select('establishment_id, amount, status');
+      if (effectiveEstId) query = query.eq('establishment_id', effectiveEstId);
+      query = query.in('status', ['pending', 'overdue']);
+      const { data, error } = await query.limit(50000);
+      if (error) throw new Error(error.message);
+      const rows = data || [];
+      const overdueSet = new Set(); const pendingSet = new Set();
+      let overdueTotal = 0, pendingTotal = 0;
+      rows.forEach(b => {
+        const amt = Number(b.amount || 0);
+        if (b.status === 'overdue') { overdueSet.add(b.establishment_id); overdueTotal += amt; }
+        else if (b.status === 'pending') { pendingSet.add(b.establishment_id); pendingTotal += amt; }
+      });
+      return { count: overdueSet.size + pendingSet.size, uniqueBy: 'establishment_id', tool, kind, filters: f, overdueCount: overdueSet.size, pendingCount: pendingSet.size, overdueTotal, pendingTotal };
+    }
+
+    const statuses = (f.status && f.status.length) ? f.status : ['pending', 'overdue'];
+    let query = supabaseAdmin.from('system_usage_bills').select('establishment_id');
+    if (effectiveEstId) query = query.eq('establishment_id', effectiveEstId);
+    query = query.in('status', statuses);
+    const { data, error } = await query.limit(50000);
     if (error) throw new Error(error.message);
-    return { count: count || 0, uniqueBy: null, tool, filters: f };
+    const unique = [...new Set((data || []).map(r => r.establishment_id).filter(Boolean))];
+    return { count: unique.length, uniqueBy: 'establishment_id', tool, kind, filters: f };
   }
 
   if (tool === 'users') {
@@ -10327,12 +10367,46 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     }
 
     const aiRole = await getAIContextRole(req, establishmentId);
-    const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null };
+    let aiUsername = '';
+    let aiFullName = '';
+    if (req.isSuperadmin) {
+      aiUsername = process.env.SUPERADMIN_USERNAME || 'venta';
+      aiFullName = '';
+    } else {
+      const { data: profRow } = await supabaseAdmin.from('profiles').select('username, full_name').eq('id', profileId).maybeSingle();
+      if (profRow) { aiUsername = profRow.username || ''; aiFullName = profRow.full_name || ''; }
+    }
+    const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null, username: aiUsername, fullName: aiFullName };
+
+    // ── Identidad determinística ("¿quién soy?") ───────────────────────
+    const identityQuery = aiDetectIdentityQuery(message);
+    if (identityQuery) {
+      const identity = getCurrentUserIdentity(ctx);
+      const identityContent = formatIdentityResult(identity);
+      return res.json({ ok: true, data: { content: identityContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, identity } });
+    }
 
     // ── Conteos determinísticos eficientes ─────────────────────────────
     // "¿Cuántos...?" se resuelve en backend con count:'exact', head:true (sin traer
     // filas, sin llamar al proveedor IA y sin escribir en la base).
     const countQuery = aiDetectCountQuery(message);
+    if (countQuery && countQuery.tool === 'billing') {
+      // Deuda de dojos (system_usage_bills): permisos estrictos, respuesta determinística.
+      const scope = systemBillingScope(ctx);
+      if (scope === 'none') {
+        return res.json({ ok: true, data: { content: 'No tienes permisos para consultar la facturación de la plataforma.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+      }
+      if (scope === 'own' && !ctx.establishmentId) {
+        return res.json({ ok: true, data: { content: 'No encontré facturas pendientes o vencidas de los dojos dentro de tu alcance autorizado.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+      }
+      try {
+        const countRes = await aiCountTool('billing', countQuery.kind, countQuery.filters, ctx, establishmentId);
+        const countContent = formatCountResult(countQuery, countRes);
+        return res.json({ ok: true, data: { content: countContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, count: countRes } });
+      } catch (countErr) {
+        return res.status(500).json({ ok: false, error: 'No pude contar los datos solicitados: ' + (countErr && countErr.message || 'error de base de datos') });
+      }
+    }
     if (countQuery && aiToolAllowed(countQuery.tool, aiRole, 'read')) {
       try {
         const countRes = await aiCountTool(countQuery.tool, countQuery.kind, countQuery.filters, ctx, establishmentId);

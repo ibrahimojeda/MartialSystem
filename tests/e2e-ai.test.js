@@ -667,3 +667,97 @@ test('AJ. IA consulta cargos vencidos sin llamar al modelo', async () => {
   assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
 });
 
+test('AK. "¿Qué usuario soy?" responde con la identidad de la sesión (superadmin)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat(superadminToken, '¿Qué usuario soy?');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('con rol Superadmin'));
+  assert.ok(!String(json.data.content).includes('Owner 1'), 'no devuelve lista global');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(providerA.metrics.chatCalls, 0, 'cero llamadas al modelo');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AL. "¿Quién soy?" responde solo la identidad del owner', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_owner_1', '¿Quién soy?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('Owner 1'));
+  assert.ok(String(json.data.content).includes('con rol owner'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AM. "¿Cuál es mi rol?" responde solo la identidad del instructor', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_instructor_1', '¿Cuál es mi rol?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('Instructor 1'));
+  assert.ok(String(json.data.content).includes('con rol instructor'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AN. "¿Cuántos dojos deben el sistema?" consulta system_usage_bills (superadmin)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.system_usage_bills.push(
+    { id: 'bill-ov1', establishment_id: 'est-1', billing_month: '2026-08', amount: 49, status: 'overdue', due_date: '2026-08-05' },
+    { id: 'bill-ov2', establishment_id: 'est-2', billing_month: '2026-08', amount: 99, status: 'overdue', due_date: '2026-08-05' },
+    { id: 'bill-pd1', establishment_id: 'est-2', billing_month: '2026-09', amount: 99, status: 'pending', due_date: '2026-09-05' }
+  );
+
+  const res = await aiChat(superadminToken, '¿Cuántos dojos deben el sistema?');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.equal(json.data.count.tool, 'billing');
+  assert.equal(json.data.count.overdueCount, 2);
+  assert.equal(json.data.count.pendingCount, 1);
+  assert.ok(String(json.data.content).includes('con facturas vencidas'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AO. Owner solo ve facturas de su propio dojo (system_usage_bills)', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.system_usage_bills.push(
+    { id: 'bill-ov3', establishment_id: 'est-1', billing_month: '2026-07', amount: 49, status: 'overdue', due_date: '2026-07-05' },
+    { id: 'bill-ov4', establishment_id: 'est-2', billing_month: '2026-07', amount: 99, status: 'overdue', due_date: '2026-07-05' }
+  );
+
+  const res = await aiChat('tok_owner_1', '¿Cuántos dojos deben el sistema?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count.tool, 'billing');
+  assert.equal(json.data.count.overdueCount, 1, 'solo est-1');
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+
+test('AP. Instructor no puede consultar facturación de dojos', async () => {
+  setConfig([{ id: 'p1', baseUrl: providerA.url }]);
+  supabaseMock.writes.length = 0;
+
+  const res = await aiChat('tok_instructor_1', '¿Cuánto debe mi dojo al sistema?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar la facturación de la plataforma.'));
+  assert.equal(providerA.metrics.interpretationCalls, 0, 'cero interpretaciones');
+  assert.equal(supabaseMock.writes.length, 0, 'sin escrituras');
+});
+

@@ -8,7 +8,8 @@ const {
   hasAIFeatureWith, shouldBlockBilling, isOverBudget, aiFailoverWith,
   aiDetectIntent, aiExtractSearchParams, buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
-  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult
+  aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -417,6 +418,88 @@ test('formatDetailedListResult produce texto paginado legible', () => {
   assert.ok(!s.includes('profile_id'));
   const empty = formatDetailedListResult({ rows: [], meta: { total: 0 } }, { tool: 'users', filters: { role: 'instructor' } }, {});
   assert.ok(empty.includes('No encontré instructores'));
+});
+
+// ─── Identidad determinística ───
+test('aiDetectIdentityQuery detecta "¿quién soy?" y variantes', () => {
+  assert.ok(aiDetectIdentityQuery('¿Qué usuario soy?'));
+  assert.ok(aiDetectIdentityQuery('¿Quién soy?'));
+  assert.ok(aiDetectIdentityQuery('¿Cuál es mi rol?'));
+  assert.ok(aiDetectIdentityQuery('¿Qué cuenta está conectada?'));
+  assert.equal(aiDetectIdentityQuery('¿Cuántos alumnos hay?'), null);
+  assert.equal(aiDetectIdentityQuery('hola'), null);
+});
+
+test('getCurrentUserIdentity extrae solo la identidad de la sesión', () => {
+  assert.deepEqual(
+    getCurrentUserIdentity({ profileId: 'p1', username: 'ana', fullName: 'Ana Lopez', role: 'owner', establishmentId: 'est-1' }),
+    { profileId: 'p1', username: 'ana', fullName: 'Ana Lopez', role: 'owner', establishmentId: 'est-1' }
+  );
+});
+
+test('formatIdentityResult superadmin es determinístico', () => {
+  assert.equal(
+    formatIdentityResult({ fullName: '', username: 'venta', role: 'superadmin' }),
+    'Eres venta, con rol Superadmin. Tienes acceso administrativo global.'
+  );
+});
+
+test('formatIdentityResult owner incluye username y rol', () => {
+  const s = formatIdentityResult({ fullName: 'Hiroshi Tanaka', username: 'hiroshi_tanaka', role: 'owner' });
+  assert.ok(s.includes('Eres Hiroshi Tanaka'));
+  assert.ok(s.includes('usuario hiroshi_tanaka'));
+  assert.ok(s.includes('con rol owner'));
+});
+
+// ─── Deuda de dojos → system_usage_bills (NO student_charges) ───
+test('aiDetectCountQuery enruta deuda de dojos a billing (no charges)', () => {
+  const q = aiDetectCountQuery('¿Cuántos dojos deben el sistema?');
+  assert.equal(q.tool, 'billing');
+  assert.equal(q.kind, 'summary');
+  assert.deepEqual(q.filters.status, ['pending', 'overdue']);
+});
+
+test('aiDetectCountQuery enruta facturas vencidas de dojos a billing overdue', () => {
+  const q = aiDetectCountQuery('¿Cuántos dojos tienen facturas vencidas?');
+  assert.equal(q.tool, 'billing');
+  assert.equal(q.kind, 'overdue_establishments');
+  assert.deepEqual(q.filters.status, ['overdue']);
+});
+
+test('aiDetectCountQuery NO confunde cargos de alumnos con deuda de dojos', () => {
+  const q = aiDetectCountQuery('¿Cuántos cargos están vencidos?');
+  assert.equal(q.tool, 'charges');
+});
+
+test('aiDetectIntent enruta "¿qué dojos deben?" a read_billing', () => {
+  assert.equal(aiDetectIntent('¿Qué dojos deben al sistema?'), 'read_billing');
+});
+
+// ─── Permisos de facturación del sistema ───
+test('systemBillingScope aplica permisos por rol', () => {
+  assert.equal(systemBillingScope({ role: 'superadmin' }), 'all');
+  assert.equal(systemBillingScope({ role: 'owner' }), 'own');
+  assert.equal(systemBillingScope({ role: 'admin' }), 'own');
+  assert.equal(systemBillingScope({ role: 'instructor' }), 'none');
+  assert.equal(systemBillingScope({ role: 'sensei' }), 'none');
+  assert.equal(systemBillingScope({ role: 'student' }), 'none');
+  assert.equal(systemBillingScope({ role: 'guardian' }), 'none');
+});
+
+// ─── formatCountResult billing ───
+test('formatCountResult billing summary combina vencidos y pendientes', () => {
+  const s = formatCountResult(
+    { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } },
+    { overdueCount: 3, pendingCount: 2, overdueTotal: 147, pendingTotal: 0 }
+  );
+  assert.ok(s.includes('Hay 3 dojos con facturas vencidas'));
+  assert.ok(s.includes('2 dojos con facturas pendientes'));
+  assert.ok(s.includes('$147'));
+});
+
+test('formatCountResult billing sin resultados', () => {
+  const s = formatCountResult({ tool: 'billing', kind: 'summary' }, { overdueCount: 0, pendingCount: 0, overdueTotal: 0 });
+  assert.ok(s.includes('No encontré facturas pendientes o vencidas'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

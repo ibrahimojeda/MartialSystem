@@ -3875,6 +3875,324 @@ app.delete('/api/payments/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════
+// STUDENT CHARGES — Cuotas/Cargos por alumno (cuentas por cobrar)
+// ══════════════════════════════════════════════════════════════
+const CHARGE_TYPES = ['membership', 'exam', 'promotion', 'other'];
+const CHARGE_STATUSES = ['pending', 'partial', 'paid', 'overdue', 'cancelled'];
+
+function chargeStatusFromAmounts(amount, paidAmount) {
+  const a = Number(amount) || 0;
+  const p = Number(paidAmount) || 0;
+  if (p <= 0) return 'pending';
+  if (p >= a) return 'paid';
+  return 'partial';
+}
+
+function canChargeWrite(membership, req) {
+  return Boolean(req && req.isSuperadmin) || (membership && (membership.role === ROLE_OWNER || membership.role === ROLE_ADMIN));
+}
+
+// GET /api/student-charges — listar cargos (scoped por rol y tenancy)
+app.get('/api/student-charges', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, status, studentId, chargeType } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    const ctx = { profileId, role: membership.role, isSuperadmin: Boolean(req.isSuperadmin), establishmentId };
+    const scope = await getChargeStudentScope(ctx, establishmentId);
+
+    let query = supabaseAdmin.from('student_charges').select('*').eq('establishment_id', establishmentId).order('due_date', { ascending: true }).limit(500);
+    if (status) query = query.eq('status', status);
+    if (chargeType) query = query.eq('charge_type', chargeType);
+    if (scope !== null) query = query.in('student_id', scope.length ? scope : ['__none__']);
+    if (studentId) {
+      if (scope !== null && !scope.includes(studentId)) return res.status(403).json({ ok: false, error: 'No access to this student charges' });
+      query = query.eq('student_id', studentId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true, data: data || [] });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load charges' });
+  }
+});
+
+// POST /api/student-charges — crear cargo (owner/admin/superadmin)
+app.post('/api/student-charges', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, studentId, disciplineId, chargeType, periodKey, description, amount, currency, dueDate } = req.body || {};
+  if (!establishmentId || !studentId || !description || amount === undefined || amount === null || !dueDate) {
+    return res.status(400).json({ ok: false, error: 'establishmentId, studentId, description, amount and dueDate are required' });
+  }
+  const amt = Number(amount);
+  if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ ok: false, error: 'amount must be > 0' });
+  const type = chargeType || 'membership';
+  if (!CHARGE_TYPES.includes(type)) return res.status(400).json({ ok: false, error: 'invalid chargeType' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    if (!canChargeWrite(membership, req)) return res.status(403).json({ ok: false, error: 'Tu rol no permite crear cargos' });
+
+    const { data: studentCheck, error: studentCheckError } = await supabaseAdmin.from('students').select('id').eq('id', studentId).eq('establishment_id', establishmentId).maybeSingle();
+    if (studentCheckError) throw new Error(studentCheckError.message);
+    if (!studentCheck) return res.status(400).json({ ok: false, error: 'Student does not belong to establishment' });
+
+    const { data, error } = await supabaseAdmin.from('student_charges').insert({
+      id: crypto.randomUUID(),
+      establishment_id: establishmentId,
+      student_id: studentId,
+      discipline_id: disciplineId || null,
+      charge_type: type,
+      period_key: periodKey || null,
+      description: String(description),
+      amount: amt,
+      currency: currency || 'ARS',
+      due_date: dueDate,
+      status: 'pending',
+      paid_amount: 0,
+      created_by: profileId
+    }).select('*').single();
+
+    if (error) throw new Error(error.message);
+    return res.json({ ok: true, data });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not create charge' });
+  }
+});
+
+// GET /api/student-charges/summary — resumen de cargos por estado y montos
+app.get('/api/student-charges/summary', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.query;
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const ctx = { profileId, role: membership.role, isSuperadmin: Boolean(req.isSuperadmin), establishmentId };
+    const scope = await getChargeStudentScope(ctx, establishmentId);
+
+    let query = supabaseAdmin.from('student_charges').select('id, amount, paid_amount, status').eq('establishment_id', establishmentId).limit(10000);
+    if (scope !== null) query = query.in('student_id', scope.length ? scope : ['__none__']);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const counts = { pending: 0, partial: 0, paid: 0, overdue: 0, cancelled: 0 };
+    let totalPending = 0, totalOverdue = 0;
+    for (const r of (data || [])) {
+      counts[r.status] = (counts[r.status] || 0) + 1;
+      const rem = Number(r.amount) - Number(r.paid_amount || 0);
+      if (r.status === 'pending' || r.status === 'partial') totalPending += rem;
+      if (r.status === 'overdue') totalOverdue += rem;
+    }
+    return res.json({ ok: true, data: { counts, totalPending: Number(totalPending.toFixed(2)), totalOverdue: Number(totalOverdue.toFixed(2)) } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load summary' });
+  }
+});
+
+// GET /api/student-charges/:id — ver un cargo (scoped)
+app.get('/api/student-charges/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  try {
+    const { data: charge, error } = await supabaseAdmin.from('student_charges').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!charge) return res.status(404).json({ ok: false, error: 'Cargo no encontrado' });
+
+    const membership = await getMembership(profileId, charge.establishment_id);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    const ctx = { profileId, role: membership.role, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: charge.establishment_id };
+    const scope = await getChargeStudentScope(ctx, charge.establishment_id);
+    if (scope !== null && !scope.includes(charge.student_id)) return res.status(403).json({ ok: false, error: 'No access to this charge' });
+
+    return res.json({ ok: true, data: charge });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not load charge' });
+  }
+});
+
+// PATCH /api/student-charges/:id — editar cargo pendiente o cancelar (owner/admin/superadmin)
+app.patch('/api/student-charges/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { description, amount, dueDate, chargeType, periodKey, cancel } = req.body || {};
+  try {
+    const { data: charge, error } = await supabaseAdmin.from('student_charges').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!charge) return res.status(404).json({ ok: false, error: 'Cargo no encontrado' });
+
+    const membership = await getMembership(profileId, charge.establishment_id);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (!canChargeWrite(membership, req)) return res.status(403).json({ ok: false, error: 'Tu rol no permite modificar cargos' });
+
+    if (cancel) {
+      if (charge.status === 'paid') return res.status(400).json({ ok: false, error: 'No se puede cancelar un cargo pagado' });
+      if (charge.status === 'cancelled') return res.json({ ok: true, data: charge });
+      const { error: cErr } = await supabaseAdmin.from('student_charges').eq('id', id).update({ status: 'cancelled', cancelled_at: new Date().toISOString() });
+      if (cErr) throw new Error(cErr.message);
+      const { data: cancelled } = await supabaseAdmin.from('student_charges').eq('id', id).maybeSingle();
+      return res.json({ ok: true, data: cancelled });
+    }
+
+    if (charge.status !== 'pending') {
+      return res.status(400).json({ ok: false, error: 'Solo se pueden editar cargos pendientes' });
+    }
+
+    const patch = {};
+    if (description !== undefined) patch.description = String(description);
+    if (dueDate !== undefined) patch.due_date = dueDate;
+    if (periodKey !== undefined) patch.period_key = periodKey;
+    if (chargeType !== undefined) {
+      if (!CHARGE_TYPES.includes(chargeType)) return res.status(400).json({ ok: false, error: 'invalid chargeType' });
+      patch.charge_type = chargeType;
+    }
+    if (amount !== undefined) {
+      const amt = Number(amount);
+      if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ ok: false, error: 'amount must be > 0' });
+      patch.amount = amt;
+    }
+
+    const { error: upErr } = await supabaseAdmin.from('student_charges').eq('id', id).update(patch);
+    if (upErr) throw new Error(upErr.message);
+    const { data: updated } = await supabaseAdmin.from('student_charges').eq('id', id).maybeSingle();
+    return res.json({ ok: true, data: updated });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not update charge' });
+  }
+});
+
+// POST /api/student-charges/:id/apply-payment — aplicar un pago a un cargo
+app.post('/api/student-charges/:id/apply-payment', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const { paymentId, amountApplied } = req.body || {};
+  if (!paymentId || amountApplied === undefined || amountApplied === null) return res.status(400).json({ ok: false, error: 'paymentId and amountApplied are required' });
+  const applied = Number(amountApplied);
+  if (!Number.isFinite(applied) || applied <= 0) return res.status(400).json({ ok: false, error: 'amountApplied must be > 0' });
+
+  try {
+    const { data: charge, error } = await supabaseAdmin.from('student_charges').select('*').eq('id', id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!charge) return res.status(404).json({ ok: false, error: 'Cargo no encontrado' });
+    if (charge.status === 'cancelled') return res.status(400).json({ ok: false, error: 'No se puede aplicar pago a un cargo cancelado' });
+
+    const membership = await getMembership(profileId, charge.establishment_id);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (!canChargeWrite(membership, req)) return res.status(403).json({ ok: false, error: 'Tu rol no permite aplicar pagos' });
+
+    const { data: payment, error: payErr } = await supabaseAdmin.from('payments').select('id, establishment_id, student_id, amount').eq('id', paymentId).maybeSingle();
+    if (payErr) throw new Error(payErr.message);
+    if (!payment) return res.status(404).json({ ok: false, error: 'Pago no encontrado' });
+    if (payment.establishment_id !== charge.establishment_id || payment.student_id !== charge.student_id) {
+      return res.status(400).json({ ok: false, error: 'El pago no corresponde al mismo establecimiento y alumno' });
+    }
+
+    const remaining = Number(charge.amount) - Number(charge.paid_amount || 0);
+    if (applied > remaining) return res.status(400).json({ ok: false, error: 'El monto aplicado supera el saldo pendiente' });
+
+    const { data: existingApp } = await supabaseAdmin.from('student_charge_payments').select('id').eq('charge_id', id).eq('payment_id', paymentId).maybeSingle();
+    if (existingApp) return res.status(400).json({ ok: false, error: 'El pago ya fue aplicado a este cargo' });
+
+    const { data: apps } = await supabaseAdmin.from('student_charge_payments').select('amount_applied').eq('payment_id', paymentId);
+    const already = (apps || []).reduce((s, a) => s + Number(a.amount_applied || 0), 0);
+    if (already + applied > Number(payment.amount)) return res.status(400).json({ ok: false, error: 'El pago no tiene saldo suficiente' });
+
+    const { error: linkErr } = await supabaseAdmin.from('student_charge_payments').insert({ id: crypto.randomUUID(), charge_id: id, payment_id: paymentId, amount_applied: applied, created_by: profileId });
+    if (linkErr) throw new Error(linkErr.message);
+
+    const newPaid = Number(charge.paid_amount || 0) + applied;
+    const newStatus = chargeStatusFromAmounts(charge.amount, newPaid);
+    const patch = { paid_amount: newPaid, status: newStatus };
+    if (newStatus === 'paid') patch.paid_at = new Date().toISOString();
+    const { error: upErr } = await supabaseAdmin.from('student_charges').eq('id', id).update(patch);
+    if (upErr) throw new Error(upErr.message);
+
+    const { data: updated } = await supabaseAdmin.from('student_charges').eq('id', id).maybeSingle();
+    return res.json({ ok: true, data: updated });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not apply payment' });
+  }
+});
+
+// POST /api/student-charges/generate-monthly — generación idempotente de mensualidades
+app.post('/api/student-charges/generate-monthly', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId, periodKey, dueDate, amount, currency, description, disciplineId, studentIds } = req.body || {};
+  if (!establishmentId || !periodKey || !dueDate || amount === undefined || amount === null) {
+    return res.status(400).json({ ok: false, error: 'establishmentId, periodKey, dueDate and amount are required' });
+  }
+  const amt = Number(amount);
+  if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ ok: false, error: 'amount must be > 0' });
+
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (!canChargeWrite(membership, req)) return res.status(403).json({ ok: false, error: 'Tu rol no permite generar cargos' });
+
+    let targets;
+    if (Array.isArray(studentIds) && studentIds.length) {
+      const { data: stus } = await supabaseAdmin.from('students').select('id').eq('establishment_id', establishmentId).in('id', studentIds);
+      targets = (stus || []).map(s => s.id);
+    } else {
+      const { data: stus } = await supabaseAdmin.from('students').select('id').eq('establishment_id', establishmentId).limit(10000);
+      targets = (stus || []).map(s => s.id);
+    }
+
+    const created = [];
+    const skipped = [];
+    const errors = [];
+    for (const sid of targets) {
+      try {
+        const { data: existing } = await supabaseAdmin.from('student_charges').select('id, status').eq('establishment_id', establishmentId).eq('student_id', sid).eq('charge_type', 'membership').eq('period_key', periodKey);
+        if ((existing || []).some(c => c.status !== 'cancelled')) { skipped.push(sid); continue; }
+        const { error: insErr } = await supabaseAdmin.from('student_charges').insert({
+          id: crypto.randomUUID(), establishment_id: establishmentId, student_id: sid,
+          discipline_id: disciplineId || null, charge_type: 'membership', period_key: periodKey,
+          description: description || ('Mensualidad ' + periodKey), amount: amt,
+          currency: currency || 'ARS', due_date: dueDate, status: 'pending', paid_amount: 0, created_by: profileId
+        });
+        if (insErr) { errors.push({ studentId: sid, error: insErr.message }); continue; }
+        created.push(sid);
+      } catch (e) { errors.push({ studentId: sid, error: e.message }); }
+    }
+    return res.json({ ok: true, data: { created, skipped, errors } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not generate charges' });
+  }
+});
+
+// POST /api/student-charges/mark-overdue — marcar vencidos (pending/partial con due_date < hoy)
+app.post('/api/student-charges/mark-overdue', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { establishmentId } = req.body || {};
+  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
+  try {
+    const membership = await getMembership(profileId, establishmentId);
+    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+    if (!canChargeWrite(membership, req)) return res.status(403).json({ ok: false, error: 'Tu rol no permite marcar vencidos' });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: due } = await supabaseAdmin.from('student_charges').select('id, student_id, description, due_date').eq('establishment_id', establishmentId).in('status', ['pending', 'partial']).lt('due_date', today).limit(1000);
+    let marked = 0;
+    for (const c of (due || [])) {
+      const { error: upErr } = await supabaseAdmin.from('student_charges').eq('id', c.id).update({ status: 'overdue' });
+      if (upErr) continue;
+      marked += 1;
+      try {
+        await supabaseAdmin.from('notifications').insert({ establishment_id: establishmentId, audience_role: 'owner', title: 'Cargo vencido', body: 'El cargo "' + c.description + '" está vencido desde el ' + c.due_date + '.', is_read: false, created_by: profileId });
+      } catch (_) { /* best-effort */ }
+    }
+    return res.json({ ok: true, data: { marked } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not mark overdue' });
+  }
+});
+
 app.get('/api/reports/summary', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
   const { establishmentId, disciplineCode } = req.query;
@@ -9231,6 +9549,27 @@ async function getInstructorAuthorizedStudentIds(ctx, estId) {
   return [...new Set((enr || []).map(e => e.student_id).filter(Boolean))];
 }
 
+// Alcance por alumno para cargos/cuotas (student_charges).
+// - null: sin restricción (superadmin/owner/admin).
+// - [ids]: solo esos alumnos (student/guardian/sensei/instructor).
+async function getChargeStudentScope(ctx, estId) {
+  if (ctx.role === 'superadmin' || ctx.role === 'owner' || ctx.role === 'admin') return null;
+  if (ctx.role === 'student') {
+    if (!estId) return [];
+    const { data: s } = await supabaseAdmin.from('students').select('id').eq('establishment_id', estId).eq('profile_id', ctx.profileId).maybeSingle();
+    return s && s.id ? [s.id] : [];
+  }
+  if (ctx.role === 'guardian') {
+    if (!estId) return [];
+    const { data: links } = await supabaseAdmin.from('guardian_students').select('student_id').eq('establishment_id', estId).eq('guardian_profile_id', ctx.profileId).limit(5000);
+    return [...new Set((links || []).map(l => l.student_id).filter(Boolean))];
+  }
+  if (ctx.role === 'sensei' || ctx.role === 'instructor') {
+    return getInstructorAuthorizedStudentIds(ctx, estId);
+  }
+  return [];
+}
+
 // ── Conteos determinísticos eficientes ────────────────────────────────────────
 // Resuelve "¿cuántos...?" directamente en Supabase sin traer filas (count:'exact',
 // head:true) y sin llamar al proveedor IA. Respeta rol/establecimiento y NUNCA escribe.
@@ -9323,6 +9662,17 @@ async function aiCountTool(tool, kind, filters, ctx, establishmentId) {
     return { count: count || 0, uniqueBy: null, tool, filters: f };
   }
 
+  if (tool === 'charges') {
+    let query = supabaseAdmin.from('student_charges').select('id', { count: 'exact', head: true });
+    if (estId) query = query.eq('establishment_id', estId);
+    if (f.status) query = query.eq('status', f.status);
+    const scope = await getChargeStudentScope(ctx, estId);
+    if (scope !== null) query = query.in('student_id', scope.length ? scope : ['__none__']);
+    const { count, error } = await query;
+    if (error) throw new Error(error.message);
+    return { count: count || 0, uniqueBy: null, tool, filters: f };
+  }
+
   throw new Error('Herramienta de conteo no soportada.');
 }
 
@@ -9381,6 +9731,7 @@ async function aiListTool(tool, params, ctx, establishmentId) {
   if (tool === 'payments') return aiListPayments(params, ctx, estId, page, pageSize, from, to);
   if (tool === 'classes') return aiListClasses(params, ctx, estId, page, pageSize, from, to);
   if (tool === 'billing') return aiListBilling(params, ctx, estId, page, pageSize, from, to);
+  if (tool === 'charges') return aiListCharges(params, ctx, estId, page, pageSize, from, to);
   throw new Error('Dominio de listado no soportado.');
 }
 
@@ -9653,6 +10004,55 @@ async function aiListBilling(params, ctx, estId, page, pageSize, from, to) {
   }));
 
   return { rows, meta: listMeta(totalN, page, pageSize, 'billing', params) };
+}
+
+async function aiListCharges(params, ctx, estId, page, pageSize, from, to) {
+  const status = (params && params.status) || null;
+  const scope = await getChargeStudentScope(ctx, estId);
+
+  const build = (sel, opts) => {
+    let query = supabaseAdmin.from('student_charges').select(sel, opts);
+    if (estId) query = query.eq('establishment_id', estId);
+    if (status) query = query.eq('status', status);
+    if (scope !== null) query = query.in('student_id', scope.length ? scope : ['__none__']);
+    return query;
+  };
+
+  const { count: total, error: totalErr } = await build('id', { count: 'exact', head: true });
+  if (totalErr) throw new Error(totalErr.message);
+  const totalN = total || 0;
+
+  const { data, error } = await build('id, student_id, charge_type, period_key, description, amount, currency, due_date, status, paid_amount, establishment_id').order('due_date', { ascending: true }).range(from, to);
+  if (error) throw new Error(error.message);
+  const rows0 = data || [];
+
+  const studentIds = [...new Set(rows0.map(r => r.student_id).filter(Boolean))];
+  const estIds = [...new Set(rows0.map(r => r.establishment_id).filter(Boolean))];
+  const studentsById = {};
+  if (studentIds.length) {
+    const { data: stus } = await supabaseAdmin.from('students').select('id, full_name').in('id', studentIds);
+    (stus || []).forEach(s => { studentsById[s.id] = s; });
+  }
+  const establishmentsById = {};
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds);
+    (ests || []).forEach(e => { establishmentsById[e.id] = e; });
+  }
+
+  const rows = rows0.map(r => ({
+    full_name: studentsById[r.student_id] ? studentsById[r.student_id].full_name : null,
+    description: r.description || null,
+    charge_type: r.charge_type || null,
+    period_key: r.period_key || null,
+    amount: r.amount,
+    currency: r.currency || 'ARS',
+    remaining_amount: Number(r.amount) - Number(r.paid_amount || 0),
+    due_date: r.due_date || null,
+    status: r.status || null,
+    establishment_name: establishmentsById[r.establishment_id] ? establishmentsById[r.establishment_id].name : null
+  }));
+
+  return { rows, meta: listMeta(totalN, page, pageSize, 'charges', params) };
 }
 
 // Genera una contraseña segura para SUGERIR al crear usuarios. La IA solo propone;

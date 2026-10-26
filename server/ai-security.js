@@ -15,6 +15,7 @@ const AI_TOOLS = {
   payments:      { label: 'Pagos',          formId: 'payment-form',           read: ['superadmin','owner','admin','sensei','instructor','student','guardian'], write: ['superadmin','owner','admin'], delete: ['superadmin','owner','admin'] },
   notifications: { label: 'Notificaciones', formId: 'notification-form',      read: ['superadmin','owner','admin','sensei','instructor'],                 write: ['superadmin','owner','admin','sensei','instructor'], delete: [] },
   billing:       { label: 'Mensualidades/Facturas', formId: 'billing-form',   read: ['superadmin','owner','admin'],                                        write: [], delete: [] },
+  charges:       { label: 'Cargos/Cuotas',        formId: 'charge-form',      read: ['superadmin','owner','admin','sensei','instructor','student','guardian'], write: ['superadmin','owner','admin'], delete: [] },
   users:         { label: 'Usuarios',       formId: 'admin-create-user-form', read: ['superadmin','owner','sensei'],                                       write: ['superadmin','owner','sensei'], delete: [] }
 };
 
@@ -257,6 +258,10 @@ function aiDetectCountQuery(message) {
     return { tool: 'billing', kind: 'total', filters: {} };
   }
 
+  if (/cargo|cargos|cuota|cuotas|ad[eu]dan|deben\s+(?:este\s+mes|dinero)|vencid[oa]s?|atrasad[oa]s?/.test(text)) {
+    return { tool: 'charges', kind: 'total', filters: { status: /vencid|atrasad/.test(text) ? 'overdue' : 'pending' } };
+  }
+
   if (/instructor|instructores|profesor|profesores|maestro|maestros/.test(text)) {
     return { tool: 'users', kind: 'total', filters: { role: 'instructor' } };
   }
@@ -312,6 +317,13 @@ function formatCountResult(query, result) {
       ? 'No encontré ' + ulabel + ' dentro de tu alcance autorizado.'
       : 'Hay ' + n + ' ' + ulabel + '.';
   }
+  if (tool === 'charges') {
+    const cstatus = (query && query.filters && query.filters.status) || 'pending';
+    const clabel = cstatus === 'overdue' ? 'cargos vencidos' : 'cargos pendientes';
+    return n === 0
+      ? 'No encontré ' + clabel + ' dentro de tu alcance autorizado.'
+      : 'Hay ' + n + ' ' + clabel + '.';
+  }
   return n === 0
     ? 'No encontré resultados dentro de tu alcance autorizado.'
     : 'Encontré ' + n + (n === 1 ? ' resultado' : ' resultados') + '.';
@@ -331,13 +343,17 @@ function aiDetectDetailedQuery(message) {
   const hasFilter = new RegExp('de\\s+(' + DETAILED_LIST_DISCIPLINES.join('|') + ')').test(text)
     || /del?\s+(?:dojo|academia|gimnasio)\s+[a-z0-9áéíóúñü]/.test(text);
   const listVerb = /mu[eé]strame|l[ií]stame|quiero\s+(?:ver|la\s+lista)|dame\s+la\s+lista|lista\s+de\b|listado\s+de\b/.test(text);
+  const chargesMarkers = /qui[eé]nes\s+(deben|ad[eu]dan|tienen\s+.*vencid)|cargo|cargos|cuota|cuotas|vencid[oa]s?|atrasad[oa]s?/.test(text);
 
-  if (!detailedMarkers.test(text) && !(listVerb && hasFilter)) return null;
+  if (!detailedMarkers.test(text) && !(listVerb && hasFilter) && !chargesMarkers) return null;
 
   const filters = {};
   let tool = null;
 
-  if (/instructor|instructores|profesor|profesores|maestro|maestros/.test(text)) { tool = 'users'; filters.role = 'instructor'; }
+  if (/cargo|cargos|cuota|cuotas|deben|ad[eu]dan|vencid|atrasad|mensualidad\s+vencida/.test(text) && !/instructor|sensei|clase|pago|pagos/.test(text)) {
+    tool = 'charges';
+    filters.status = /vencid|atrasad/.test(text) ? 'overdue' : 'pending';
+  } else if (/instructor|instructores|profesor|profesores|maestro|maestros/.test(text)) { tool = 'users'; filters.role = 'instructor'; }
   else if (/sensei|senseis/.test(text)) { tool = 'users'; filters.role = 'sensei'; }
   else if (/pago|pagos/.test(text)) { tool = 'payments'; }
   else if (/clase|clases|horario|horarios/.test(text)) { tool = 'classes'; }
@@ -376,7 +392,7 @@ function formatDetailedListResult(listRes, query, ctx) {
 
   const label = role === 'instructor' ? 'instructores'
     : role === 'sensei' ? 'senseis'
-    : { students: 'alumnos', payments: 'pagos', classes: 'clases', billing: 'facturas', users: 'usuarios' }[domain] || 'registros';
+    : { students: 'alumnos', payments: 'pagos', classes: 'clases', billing: 'facturas', charges: 'cargos', users: 'usuarios' }[domain] || 'registros';
 
   if (!rows.length) {
     return 'No encontré ' + label + ' dentro de tu alcance autorizado.';
@@ -405,9 +421,13 @@ function formatDetailedRow(r, domain, idx) {
   if (r.phone) lines.push('   Teléfono: ' + r.phone);
   if (r.current_rank) lines.push('   Rango: ' + r.current_rank);
   if (r.status && r.status !== r.is_active) lines.push('   Estado: ' + r.status);
+  if (r.description) lines.push('   Concepto: ' + r.description);
+  if (r.period_key) lines.push('   Periodo: ' + r.period_key);
   if (r.amount !== undefined && r.amount !== null) lines.push('   Monto: $' + Number(r.amount).toLocaleString());
   if (r.paid_at) lines.push('   Fecha: ' + String(r.paid_at).slice(0, 10));
   if (r.concept) lines.push('   Concepto: ' + r.concept);
+  if (r.remaining_amount !== undefined && r.remaining_amount !== null) lines.push('   Saldo pendiente: $' + Number(r.remaining_amount).toLocaleString());
+  if (r.due_date) lines.push('   Vence: ' + String(r.due_date).slice(0, 10));
   if (r.scheduled_date) lines.push('   Fecha: ' + String(r.scheduled_date).slice(0, 10));
   if (r.start_time && r.end_time) lines.push('   Horario: ' + r.start_time + ' – ' + r.end_time);
   if (r.location) lines.push('   Lugar: ' + r.location);

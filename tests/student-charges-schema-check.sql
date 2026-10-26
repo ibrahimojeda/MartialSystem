@@ -40,13 +40,13 @@ order by tablename, indexname;
 select conrelid::regclass as tabla, conname, pg_get_constraintdef(oid) as definicion
 from pg_constraint
 where contype = 'f'
-  and conrelid in ('public.student_charges'::regclass, 'public.student_charge_payments'::regclass)
+  and conrelid in (to_regclass('public.student_charges'), to_regclass('public.student_charge_payments'))
 order by conrelid::regclass::text, conname;
 
 -- 6) RLS habilitado (debe devolver "enabled")
 select c.relname as tabla, c.relrowsecurity as rls_habilitado
 from pg_class c
-where c.oid in ('public.student_charges'::regclass, 'public.student_charge_payments'::regclass)
+where c.oid in (to_regclass('public.student_charges'), to_regclass('public.student_charge_payments'))
 order by c.relname;
 
 -- 7) Trigger updated_at (debe devolver una fila)

@@ -54,6 +54,23 @@ async function preflight() {
   process.exit(2);
 }
 
+// Preflight 2: con token de owner, verifica que las columnas/relaciones esperadas
+// existan (migración completa). Distingue "tabla inexistente" (503, ya cubierto)
+// de "tabla existe pero faltan columnas" (error 42P01/42703 de PostgREST).
+async function preflightColumns(owner, estOwn) {
+  if (!owner || !estOwn) return;
+  const res = await req('GET', '/api/student-charges?establishmentId=' + encodeURIComponent(estOwn), owner);
+  if (res.status === 200) { console.log('Preflight columnas OK (GET cargos responde 200).'); return; }
+  const msg = (res.json && res.json.error) || '';
+  if (/does not exist|undefined_column|42703|42P01|column/i.test(msg)) {
+    console.error('DIAGNÓSTICO: las tablas existen pero faltan columnas/relaciones esperadas.');
+    console.error('La migración 019 pudo quedar parcial. Revisa el historial del SQL Editor.');
+    console.error('Detalle (sin datos sensibles): ' + String(msg).slice(0, 200));
+    process.exit(2);
+  }
+  console.log('Preflight columnas: status ' + res.status + ' (se reportará en las pruebas).');
+}
+
 async function main() {
   console.log('== Validación student_charges en STAGING ==');
   console.log('URL: ' + BASE_URL);
@@ -74,6 +91,8 @@ async function main() {
   const estOther = env('STAGING_EST_OTHER_ID');
   const stuOwn = env('STAGING_STUDENT_OWN_ID');
   const stuOther = env('STAGING_STUDENT_OTHER_ID');
+
+  await preflightColumns(owner, estOwn);
 
   console.log('\n== A. Activación controlada (tabla no disponible) ==');
   ok('503 STUDENT_CHARGES_NOT_READY cubierto por preflight (si faltaran las tablas, el script ya habría abortado con diagnóstico)');

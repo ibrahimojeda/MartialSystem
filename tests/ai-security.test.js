@@ -525,6 +525,26 @@ test('formatEstablishmentBilling con deuda y factura vencida más antigua', () =
   assert.ok(s.includes('2026-08-05'));
 });
 
+test('aiDetectCountQuery enruta "dojos con pagos vencidos" a billing (no payments)', () => {
+  const q = aiDetectCountQuery('¿Cuántos dojos tienen pagos vencidos?');
+  assert.equal(q.tool, 'billing');
+  assert.equal(q.kind, 'overdue_establishments');
+  assert.deepEqual(q.filters.status, ['overdue']);
+});
+
+test('aiDetectCountQuery enruta "alumnos con pagos vencidos" a payments (no billing)', () => {
+  const q = aiDetectCountQuery('¿Cuántos alumnos tienen pagos vencidos?');
+  assert.notEqual(q.tool, 'billing');
+  assert.ok(q.tool === 'payments' || q.tool === 'charges');
+});
+
+test('aiDetectIntent prioriza entidad de establecimiento sobre "pagos vencidos"', () => {
+  assert.equal(aiDetectIntent('¿Cuántos dojos tienen pagos vencidos?'), 'read_billing');
+  assert.equal(aiDetectIntent('¿Qué academias deben al sistema?'), 'read_billing');
+  assert.equal(aiDetectIntent('¿Qué establecimientos están atrasados con el sistema?'), 'read_billing');
+  assert.equal(aiDetectIntent('¿Qué estudiantes deben mensualidad?'), 'read_charges');
+});
+
 console.log('Suite ai-security: ejecutada con node:test');
 
 

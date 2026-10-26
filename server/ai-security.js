@@ -34,7 +34,8 @@ function aiDetectIntent(message) {
   const readWords = /revisa|revisar|busca|buscar|muestra|mostrar|consulta|consultar|lista|listar|mira|mirar|cu[aá]les|qui[eé]nes|[úu]ltim|historial|cu[aá]ntos/.test(text);
   const writeWords = /crear|crea|registrar|registra|agregar|agrega|guardar|guarda|ingresar|cobra|cobrar|editar|actualizar/.test(text);
   if (writeWords && !readWords) return 'write';
-  if (/(dojo|dojos|academia|academias|dueñ|propietario|plataforma|martialsystem|moros).*(deben|debe|deuda|factura|mensualidad|cuota|vencid|saldo)|(deuda|factura|mensualidad|cuota de la plataforma).*(dojo|academia|plataforma|sistema)/.test(text)) return 'read_billing';
+  if (/(dojo|academia|establecimiento|dueñ|propietario|plataforma|martialsystem|sistema|moros).*(deben|debe|deuda|vencid|atrasad|factura|mensualidad|cuota|saldo|pendiente|moros)|(deuda|factura|mensualidad|cuota de la plataforma).*(dojo|academia|plataforma|sistema)/.test(text)) return 'read_billing';
+  if (/alumno|alumnos|estudiante|estudiantes/.test(text) && /mensualidad|cargo|cargos|cuota|cuotas|vencid|atrasad|ad[eu]dan/.test(text)) return 'read_charges';
   if (/pago|pagos|cobro|cobros|monto|importe|fecha de pago|pagaron|deben|adeudan/.test(text)) return 'read_payments';
   if (/alumno|alumnos|estudiante|estudiantes/.test(text)) return 'read_students';
   if (/clase|clases|horario|horarios|agenda/.test(text)) return 'read_classes';
@@ -79,7 +80,7 @@ function buildAIIntent(message) {
     return out;
   }
 
-  if (base === 'read_payments' || base === 'read_students' || base === 'read_classes' || base === 'read_users' || base === 'read_billing') {
+  if (base === 'read_payments' || base === 'read_students' || base === 'read_classes' || base === 'read_users' || base === 'read_billing' || base === 'read_charges') {
     out.intent = 'read';
     out.domain = base.slice(5);
     const sem = normalizeAISemantics(text);
@@ -229,6 +230,15 @@ function aiDetectCountQuery(message) {
   const hasPayments = /pago|pagos|pagaron|pag[aó]|cobro|cobros/.test(text);
   const hasClasses = /clase|clases/.test(text);
   const hasBilling = /mensualidad|mensualidades|factura|facturas|billing/.test(text);
+  const hasDojoDebt = /dojo|academia|establecimiento|dueñ|propietario|plataforma|martialsystem|sistema|moros/.test(text);
+
+  // PRIORIDAD SEMÁNTICA: deuda de dojos/academias → system_usage_bills (antes que payments/students/charges).
+  if (hasDojoDebt && /deben|debe|deuda|vencid|atrasad|factura|mensualidad|cuota|saldo|adeudan|pendiente|moros/.test(text)) {
+    const overdue = /vencid|atrasad|moros/.test(text);
+    if (overdue) return { tool: 'billing', kind: 'overdue_establishments', filters: { status: ['overdue'] } };
+    if (/pendiente|pendientes/.test(text)) return { tool: 'billing', kind: 'pending_establishments', filters: { status: ['pending'] } };
+    return { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } };
+  }
 
   // "¿Cuántos alumnos pagaron más de 0?" → alumnos únicos con al menos un pago > 0.
   if (hasStudents && hasPayments) {
@@ -253,16 +263,6 @@ function aiDetectCountQuery(message) {
 
   if (hasStudents) {
     return { tool: 'students', kind: 'total', filters: {} };
-  }
-
-  const hasDojoDebt = /dojo|dojos|academia|academias|dueñ|propietario|plataforma|martialsystem|moros/.test(text);
-
-  // Deuda de los dojos con MartialSystem → system_usage_bills (NO student_charges).
-  if (hasDojoDebt && /deben|debe|deuda|vencid|atrasad|factura|mensualidad|cuota|saldo|adeudan/.test(text)) {
-    const overdue = /vencid|atrasad|moros/.test(text);
-    if (overdue) return { tool: 'billing', kind: 'overdue_establishments', filters: { status: ['overdue'] } };
-    if (/pendiente|pendientes/.test(text)) return { tool: 'billing', kind: 'pending_establishments', filters: { status: ['pending'] } };
-    return { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } };
   }
 
   if (hasBilling) {

@@ -9617,6 +9617,19 @@ async function aiSearchTool(tool, params, ctx, establishmentId) {
     return { rows: rows.map(r => ({ id: r.id, profile_id: r.profile_id, role: r.role, full_name: r.profile?.full_name || null, username: r.profile?.username || null, is_active: r.profile?.is_active })), meta: { count: rows.length, query: q } };
   }
 
+  if (tool === 'charges') {
+    const sel = 'id,establishment_id,student_id,charge_type,period_key,description,amount,currency,due_date,status,paid_amount,created_at';
+    let query = supabaseAdmin.from('student_charges').select(sel);
+    if (estId) query = query.eq('establishment_id', estId);
+    const st = String((params && params.status) || '').trim().toLowerCase();
+    if (st) query = query.eq('status', st);
+    const scope = await getChargeStudentScope(ctx, estId);
+    if (scope !== null) query = query.in('student_id', scope.length ? scope : ['__none__']);
+    const { data, error } = await query.order('due_date', { ascending: true }).limit(MAX);
+    if (error) throw new Error(error.message);
+    return { rows: data || [], meta: { count: (data || []).length, query: q } };
+  }
+
   return { rows: [], meta: { count: 0, note: 'Herramienta de búsqueda no soportada.' } };
 }
 
@@ -10298,13 +10311,15 @@ async function aiProposeDelete(tool, params, ctx, establishmentId) {
 // una pregunta claramente de datos, se fuerza la búsqueda real (respeta rol/establecimiento).
 function aiRouteKeyword(message) {
   const m = String(message || '').toLowerCase();
-  if (/mensualidad|mensualidades|factura|facturas|billing/.test(m)) return 'billing';
-  // Prioridad de intención: pagos > clases > usuarios > alumnos (la acción principal manda).
   const intent = aiDetectIntent(message);
+  if (intent === 'read_billing') return 'billing';
+  if (intent === 'read_charges') return 'charges';
   if (intent === 'read_payments') return 'payments';
   if (intent === 'read_classes') return 'classes';
   if (intent === 'read_users') return 'users';
   if (intent === 'read_students') return 'students';
+  // Fallback: facturas/mensualidades genéricas (sin entidad de alumno) → billing.
+  if (/mensualidad|mensualidades|factura|facturas|billing/.test(m) && !/alumno|alumnos|estudiante|estudiantes/.test(m)) return 'billing';
   return null;
 }
 

@@ -269,3 +269,33 @@ test('17. Sin escrituras en consultas de solo lectura', async () => {
   await aiChat(superadminToken, '¿Cuánto debe Dojo Bushido?');
   assert.equal(supabaseMock.writes.length, 0, 'cero escrituras en consultas');
 });
+
+test('18. "¿Cuántos dojos tienen pagos vencidos?" → billing (system_usage_bills)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.system_usage_bills = [
+    { id: 'b-ov1', establishment_id: 'est-1', billing_month: '2026-08', amount: 49, currency: 'USD', status: 'overdue', due_date: '2026-08-05' },
+    { id: 'b-ov2', establishment_id: 'est-2', billing_month: '2026-08', amount: 99, currency: 'USD', status: 'overdue', due_date: '2026-08-05' },
+    { id: 'b-pd1', establishment_id: 'est-2', billing_month: '2026-09', amount: 99, currency: 'USD', status: 'pending', due_date: '2026-09-05' }
+  ];
+  const res = await aiChat(superadminToken, '¿Cuántos dojos tienen pagos vencidos?');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.equal(json.data.count.tool, 'billing');
+  assert.equal(json.data.count.kind, 'overdue_establishments');
+  assert.equal(json.data.count.count, 2, 'solo status=overdue');
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('19. "¿Cuántos alumnos tienen pagos vencidos?" → NO system_usage_bills', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat(superadminToken, '¿Cuántos alumnos tienen pagos vencidos?');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.notEqual(json.data.count.tool, 'billing');
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});

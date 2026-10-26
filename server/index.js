@@ -4052,9 +4052,9 @@ app.patch('/api/student-charges/:id', requireAuth, async (req, res) => {
     if (cancel) {
       if (charge.status === 'paid') return res.status(400).json({ ok: false, error: 'No se puede cancelar un cargo pagado' });
       if (charge.status === 'cancelled') return res.json({ ok: true, data: charge });
-      const { error: cErr } = await supabaseAdmin.from('student_charges').eq('id', id).update({ status: 'cancelled', cancelled_at: new Date().toISOString() });
+      const { error: cErr } = await supabaseAdmin.from('student_charges').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).eq('id', id);
       if (cErr) throw new Error(cErr.message);
-      const { data: cancelled } = await supabaseAdmin.from('student_charges').eq('id', id).maybeSingle();
+      const { data: cancelled } = await supabaseAdmin.from('student_charges').select('*').eq('id', id).maybeSingle();
       return res.json({ ok: true, data: cancelled });
     }
 
@@ -4076,9 +4076,9 @@ app.patch('/api/student-charges/:id', requireAuth, async (req, res) => {
       patch.amount = amt;
     }
 
-    const { error: upErr } = await supabaseAdmin.from('student_charges').eq('id', id).update(patch);
+    const { error: upErr } = await supabaseAdmin.from('student_charges').update(patch).eq('id', id);
     if (upErr) throw new Error(upErr.message);
-    const { data: updated } = await supabaseAdmin.from('student_charges').eq('id', id).maybeSingle();
+    const { data: updated } = await supabaseAdmin.from('student_charges').select('*').eq('id', id).maybeSingle();
     return res.json({ ok: true, data: updated });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not update charge' });
@@ -4128,10 +4128,10 @@ app.post('/api/student-charges/:id/apply-payment', requireAuth, async (req, res)
     const newStatus = chargeStatusFromAmounts(charge.amount, newPaid);
     const patch = { paid_amount: newPaid, status: newStatus };
     if (newStatus === 'paid') patch.paid_at = new Date().toISOString();
-    const { error: upErr } = await supabaseAdmin.from('student_charges').eq('id', id).update(patch);
+    const { error: upErr } = await supabaseAdmin.from('student_charges').update(patch).eq('id', id);
     if (upErr) throw new Error(upErr.message);
 
-    const { data: updated } = await supabaseAdmin.from('student_charges').eq('id', id).maybeSingle();
+    const { data: updated } = await supabaseAdmin.from('student_charges').select('*').eq('id', id).maybeSingle();
     return res.json({ ok: true, data: updated });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not apply payment' });
@@ -4199,7 +4199,7 @@ app.post('/api/student-charges/mark-overdue', requireAuth, async (req, res) => {
     const { data: due } = await supabaseAdmin.from('student_charges').select('id, student_id, description, due_date').eq('establishment_id', establishmentId).in('status', ['pending', 'partial']).lt('due_date', today).limit(1000);
     let marked = 0;
     for (const c of (due || [])) {
-      const { error: upErr } = await supabaseAdmin.from('student_charges').eq('id', c.id).update({ status: 'overdue' });
+      const { error: upErr } = await supabaseAdmin.from('student_charges').update({ status: 'overdue' }).eq('id', c.id);
       if (upErr) continue;
       marked += 1;
       try {

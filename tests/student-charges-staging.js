@@ -169,19 +169,23 @@ async function main() {
 
   console.log('\n== K/L/M/N. Pagos (parcial, completo, sobreaplicación, doble) ==');
   if (createdChargeId && stuOwn && estOwn) {
-    const payBody = { establishmentId: estOwn, studentId: stuOwn, amount: 500, currency: 'ARS', method: 'cash', concept: 'Pago sintético staging' };
-    const payCreate = await req('POST', '/api/payments', owner, payBody);
-    if (payCreate.status === 200 || payCreate.status === 201) {
-      const paymentId = payCreate.json.data.id;
-      const k = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId, amountApplied: 200 });
+    const mkPay = async (amount, concept) => {
+      const r = await req('POST', '/api/payments', owner, { establishmentId: estOwn, studentId: stuOwn, amount, currency: 'ARS', method: 'cash', concept });
+      return (r.json && r.json.data && r.json.data.id) || '';
+    };
+    const p1 = await mkPay(200, 'Pago parcial staging');
+    const p2 = await mkPay(300, 'Pago complemento staging');
+    const p3 = await mkPay(100, 'Pago sobreaplicacion staging');
+    if (p1 && p2 && p3) {
+      const k = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId: p1, amountApplied: 200 });
       if (k.json && k.json.data && k.json.data.status === 'partial' && Number(k.json.data.paid_amount) === 200) ok('pago parcial (partial, paid_amount=200)'); else fail('pago parcial');
-      const l = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId, amountApplied: 300 });
+      const l = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId: p2, amountApplied: 300 });
       if (l.json && l.json.data && l.json.data.status === 'paid') ok('pago completo → paid'); else fail('pago completo → paid');
-      const m = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId, amountApplied: 1 });
+      const m = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId: p3, amountApplied: 1 });
       if (m.status === 400) ok('sobreaplicación rechazada'); else fail('sobreaplicación rechazada (status ' + m.status + ')');
-      const n = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId, amountApplied: 50 });
+      const n = await req('POST', `/api/student-charges/${createdChargeId}/apply-payment`, owner, { paymentId: p1, amountApplied: 50 });
       if (n.status === 400) ok('doble aplicación rechazada'); else fail('doble aplicación rechazada (status ' + n.status + ')');
-    } else skip('pagos (no se pudo crear pago fixture)');
+    } else skip('pagos (no se pudieron crear pagos fixture)');
   } else skip('pagos (sin cargo creado)');
 
   console.log('\n== Q. IA consulta vencidos ==');

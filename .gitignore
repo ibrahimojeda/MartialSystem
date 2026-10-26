@@ -1,6 +1,7 @@
 # Entorno
 .env
 tests/.staging.env
+tests/.production.env
 
 # Dependencias
 node_modules/

@@ -1,5 +1,6 @@
 # Entorno
 .env
+tests/.staging.env
 
 # Dependencias
 node_modules/
@@ -14,6 +15,18 @@ assets/
 temp_upload_search.txt
 server_output.log
 simulator/reports/
+*.log
+*.pid
+hs_err_*.log
+
+# Builds de Android (APK) y artefactos de Capacitor
+*.apk
+_apk_check/
+_apk_xtract/
+
+# Tokens y archivos de depuración con datos sensibles
+tok.txt
+/_*.*
 
 # Archivos basura generados por herramientas de edición
 console.log(

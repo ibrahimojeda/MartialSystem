@@ -60,5 +60,9 @@ create trigger trg_student_charges_updated_at
   before update on student_charges
   for each row execute procedure set_updated_at();
 
+-- RLS: se habilita por defecto. El acceso lo administra el backend mediante
+-- supabaseAdmin (service_role), que bypasea RLS; no se definen políticas directas
+-- porque TODO el control de permisos/tenancy ocurre en server/index.js (getMembership
+-- + getChargeStudentScope), igual que payments y el resto de módulos.
 alter table student_charges enable row level security;
 alter table student_charge_payments enable row level security;

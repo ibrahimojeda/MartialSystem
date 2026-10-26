@@ -67,6 +67,7 @@ beforeEach(() => {
   supabaseMock.writes.length = 0;
   supabaseMock.clearErrors();
   require('../server/index.js').__resetRateLimit();
+  require('../server/index.js').__resetStudentChargesReady();
 });
 
 test('A. Crear cargo válido (owner)', async () => {
@@ -208,4 +209,16 @@ test('O. Error de Supabase no inventa cargos', async () => {
   assert.equal(res.status, 500);
   const json = await res.json();
   assert.equal(json.ok, false);
+});
+
+test('P. Tabla inexistente → 503 STUDENT_CHARGES_NOT_READY', async () => {
+  supabaseMock.setError('student_charges', 'relation "student_charges" does not exist');
+  require('../server/index.js').__resetStudentChargesReady();
+  const res = await req('GET', '/api/student-charges?establishmentId=est-1', 'tok_owner_1');
+  supabaseMock.clearErrors();
+  require('../server/index.js').__resetStudentChargesReady();
+  assert.equal(res.status, 503);
+  const json = await res.json();
+  assert.equal(json.code, 'STUDENT_CHARGES_NOT_READY');
+  assert.ok(!/stack|relation/i.test(JSON.stringify(json)), 'sin stack trace ni mensaje técnico');
 });

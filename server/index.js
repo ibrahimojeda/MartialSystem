@@ -3893,6 +3893,25 @@ function canChargeWrite(membership, req) {
   return Boolean(req && req.isSuperadmin) || (membership && (membership.role === ROLE_OWNER || membership.role === ROLE_ADMIN));
 }
 
+// Activación controlada: si la migración 019 aún no se aplicó (tabla inexistente),
+// responde 503 STUDENT_CHARGES_NOT_READY en lugar de un 500/stack confuso.
+let studentChargesReadyCache = null;
+const requireStudentCharges = async (req, res, next) => {
+  if (studentChargesReadyCache === true) return next();
+  try {
+    const { error } = await supabaseAdmin.from('student_charges').select('id').limit(1);
+    if (error && /does not exist|42P01|PGRST205|relation/i.test(String(error.message || ''))) {
+      studentChargesReadyCache = false;
+      return res.status(503).json({ ok: false, error: 'Módulo de cargos no disponible todavía', code: 'STUDENT_CHARGES_NOT_READY' });
+    }
+    studentChargesReadyCache = true;
+    return next();
+  } catch (_) {
+    return res.status(503).json({ ok: false, error: 'Módulo de cargos no disponible todavía', code: 'STUDENT_CHARGES_NOT_READY' });
+  }
+};
+app.use('/api/student-charges', requireStudentCharges);
+
 // GET /api/student-charges — listar cargos (scoped por rol y tenancy)
 app.get('/api/student-charges', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;
@@ -11014,7 +11033,8 @@ module.exports = {
   },
   __resetAICooldown: () => aiProviderCooldown.clear(),
   __resetDetailedListState: () => detailedListState.clear(),
-  __resetRateLimit: () => rateLimitBuckets.clear()
+  __resetRateLimit: () => rateLimitBuckets.clear(),
+  __resetStudentChargesReady: () => { studentChargesReadyCache = null; }
 };
 
 if (require.main === module) {

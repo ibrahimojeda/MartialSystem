@@ -100,7 +100,7 @@ begin
   end if;
 
   select relrowsecurity into rls from pg_class
-   where oid = 'public.student_charges'::regclass;
+   where oid = to_regclass('public.student_charges');
   if rls is distinct from true then
     raise notice 'DIAGNOSTICO: RLS NO habilitado en student_charges.';
   else

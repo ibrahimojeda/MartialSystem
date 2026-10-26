@@ -48,11 +48,12 @@ before(async () => {
   // Facturas del sistema: est-1 (propia) y est-2 (ajena).
   supabaseMock._tables.system_usage_bills = [
     { id: 'bill-1', establishment_id: 'est-1', billing_month: '2026-10', amount: 29, currency: 'USD', status: 'confirmed', due_date: '2026-10-05' },
-    { id: 'bill-2', establishment_id: 'est-1', billing_month: '2026-08', amount: 49, currency: 'USD', status: 'overdue', due_date: '2026-08-05' },
+    { id: 'bill-2', establishment_id: 'est-1', billing_month: '2026-08', amount: 49, currency: 'USD', status: 'overdue', due_date: '2026-08-05', paid_at: '2026-08-10', payment_reference: 'REF-2' },
     { id: 'bill-3', establishment_id: 'est-1', billing_month: '2026-09', amount: 49, currency: 'USD', status: 'pending', due_date: '2026-09-05' },
     { id: 'bill-4', establishment_id: 'est-2', billing_month: '2026-08', amount: 99, currency: 'USD', status: 'overdue', due_date: '2026-08-05' },
     { id: 'bill-5', establishment_id: 'est-2', billing_month: '2026-09', amount: 99, currency: 'ARS', status: 'pending', due_date: '2026-09-05' },
-    { id: 'bill-6', establishment_id: 'est-2', billing_month: '2026-07', amount: 99, currency: 'USD', status: 'waived', due_date: '2026-07-05' }
+    { id: 'bill-6', establishment_id: 'est-2', billing_month: '2026-07', amount: 99, currency: 'USD', status: 'waived', due_date: '2026-07-05' },
+    { id: 'bill-7', establishment_id: 'est-1', billing_month: '2026-06', amount: 49, currency: 'USD', status: 'paid', due_date: '2026-06-05', paid_at: '2026-06-10', payment_reference: 'REF-7' }
   ];
 
   setConfig();
@@ -184,25 +185,83 @@ test('8. Totales separados por moneda (no suma monedas distintas)', async () => 
   assert.equal(supabaseMock.writes.length, 0);
 });
 
-test('9. Confirmar pago es solo superadmin', async () => {
-  const res = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-2', {
+test('9. Confirmar pago es solo superadmin (rol no autorizado → 403)', async () => {
+  const res = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-3', {
     method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer tok_owner_1' },
     body: JSON.stringify({})
   });
   assert.equal(res.status, 403, 'owner no puede confirmar');
 });
 
-test('10. Superadmin confirma pago y no permite doble confirmación', async () => {
-  const r1 = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-2', {
+test('10. Confirmar pending → confirmed: permitido', async () => {
+  const r = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-3', {
     method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
     body: JSON.stringify({})
   });
-  assert.equal(r1.status, 200);
-  const j1 = await r1.json();
-  assert.equal(j1.data.status, 'confirmed');
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).data.status, 'confirmed');
 });
 
-test('11. Sin escrituras en consultas de solo lectura', async () => {
+test('11. Confirmar overdue → confirmed: permitido si pago válido', async () => {
+  const r = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-2', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
+    body: JSON.stringify({})
+  });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).data.status, 'confirmed');
+});
+
+test('12. Reconfirmar confirmed → 409 BILL_ALREADY_CONFIRMED', async () => {
+  const r = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-1', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
+    body: JSON.stringify({})
+  });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).code, 'BILL_ALREADY_CONFIRMED');
+});
+
+test('13. Confirmar paid → 409 BILL_ALREADY_CONFIRMED', async () => {
+  const r = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-7', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
+    body: JSON.stringify({})
+  });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).code, 'BILL_ALREADY_CONFIRMED');
+});
+
+test('14. Confirmar waived → 409 BILL_ALREADY_CONFIRMED', async () => {
+  const r = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-6', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
+    body: JSON.stringify({})
+  });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).code, 'BILL_ALREADY_CONFIRMED');
+});
+
+test('15. Confirmar overdue sin pago → 409 BILL_NO_PAYMENT', async () => {
+  const r = await fetch(baseUrl + '/api/system-billing/confirm-payment/bill-4', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
+    body: JSON.stringify({})
+  });
+  assert.equal(r.status, 409);
+  assert.equal((await r.json()).code, 'BILL_NO_PAYMENT');
+});
+
+test('16. Nombre ambiguo de academia pide aclaración (sin consultar facturas)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.establishments.push({ id: 'est-3', name: 'Dojo Bushido Norte', city: 'C3', country: 'PA', is_active: true, created_at: '2026-01-01' });
+  const res = await aiChat(superadminToken, '¿Cuánto debe el dojo Bushido?');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('varias academias'), 'pide aclaración');
+  assert.ok(!String(json.data.content).includes('USD'), 'no muestra importes');
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('17. Sin escrituras en consultas de solo lectura', async () => {
   setConfig();
   supabaseMock.writes.length = 0;
   await aiChat(superadminToken, '¿Cuántos dojos deben el sistema?');

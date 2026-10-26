@@ -8331,7 +8331,31 @@ app.patch('/api/system-billing/confirm-payment/:billId', requireAuth, async (req
   const { waive } = req.body || {};
 
   try {
-    const newStatus = waive === true ? 'waived' : 'confirmed';
+    const { data: bill, error: billErr } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('id, status, paid_at, payment_reference')
+      .eq('id', billId)
+      .maybeSingle();
+    if (billErr) throw new Error(billErr.message);
+    if (!bill) return res.status(404).json({ ok: false, error: 'Factura no encontrada' });
+
+    const isWaive = waive === true;
+    if (isWaive) {
+      // Exonerar: permitido desde pending/overdue/paid; bloqueado si ya confirmed/waived.
+      if (bill.status === 'confirmed' || bill.status === 'waived') {
+        return res.status(409).json({ ok: false, code: 'BILL_ALREADY_CONFIRMED', error: 'La factura ya está confirmada o exonerada.' });
+      }
+    } else {
+      // Confirmar: permitido desde pending/overdue; bloqueado si paid/confirmed/waived.
+      if (bill.status === 'confirmed' || bill.status === 'paid' || bill.status === 'waived') {
+        return res.status(409).json({ ok: false, code: 'BILL_ALREADY_CONFIRMED', error: 'La factura ya fue confirmada o pagada.' });
+      }
+      if (bill.status === 'overdue' && !bill.paid_at && !bill.payment_reference) {
+        return res.status(409).json({ ok: false, code: 'BILL_NO_PAYMENT', error: 'La factura vencida no tiene un pago registrado.' });
+      }
+    }
+
+    const newStatus = isWaive ? 'waived' : 'confirmed';
     const { data, error } = await supabaseAdmin
       .from('system_usage_bills')
       .update({
@@ -9009,18 +9033,29 @@ async function resolveEstablishmentByName(message, ctx, establishmentId) {
   const text = String(message || '').toLowerCase();
   const { data: ests, error } = await supabaseAdmin.from('establishments').select('id, name').limit(300);
   if (error) throw new Error(error.message);
-  const mentioned = (ests || []).filter(e => e.name && text.includes(String(e.name).toLowerCase()));
-  if (!mentioned.length) return { status: 'general' };
+  const all = (ests || []).filter(e => e.name);
+  const mentioned = all.filter(e => text.includes(String(e.name).toLowerCase()));
   if (mentioned.length > 1) return { status: 'ambiguous', names: mentioned.map(m => m.name) };
-  const target = mentioned[0];
-  const scope = systemBillingScope(ctx);
-  if (scope === 'all') return { status: 'specific', id: target.id, name: target.name };
-  if (scope === 'own') {
-    const ownId = ctx.establishmentId || establishmentId;
-    if (target.id === ownId) return { status: 'specific', id: target.id, name: target.name };
-    return { status: 'not_authorized', name: target.name };
+  if (mentioned.length === 1) {
+    const matchedLower = String(mentioned[0].name).toLowerCase();
+    // Si el nombre mencionado es prefijo de otra academia, es ambiguo.
+    const supersets = all.filter(e => {
+      const n = String(e.name).toLowerCase();
+      return n !== matchedLower && n.startsWith(matchedLower);
+    });
+    if (supersets.length) {
+      return { status: 'ambiguous', names: [mentioned[0].name, ...supersets.map(s => s.name)] };
+    }
+    const scope = systemBillingScope(ctx);
+    if (scope === 'all') return { status: 'specific', id: mentioned[0].id, name: mentioned[0].name };
+    if (scope === 'own') {
+      const ownId = ctx.establishmentId || establishmentId;
+      if (mentioned[0].id === ownId) return { status: 'specific', id: mentioned[0].id, name: mentioned[0].name };
+      return { status: 'not_authorized', name: mentioned[0].name };
+    }
+    return { status: 'none' };
   }
-  return { status: 'none' };
+  return { status: 'general' };
 }
 
 // Constructor de contexto Fase 1: datos REALES y acotados según rol/establecimiento.

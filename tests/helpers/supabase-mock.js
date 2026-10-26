@@ -58,10 +58,23 @@ function createSupabaseMock(seed = {}) {
       return { select: () => ({ single: () => Promise.resolve({ data: recs[0], error: null }) }), then: (r) => Promise.resolve({ data: recs, error: null }).then(r) };
     };
     q.update = (payload) => {
-      const targets = filtered();
-      targets.forEach(r => Object.assign(r, payload));
-      mock.writes.push({ table, operation: 'update', payload });
-      return { eq: () => q, select: () => q, then: (r) => Promise.resolve({ data: targets, error: null }).then(r) };
+      const upd = {
+        eq: (col, val) => { state.filters.push({ type: 'eq', col, val }); return upd; },
+        select: () => upd,
+        single: () => {
+          const targets = filtered();
+          targets.forEach(r => Object.assign(r, payload));
+          mock.writes.push({ table, operation: 'update', payload });
+          return Promise.resolve(targets.length ? { data: targets[0], error: null } : { data: null, error: { message: 'not found' } });
+        },
+        then: (resolve, reject) => {
+          const targets = filtered();
+          targets.forEach(r => Object.assign(r, payload));
+          mock.writes.push({ table, operation: 'update', payload });
+          return Promise.resolve({ data: targets, error: null }).then(resolve, reject);
+        }
+      };
+      return upd;
     };
     q.delete = () => {
       mock.writes.push({ table, operation: 'delete', payload: null });

@@ -133,7 +133,9 @@ function defaultSeed() {
     establishment_disciplines: [{ id: 'ed-1', establishment_id: 'est-1', discipline_id: 'disc-karate', is_active: true }],
     app_settings: [{ id: 'as-1', establishment_id: null, settings_key: '__ai__', settings_value: null, updated_at: null }],
     notifications: [],
-    guardian_students: []
+    guardian_students: [],
+    student_charges: [],
+    student_charge_payments: []
   };
 }
 

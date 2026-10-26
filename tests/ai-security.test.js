@@ -538,6 +538,22 @@ test('aiDetectCountQuery enruta "alumnos con pagos vencidos" a charges (student_
   assert.equal(q.filters.status, 'overdue');
 });
 
+test('aiDetectCountQuery distingue vencimiento de dominio en cargos de alumnos', () => {
+  // Vencimiento explícito → overdue
+  assert.deepEqual(aiDetectCountQuery('¿Cuántos alumnos adeudan?'), { tool: 'charges', kind: 'total', filters: { status: 'overdue' } });
+  // Pendiente explícito → pending
+  assert.deepEqual(aiDetectCountQuery('¿Cuántos alumnos tienen cuotas pendientes?'), { tool: 'charges', kind: 'total', filters: { status: 'pending' } });
+  // Dominio sin señal de vencimiento → sin status obligatorio
+  const c1 = aiDetectCountQuery('¿Cuántos alumnos tienen cargos?');
+  assert.equal(c1.tool, 'charges');
+  assert.equal(c1.filters.status, undefined);
+  const c2 = aiDetectCountQuery('¿Cuántos alumnos pagan mensualidad?');
+  assert.equal(c2.tool, 'charges');
+  assert.equal(c2.filters.status, undefined);
+  // Pagos realizados → payments (no charges)
+  assert.equal(aiDetectCountQuery('¿Cuántos alumnos pagaron?').tool, 'payments');
+});
+
 test('aiDetectIntent prioriza entidad de establecimiento sobre "pagos vencidos"', () => {
   assert.equal(aiDetectIntent('¿Cuántos dojos tienen pagos vencidos?'), 'read_billing');
   assert.equal(aiDetectIntent('¿Qué academias deben al sistema?'), 'read_billing');

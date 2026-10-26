@@ -240,9 +240,18 @@ function aiDetectCountQuery(message) {
     return { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } };
   }
 
-  // ALUMNOS con obligaciones vencidas/cargos → student_charges (NO payments).
-  if (hasStudents && /vencid|atrasad|cargo|cargos|cuota|cuotas|mensualidad|ad[eu]dan/.test(text)) {
-    return { tool: 'charges', kind: 'total', filters: { status: /vencid|atrasad/.test(text) ? 'overdue' : 'pending' } };
+  // ALUMNOS con obligaciones → student_charges (NO payments).
+  // El estado se impone SOLO con señal explícita: vencido/atrasado/moroso/adeuda/impago → overdue; pendiente → pending.
+  if (hasStudents) {
+    const overdueSignal = /vencid|atrasad|moros|adeud|impago|no\s+ha\s+pagado|deuda\s+pendiente/.test(text);
+    const pendingSignal = /pendiente|pendientes/.test(text);
+    const chargesSignal = overdueSignal || pendingSignal || /cargo|cargos|cuota|cuotas|mensualidad/.test(text);
+    if (chargesSignal) {
+      const filters = {};
+      if (overdueSignal) filters.status = 'overdue';
+      else if (pendingSignal) filters.status = 'pending';
+      return { tool: 'charges', kind: 'total', filters };
+    }
   }
 
   // "¿Cuántos alumnos pagaron más de 0?" → alumnos únicos con al menos un pago > 0.

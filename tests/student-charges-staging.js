@@ -33,9 +33,32 @@ async function req(method, path, token, body) {
   return { status: res.status, json };
 }
 
+// Preflight: detecta si la migración está aplicada. El middleware requireStudentCharges
+// responde 503 STUDENT_CHARGES_NOT_READY ANTES de requireAuth cuando la tabla no existe.
+async function preflight() {
+  const res = await fetch(BASE_URL + '/api/student-charges');
+  let json = null;
+  try { json = await res.json(); } catch (_) {}
+  if (res.status === 503 && json && json.code === 'STUDENT_CHARGES_NOT_READY') {
+    console.error('DIAGNÓSTICO: las tablas student_charges / student_charge_payments NO existen en este entorno.');
+    console.error('Acción: aplica supabase/019_student_charges.sql en el SQL Editor de Supabase (proyecto staging).');
+    console.error('No ejecutes el rollback: no hay nada que revertir si las tablas no existen.');
+    console.error('STUDENT_CHARGES_NOT_READY');
+    process.exit(2);
+  }
+  if (res.status === 401 || res.status === 400 || res.status === 200) {
+    console.log('Preflight OK: las tablas existen (el middleware no devolvió 503).');
+    return;
+  }
+  console.error('Preflight inesperado (status ' + res.status + '). Revisa STAGING_BASE_URL y el proyecto Supabase conectado (¿staging o producción?).');
+  process.exit(2);
+}
+
 async function main() {
   console.log('== Validación student_charges en STAGING ==');
   console.log('URL: ' + BASE_URL);
+
+  await preflight();
 
   const owner = await login(env('STAGING_OWNER_USER'), env('STAGING_OWNER_PASS'));
   const instructor = await login(env('STAGING_INSTRUCTOR_USER'), env('STAGING_INSTRUCTOR_PASS'));
@@ -53,7 +76,7 @@ async function main() {
   const stuOther = env('STAGING_STUDENT_OTHER_ID');
 
   console.log('\n== A. Activación controlada (tabla no disponible) ==');
-  skip('503 STUDENT_CHARGES_NOT_READY documentado (probado en suite local con mock)');
+  ok('503 STUDENT_CHARGES_NOT_READY cubierto por preflight (si faltaran las tablas, el script ya habría abortado con diagnóstico)');
 
   console.log('\n== B/C/D/E. Crear cargo y validaciones ==');
   const chargeBase = {

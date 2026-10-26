@@ -88,3 +88,30 @@ select
 - Rotar contraseñas expuestas en el chat: `juan_moreno`, `venta` (y demás credenciales de prueba pegadas).
 - **No incluir credenciales en informes, commits ni chats.**
 - `tests/.staging.env` está **gitignored** (no versionado). Verificado.
+
+---
+
+## Resultado final (cierre del smoke test)
+
+**Fecha:** 2026-10-26
+
+### Verificación de roles en producción
+- **Owner lee cargos:** ✅ PASS (`hiroshi_tanaka` → "Dojo Bushido").
+- **Instructor lee cargos (solo autorizados):** ✅ PASS (`takeshi_mori` → "Dojo Bushido").
+- **Estudiante en producción:** ⏭️ SKIP — las credenciales disponibles pertenecen a otro establecimiento ("Centro Aikido & Kendo"), no a "Dojo Bushido".
+  - El `HTTP 403` observado es **esperado** por aislamiento multi-tenant; **no es un bug**.
+- **Estudiante (permisos y alcance correctos):** ✅ validado previamente en **staging** (17 PASS incluyó "estudiante lee cargos").
+
+### Estado global
+- Schema producción: ✅ completo (8/8).
+- Smoke test producción: **9 PASS / 0 FAIL / 3 SKIP**.
+- Render: `389852d` (descendiente de `0670c82`, contiene el fix `.update().eq()`). ✅
+
+### Clasificación
+**GO para piloto controlado** — no es validación exhaustiva de todos los roles en producción.
+
+### Nota operativa
+Para cerrar la cobertura del rol **student** en producción, repetir el smoke test cuando exista un alumno con login perteneciente al establecimiento de prueba o al primer cliente piloto (creado mediante el **flujo normal de administración**, no con SQL directo).
+
+### Regla de seguridad
+No crear perfiles por SQL directo, no crear usuarios artificiales en producción, no modificar alumnos reales, no ejecutar rollback, no cambiar la lógica de permisos, y **no ocultar el SKIP**.

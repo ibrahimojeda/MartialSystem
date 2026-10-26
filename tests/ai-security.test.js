@@ -532,10 +532,10 @@ test('aiDetectCountQuery enruta "dojos con pagos vencidos" a billing (no payment
   assert.deepEqual(q.filters.status, ['overdue']);
 });
 
-test('aiDetectCountQuery enruta "alumnos con pagos vencidos" a payments (no billing)', () => {
+test('aiDetectCountQuery enruta "alumnos con pagos vencidos" a charges (student_charges)', () => {
   const q = aiDetectCountQuery('¿Cuántos alumnos tienen pagos vencidos?');
-  assert.notEqual(q.tool, 'billing');
-  assert.ok(q.tool === 'payments' || q.tool === 'charges');
+  assert.equal(q.tool, 'charges');
+  assert.equal(q.filters.status, 'overdue');
 });
 
 test('aiDetectIntent prioriza entidad de establecimiento sobre "pagos vencidos"', () => {

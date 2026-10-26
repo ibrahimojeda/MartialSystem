@@ -289,13 +289,14 @@ test('18. "¿Cuántos dojos tienen pagos vencidos?" → billing (system_usage_bi
   assert.equal(supabaseMock.writes.length, 0);
 });
 
-test('19. "¿Cuántos alumnos tienen pagos vencidos?" → NO system_usage_bills', async () => {
+test('19. "¿Cuántos alumnos tienen pagos vencidos?" → student_charges (no system_usage_bills)', async () => {
   setConfig();
   supabaseMock.writes.length = 0;
   const res = await aiChat(superadminToken, '¿Cuántos alumnos tienen pagos vencidos?');
   assert.equal(res.status, 200);
   const json = await res.json();
   assert.notEqual(json.data.count.tool, 'billing');
+  assert.equal(json.data.count.tool, 'charges');
   assert.equal(providerA.metrics.interpretationCalls, 0);
   assert.equal(supabaseMock.writes.length, 0);
 });

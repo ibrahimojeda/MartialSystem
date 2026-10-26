@@ -240,6 +240,11 @@ function aiDetectCountQuery(message) {
     return { tool: 'billing', kind: 'summary', filters: { status: ['pending', 'overdue'] } };
   }
 
+  // ALUMNOS con obligaciones vencidas/cargos → student_charges (NO payments).
+  if (hasStudents && /vencid|atrasad|cargo|cargos|cuota|cuotas|mensualidad|ad[eu]dan/.test(text)) {
+    return { tool: 'charges', kind: 'total', filters: { status: /vencid|atrasad/.test(text) ? 'overdue' : 'pending' } };
+  }
+
   // "¿Cuántos alumnos pagaron más de 0?" → alumnos únicos con al menos un pago > 0.
   if (hasStudents && hasPayments) {
     return { tool: 'payments', kind: 'unique_students', filters: { amountMin: 0, amountMax: null, period: null, date: null } };

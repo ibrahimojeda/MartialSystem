@@ -10503,7 +10503,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       }
       try {
         const countRes = await aiCountTool('billing', countQuery.kind, countQuery.filters, ctx, establishmentId);
-        const countContent = formatCountResult(countQuery, countRes);
+        const countContent = formatCountResult(countQuery, countRes, ctx);
         return res.json({ ok: true, data: { content: countContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, count: countRes } });
       } catch (countErr) {
         return res.status(500).json({ ok: false, error: 'No pude contar los datos solicitados: ' + (countErr && countErr.message || 'error de base de datos') });
@@ -10512,7 +10512,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     if (countQuery && aiToolAllowed(countQuery.tool, aiRole, 'read')) {
       try {
         const countRes = await aiCountTool(countQuery.tool, countQuery.kind, countQuery.filters, ctx, establishmentId);
-        const countContent = formatCountResult(countQuery, countRes);
+        const countContent = formatCountResult(countQuery, countRes, ctx);
         return res.json({ ok: true, data: { content: countContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, count: countRes } });
       } catch (countErr) {
         return res.status(500).json({ ok: false, error: 'No pude contar los datos solicitados: ' + (countErr && countErr.message || 'error de base de datos') });

@@ -301,7 +301,7 @@ function aiDetectCountQuery(message) {
 }
 
 // Formatea una respuesta determinística de conteo (sin llamar al modelo).
-function formatCountResult(query, result) {
+function formatCountResult(query, result, ctx) {
   const n = Math.max(0, Number(result && result.count) || 0);
   const tool = (query && query.tool) || 'students';
   const kind = (query && query.kind) || 'total';
@@ -331,20 +331,25 @@ function formatCountResult(query, result) {
       : 'Encontré ' + n + (n === 1 ? ' alumno' : ' alumnos') + ' en tu dojo.';
   }
   if (tool === 'billing') {
+    const isGlobal = ctx && systemBillingScope(ctx) === 'all';
     if (kind === 'overdue_establishments') {
       return n === 0
-        ? 'No encontré dojos con facturas vencidas dentro de tu alcance autorizado.'
-        : 'Hay ' + n + (n === 1 ? ' dojo' : ' dojos') + ' con facturas vencidas.';
+        ? (isGlobal ? 'No encontré facturas vencidas de ningún dojo en el sistema.' : 'No encontré dojos con facturas vencidas dentro de tu alcance autorizado.')
+        : 'Hay ' + n + (n === 1 ? ' dojo' : ' dojos') + ' con facturas vencidas al sistema.';
     }
     if (kind === 'pending_establishments') {
       return n === 0
-        ? 'No encontré dojos con facturas pendientes dentro de tu alcance autorizado.'
+        ? (isGlobal ? 'No encontré facturas pendientes de ningún dojo en el sistema.' : 'No encontré dojos con facturas pendientes dentro de tu alcance autorizado.')
         : 'Hay ' + n + (n === 1 ? ' dojo' : ' dojos') + ' con facturas pendientes.';
     }
     if (kind === 'summary') {
       const oc = Math.max(0, Number(result && result.overdueCount) || 0);
       const pc = Math.max(0, Number(result && result.pendingCount) || 0);
-      if (oc === 0 && pc === 0) return 'No encontré facturas pendientes o vencidas de los dojos dentro de tu alcance autorizado.';
+      if (oc === 0 && pc === 0) {
+        return isGlobal
+          ? 'No encontré facturas pendientes o vencidas de los dojos en el sistema.'
+          : 'No encontré facturas pendientes o vencidas de los dojos dentro de tu alcance autorizado.';
+      }
       const parts = [];
       if (oc) parts.push('Hay ' + oc + (oc === 1 ? ' dojo' : ' dojos') + ' con facturas vencidas');
       if (pc) parts.push(pc + (pc === 1 ? ' dojo' : ' dojos') + ' con facturas pendientes');
@@ -359,7 +364,7 @@ function formatCountResult(query, result) {
       return msg;
     }
     return n === 0
-      ? 'No encontré facturas dentro de tu alcance autorizado.'
+      ? (isGlobal ? 'No encontré facturas en el sistema.' : 'No encontré facturas dentro de tu alcance autorizado.')
       : 'Encontré ' + n + (n === 1 ? ' factura' : ' facturas') + '.';
   }
   if (tool === 'users') {

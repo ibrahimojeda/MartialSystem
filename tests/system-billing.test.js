@@ -300,3 +300,19 @@ test('19. "¿Cuántos alumnos tienen pagos vencidos?" → student_charges (no sy
   assert.equal(providerA.metrics.interpretationCalls, 0);
   assert.equal(supabaseMock.writes.length, 0);
 });
+
+test('20. Superadmin sin facturas vencidas → resultado vacío sin "alcance autorizado"', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.system_usage_bills = [];
+  const res = await aiChat(superadminToken, '¿Cuántos Dojos tienen pagos vencidos al sistema?');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.equal(json.data.count.tool, 'billing');
+  assert.equal(json.data.count.kind, 'overdue_establishments');
+  assert.ok(String(json.data.content).includes('No encontré facturas vencidas de ningún dojo en el sistema.'));
+  assert.ok(!String(json.data.content).includes('alcance autorizado'));
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});

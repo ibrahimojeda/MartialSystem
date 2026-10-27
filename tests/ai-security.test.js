@@ -561,6 +561,24 @@ test('aiDetectIntent prioriza entidad de establecimiento sobre "pagos vencidos"'
   assert.equal(aiDetectIntent('¿Qué estudiantes deben mensualidad?'), 'read_charges');
 });
 
+test('aiDetectCountQuery "dojos ... pagos vencidos al sistema" → billing overdue', () => {
+  const q = aiDetectCountQuery('¿Cuántos Dojos tienen pagos vencidos al sistema?');
+  assert.equal(q.tool, 'billing');
+  assert.equal(q.kind, 'overdue_establishments');
+  assert.deepEqual(q.filters.status, ['overdue']);
+});
+
+test('formatCountResult billing vacío distingue superadmin de owner', () => {
+  assert.equal(
+    formatCountResult({ tool: 'billing', kind: 'overdue_establishments' }, { count: 0 }, { role: 'superadmin' }),
+    'No encontré facturas vencidas de ningún dojo en el sistema.'
+  );
+  assert.equal(
+    formatCountResult({ tool: 'billing', kind: 'overdue_establishments' }, { count: 0 }, { role: 'owner' }),
+    'No encontré dojos con facturas vencidas dentro de tu alcance autorizado.'
+  );
+});
+
 console.log('Suite ai-security: ejecutada con node:test');
 
 

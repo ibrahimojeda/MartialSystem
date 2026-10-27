@@ -8295,7 +8295,7 @@ app.post('/api/system-billing/pay', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/system-billing/pending-payments — Superadmin views pending payments
+// GET /api/system-billing/pending-payments — Superadmin views pending payments (SOLO LECTURA).
 app.get('/api/system-billing/pending-payments', requireAuth, async (req, res) => {
   if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
 
@@ -8308,18 +8308,39 @@ app.get('/api/system-billing/pending-payments', requireAuth, async (req, res) =>
       .limit(500);
     if (error) throw new Error(error.message);
 
-    // Update overdue status
-    const now = new Date();
-    for (const bill of (bills || [])) {
-      if (bill.status === 'pending' && new Date(bill.due_date) < now) {
-        await supabaseAdmin.from('system_usage_bills').update({ status: 'overdue' }).eq('id', bill.id);
-        bill.status = 'overdue';
-      }
-    }
-
     return res.json({ ok: true, data: bills || [] });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not load pending payments' });
+  }
+});
+
+// POST /api/system-billing/mark-overdue — Marca facturas pending con due_date < hoy como overdue.
+// Operación idempotente de superadmin (solo pending vencidas; no toca paid/confirmed/waived).
+app.post('/api/system-billing/mark-overdue', requireAuth, async (req, res) => {
+  if (!req.isSuperadmin) return res.status(403).json({ ok: false, error: 'Superadmin only' });
+
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: due, error } = await supabaseAdmin
+      .from('system_usage_bills')
+      .select('id')
+      .eq('status', 'pending')
+      .lt('due_date', today)
+      .limit(5000);
+    if (error) throw new Error(error.message);
+
+    let marked = 0;
+    for (const b of (due || [])) {
+      const { error: upErr } = await supabaseAdmin
+        .from('system_usage_bills')
+        .update({ status: 'overdue' })
+        .eq('id', b.id);
+      if (!upErr) marked += 1;
+    }
+
+    return res.json({ ok: true, data: { marked } });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message || 'Could not mark overdue' });
   }
 });
 

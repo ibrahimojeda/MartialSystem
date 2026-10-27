@@ -316,3 +316,51 @@ test('20. Superadmin sin facturas vencidas → resultado vacío sin "alcance aut
   assert.equal(providerA.metrics.interpretationCalls, 0);
   assert.equal(supabaseMock.writes.length, 0);
 });
+
+test('21. GET pending-payments es solo lectura (no modifica estados)', async () => {
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.system_usage_bills = [
+    { id: 'g1', establishment_id: 'est-1', billing_month: '2026-09', amount: 49, currency: 'USD', status: 'pending', due_date: '2020-01-01' }
+  ];
+  const res = await fetch(baseUrl + '/api/system-billing/pending-payments', {
+    headers: { Authorization: 'Bearer ' + superadminToken }
+  });
+  assert.equal(res.status, 200);
+  assert.equal(supabaseMock.writes.length, 0, 'GET no escribe');
+  assert.equal(supabaseMock._tables.system_usage_bills[0].status, 'pending', 'sigue pending tras GET');
+});
+
+test('22. POST mark-overdue marca solo pending vencidas y es idempotente', async () => {
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.system_usage_bills = [
+    { id: 'm1', establishment_id: 'est-1', billing_month: '2026-09', amount: 49, currency: 'USD', status: 'pending', due_date: '2020-01-01' },
+    { id: 'm2', establishment_id: 'est-1', billing_month: '2026-10', amount: 49, currency: 'USD', status: 'pending', due_date: '2099-01-01' },
+    { id: 'm3', establishment_id: 'est-1', billing_month: '2026-11', amount: 49, currency: 'USD', status: 'paid', due_date: '2020-01-01' },
+    { id: 'm4', establishment_id: 'est-1', billing_month: '2026-12', amount: 49, currency: 'USD', status: 'confirmed', due_date: '2020-01-01' },
+    { id: 'm5', establishment_id: 'est-1', billing_month: '2027-01', amount: 49, currency: 'USD', status: 'waived', due_date: '2020-01-01' }
+  ];
+  const r1 = await fetch(baseUrl + '/api/system-billing/mark-overdue', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + superadminToken }
+  });
+  assert.equal(r1.status, 200);
+  assert.equal((await r1.json()).data.marked, 1, 'solo la pending vencida');
+  assert.equal(supabaseMock._tables.system_usage_bills.find(b => b.id === 'm1').status, 'overdue');
+  assert.equal(supabaseMock._tables.system_usage_bills.find(b => b.id === 'm2').status, 'pending', 'futura no cambia');
+  assert.equal(supabaseMock._tables.system_usage_bills.find(b => b.id === 'm3').status, 'paid');
+  assert.equal(supabaseMock._tables.system_usage_bills.find(b => b.id === 'm4').status, 'confirmed');
+  assert.equal(supabaseMock._tables.system_usage_bills.find(b => b.id === 'm5').status, 'waived');
+  // Repetir → idempotente
+  const r2 = await fetch(baseUrl + '/api/system-billing/mark-overdue', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + superadminToken }
+  });
+  assert.equal(r2.status, 200);
+  assert.equal((await r2.json()).data.marked, 0, 'idempotente');
+});
+
+test('23. POST mark-overdue requiere superadmin (403)', async () => {
+  const res = await fetch(baseUrl + '/api/system-billing/mark-overdue', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok_owner_1' },
+    body: JSON.stringify({})
+  });
+  assert.equal(res.status, 403);
+});

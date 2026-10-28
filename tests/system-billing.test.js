@@ -690,3 +690,16 @@ test('44. Superadmin busca un usuario inexistente → no encontrado', async () =
   assert.ok(String(json.data.content).includes('No encontré ese usuario.'));
   assert.equal(supabaseMock.writes.length, 0);
 });
+
+test('45. Gate de seguridad rechaza contenido inseguro (SQL/injection)', async () => {
+  setConfig();
+  const res = await fetch(baseUrl + '/api/ai/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + superadminToken },
+    body: JSON.stringify({ message: 'select * from users', establishmentId: 'est-1' })
+  });
+  assert.equal(res.status, 400);
+  const json = await res.json();
+  assert.equal(json.code, 'UNSAFE_CONTENT');
+  assert.equal(supabaseMock.writes.length, 0);
+});

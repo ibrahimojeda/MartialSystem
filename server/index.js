@@ -17,6 +17,7 @@ const {
   aiDetectPlansQuery, formatPlansResult,
   aiDetectProfileSummaryQuery, formatProfileSummary, sanitizeProfileForRole
 } = require('./ai-security');
+const { normalizeUserMessage } = require('./ai-semantic');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
 let APP_VERSION = '0.0.0';
@@ -10583,6 +10584,12 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const { message, establishmentId } = req.body || {};
     if (!message || !String(message).trim()) return res.status(400).json({ ok: false, error: 'message is required' });
     if (String(message).length > 2000) return res.status(400).json({ ok: false, error: 'Mensaje demasiado largo (máximo 2000 caracteres).' });
+
+    // Gate de seguridad semántica: rechaza contenido ejecutable/inseguro antes de interpretar.
+    const unsafeFlags = normalizeUserMessage(message).flags;
+    if (unsafeFlags.length) {
+      return res.status(400).json({ ok: false, error: 'Tu consulta contiene contenido no permitido.', code: 'UNSAFE_CONTENT' });
+    }
 
     // Gating por plan (Fase 1): el establecimiento debe incluir ia_features en su plan.
     if (!req.isSuperadmin && establishmentId) {

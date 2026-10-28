@@ -426,3 +426,49 @@ test('27. Instructor no puede consultar planes de la plataforma', async () => {
   assert.ok(String(json.data.content).includes('No tienes permisos para consultar la facturación o suscripciones de la plataforma.'));
   assert.equal(supabaseMock.writes.length, 0);
 });
+
+test('28. Superadmin obtiene resumen de un usuario por username', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat(superadminToken, 'Muéstrame el resumen del usuario owner1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('Owner 1'));
+  assert.ok(String(json.data.content).includes('owner1'));
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('29. Superadmin sin perfil objetivo pide aclaración (no rechaza por rol)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat(superadminToken, 'Muéstrame el resumen de este perfil');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('¿Qué perfil deseas consultar?'));
+  assert.ok(!String(json.data.content).includes('no te permite'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('30. Owner consulta perfil de su establecimiento', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', 'Muéstrame el resumen del usuario inst1', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(String(json.data.content).includes('Instructor 1'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('31. Owner no consulta perfil de otro establecimiento', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', 'Muéstrame el resumen del usuario inst2', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar ese perfil.'));
+  assert.equal(supabaseMock.writes.length, 0);
+});

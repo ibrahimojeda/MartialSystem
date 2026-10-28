@@ -14,7 +14,8 @@ const {
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope, formatEstablishmentBilling,
-  aiDetectPlansQuery, formatPlansResult
+  aiDetectPlansQuery, formatPlansResult,
+  aiDetectProfileSummaryQuery, formatProfileSummary
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9122,6 +9123,61 @@ async function aiListPlansTool(ctx, estId, page, pageSize) {
   return { rows, scope, meta: { total: epRows.length, page: p, pageSize: ps } };
 }
 
+// Autoriza el acceso a un perfil según el rol real de la sesión.
+async function profileInScope(ctx, targetProfileId, establishmentId) {
+  const role = String((ctx && ctx.role) || '').toLowerCase();
+  if (role === 'superadmin') return true;
+  if (role === 'student' || role === 'guardian') return targetProfileId === ctx.profileId;
+  const estId = ctx.establishmentId || establishmentId;
+  if (!estId) return false;
+  const { data: m } = await supabaseAdmin.from('establishment_members').select('id').eq('establishment_id', estId).eq('profile_id', targetProfileId).maybeSingle();
+  return Boolean(m);
+}
+
+// Resuelve y devuelve el resumen de un perfil (solo lectura, autorizado).
+async function aiGetProfileSummaryTool(ctx, targetProfileId, message, establishmentId) {
+  let profile = null;
+  if (targetProfileId) {
+    const { data: p } = await supabaseAdmin.from('profiles').select('id, username, full_name, role, is_active, created_at').eq('id', targetProfileId).maybeSingle();
+    profile = p;
+  } else {
+    const text = String(message || '').toLowerCase();
+    const { data: profs } = await supabaseAdmin.from('profiles').select('id, username, full_name, role, is_active, created_at').limit(500);
+    const matches = (profs || []).filter(p =>
+      (p.username && text.includes(String(p.username).toLowerCase())) ||
+      (p.full_name && text.includes(String(p.full_name).toLowerCase()))
+    );
+    if (matches.length === 1) profile = matches[0];
+    else if (matches.length > 1) return { status: 'ambiguous' };
+    else return { status: 'no_target' };
+  }
+
+  if (!profile) return { status: 'not_found' };
+
+  const allowed = await profileInScope(ctx, profile.id, establishmentId);
+  if (!allowed) return { status: 'forbidden' };
+
+  const { data: mems } = await supabaseAdmin.from('establishment_members').select('establishment_id').eq('profile_id', profile.id).limit(20);
+  const estIds = (mems || []).map(m => m.establishment_id);
+  let estNames = [];
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds);
+    estNames = (ests || []).map(e => e.name);
+  }
+
+  return {
+    status: 'ok',
+    profile: {
+      username: profile.username,
+      full_name: profile.full_name,
+      role: profile.role,
+      is_active: profile.is_active,
+      created_at: profile.created_at,
+      establishment_name: estNames.join(', ') || null
+    }
+  };
+}
+
 // Constructor de contexto Fase 1: datos REALES y acotados según rol/establecimiento.
 // La regla de oro: la IA solo recibe datos que el rol puede ver.
 async function buildAIContext(req, establishmentId) {
@@ -10542,6 +10598,31 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
         return res.json({ ok: true, data: { content, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, list: plans } });
       } catch (e) {
         return res.status(500).json({ ok: false, error: 'No pude consultar los planes de los dojos: ' + (e && e.message || 'error de base de datos') });
+      }
+    }
+
+    // ── Resumen de perfil (lectura determinística) ────────────────────
+    const profileQuery = aiDetectProfileSummaryQuery(message);
+    if (profileQuery) {
+      const targetProfileId = String((req.body && req.body.targetProfileId) || '').trim() || null;
+      try {
+        const result = await aiGetProfileSummaryTool(ctx, targetProfileId, message, establishmentId);
+        if (result.status === 'no_target') {
+          return res.json({ ok: true, data: { content: '¿Qué perfil deseas consultar? Selecciona un perfil o indícame su nombre de usuario.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+        }
+        if (result.status === 'ambiguous') {
+          return res.json({ ok: true, data: { content: 'Encontré varios perfiles con ese nombre. Por favor, indícame el nombre de usuario exacto.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+        }
+        if (result.status === 'not_found') {
+          return res.json({ ok: true, data: { content: 'No encontré el perfil solicitado.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+        }
+        if (result.status === 'forbidden') {
+          return res.json({ ok: true, data: { content: 'No tienes permisos para consultar ese perfil.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+        }
+        const content = formatProfileSummary(result.profile);
+        return res.json({ ok: true, data: { content, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, profile: result.profile } });
+      } catch (e) {
+        return res.status(500).json({ ok: false, error: 'No pude consultar el perfil: ' + (e && e.message || 'error de base de datos') });
       }
     }
 

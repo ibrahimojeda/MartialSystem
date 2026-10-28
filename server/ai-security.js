@@ -701,8 +701,31 @@ module.exports = {
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
   formatCurrencyAmount, formatEstablishmentBilling,
-  aiDetectPlansQuery, formatPlansResult
+  aiDetectPlansQuery, formatPlansResult,
+  aiDetectProfileSummaryQuery, formatProfileSummary
 };
+
+// Detecta consultas de lectura sobre el resumen de un perfil/usuario.
+function aiDetectProfileSummaryQuery(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (/resumen|detalles|informaci[oó]n/.test(text) && /perfil|usuario/.test(text)) {
+    return { intent: 'read', domain: 'users', operation: 'profile_summary', filters: {}, confidence: 1 };
+  }
+  return null;
+}
+
+// Formatea el resumen de un perfil (sin IDs internos ni secretos).
+function formatProfileSummary(profile) {
+  return [
+    'Resumen del perfil:',
+    '',
+    'Nombre: ' + (profile.full_name || '—'),
+    'Usuario: ' + (profile.username || '—'),
+    'Rol: ' + (profile.role || '—'),
+    'Establecimiento: ' + (profile.establishment_name || '—'),
+    'Estado: ' + (profile.is_active ? 'activo' : 'inactivo')
+  ].join('\n');
+}
 
 // Detecta consultas de lectura sobre los planes/suscripciones de los dojos.
 function aiDetectPlansQuery(message) {

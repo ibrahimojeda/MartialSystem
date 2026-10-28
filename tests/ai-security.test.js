@@ -10,7 +10,8 @@ const {
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
-  formatCurrencyAmount, formatEstablishmentBilling, aiDetectPlansQuery, formatPlansResult
+  formatCurrencyAmount, formatEstablishmentBilling, aiDetectPlansQuery, formatPlansResult,
+  aiDetectProfileSummaryQuery, formatProfileSummary
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -612,6 +613,30 @@ test('formatPlansResult produce listado legible sin IDs', () => {
 test('formatPlansResult vacío distingue superadmin de owner', () => {
   assert.equal(formatPlansResult([], 'all'), 'No encontré planes configurados para los dojos en el sistema.');
   assert.equal(formatPlansResult([], 'own'), 'No encontré planes configurados para los dojos dentro de tu alcance autorizado.');
+});
+
+test('aiDetectProfileSummaryQuery detecta resumen de perfil/usuario', () => {
+  const q = aiDetectProfileSummaryQuery('Muéstrame el resumen de este perfil');
+  assert.ok(q);
+  assert.equal(q.intent, 'read');
+  assert.equal(q.domain, 'users');
+  assert.equal(q.operation, 'profile_summary');
+  assert.equal(aiDetectProfileSummaryQuery('dame el resumen de este usuario').operation, 'profile_summary');
+});
+
+test('aiDetectProfileSummaryQuery no confunde consultas de conteo', () => {
+  assert.equal(aiDetectProfileSummaryQuery('¿Cuántos usuarios hay?'), null);
+  assert.equal(aiDetectProfileSummaryQuery('¿Cuántos alumnos hay?'), null);
+});
+
+test('formatProfileSummary no expone secretos ni IDs', () => {
+  const s = formatProfileSummary({ full_name: 'Hiroshi Tanaka', username: 'hiroshi_tanaka', role: 'owner', is_active: true, establishment_name: 'Dojo Bushido' });
+  assert.ok(s.includes('Hiroshi Tanaka'));
+  assert.ok(s.includes('hiroshi_tanaka'));
+  assert.ok(s.includes('owner'));
+  assert.ok(s.includes('activo'));
+  assert.ok(!s.includes('password'));
+  assert.ok(!s.includes('token'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

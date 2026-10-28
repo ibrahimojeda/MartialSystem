@@ -5,7 +5,7 @@
 
 const crypto = require('crypto');
 
-function httpError(status, message) { const e = new Error(message); e.status = status; return e; }
+function httpError(status, message, code) { const e = new Error(message); e.status = status; if (code) e.code = code; return e; }
 
 async function getLinkedStudentProfileIds(db, guardianProfileId) {
   const { data: links } = await db.from('guardian_students').select('student_id').eq('guardian_profile_id', guardianProfileId).limit(5000);
@@ -136,6 +136,8 @@ async function addMessage(db, ctx, conversationId, body) {
   if (cErr) throw httpError(500, 'Error leyendo la conversación: ' + cErr.message);
   if (!c) throw httpError(404, 'Conversación no encontrada');
   if (!(await canAccessConversation(db, ctx, c))) throw httpError(403, 'No access to this conversation');
+  // Una conversación archivada no acepta mensajes nuevos.
+  if (c.archived_at) throw httpError(409, 'La conversación está archivada', 'CONVERSATION_ARCHIVED');
   const id = crypto.randomUUID();
   const { data: msg, error: mErr } = await db.from('messages')
     .insert({ id, conversation_id: conversationId, sender_profile_id: ctx.profileId, body: text, created_at: new Date().toISOString() })

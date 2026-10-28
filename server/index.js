@@ -4249,7 +4249,9 @@ async function handleMessaging(req, res, fn) {
     const data = await fn(rc.ctx);
     return res.json({ ok: true, data });
   } catch (err) {
-    return res.status(err.status || 500).json({ ok: false, error: err.message || 'Error de mensajería' });
+    const body = { ok: false, error: err.message || 'Error de mensajería' };
+    if (err.code) body.code = err.code;
+    return res.status(err.status || 500).json(body);
   }
 }
 

@@ -149,8 +149,10 @@ test('error al insertar conversación → 500 (nunca 200)', async () => {
 });
 
 test('error al insertar mensaje → 500', async () => {
+  const createRes = await req('POST', '/api/conversations', 'tok_owner_1', { establishmentId: 'est-1', subject: 'Error msg', memberProfileIds: ['instructor-1'] });
+  const cid = (await createRes.json()).data.id;
   supabaseMock.setError('messages', 'boom');
-  const res = await req('POST', `/api/conversations/${convId}/messages?establishmentId=est-1`, 'tok_owner_1', { body: 'x' });
+  const res = await req('POST', `/api/conversations/${cid}/messages?establishmentId=est-1`, 'tok_owner_1', { body: 'x' });
   assert.equal(res.status, 500);
 });
 
@@ -180,12 +182,21 @@ test('superadmin no puede enviar mensajes (403)', async () => {
 });
 
 test('instructor envía mensaje con sender_profile_id válido', async () => {
-  const res = await req('POST', `/api/conversations/${convId}/messages?establishmentId=est-1`, 'tok_instructor_1', { body: 'Hola desde instructor' });
+  const createRes = await req('POST', '/api/conversations', 'tok_owner_1', { establishmentId: 'est-1', subject: 'Instructor send', memberProfileIds: ['instructor-1'] });
+  const cid = (await createRes.json()).data.id;
+  const res = await req('POST', `/api/conversations/${cid}/messages?establishmentId=est-1`, 'tok_instructor_1', { body: 'Hola desde instructor' });
   assert.equal(res.status, 200);
   const json = await res.json();
   assert.ok(json.data && json.data.id);
   assert.equal(json.data.sender_profile_id, 'instructor-1');
   assert.ok(json.data.sender_profile_id !== 'superadmin');
+});
+
+test('no se puede enviar mensaje a conversación archivada (409)', async () => {
+  const res = await req('POST', `/api/conversations/${convId}/messages?establishmentId=est-1`, 'tok_owner_1', { body: 'después de archivar' });
+  assert.equal(res.status, 409);
+  const json = await res.json();
+  assert.equal(json.code, 'CONVERSATION_ARCHIVED');
 });
 
 console.log('Suite messaging: ejecutada con node:test');

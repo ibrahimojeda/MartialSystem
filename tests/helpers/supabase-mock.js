@@ -150,7 +150,7 @@ function defaultSeed() {
       { id: 'pay-1', establishment_id: 'est-1', student_id: 'stu-1', discipline_id: 'disc-karate', amount: 100, currency: 'USD', method: 'cash', concept: 'Mensualidad', paid_at: '2026-10-01', created_by: 'owner-1' }
     ],
     class_sessions: [
-      { id: 'cls-1', establishment_id: 'est-1', discipline_id: 'disc-karate', instructor_profile_id: 'instructor-1', title: 'Karate', scheduled_date: '2026-10-20', start_time: '10:00', end_time: '11:00', location: 'Sala 1', notes: null, status: 'scheduled', created_at: '2026-01-01' }
+      { id: 'cls-1', establishment_id: 'est-1', discipline_id: 'disc-karate', instructor_profile_id: 'instructor-1', title: 'Karate', scheduled_date: '2026-10-20', start_time: '10:00', end_time: '11:00', location: 'Sala 1', notes: null, status: 'scheduled', created_at: '2026-01-01', updated_at: '2026-01-01' }
     ],
     class_attendance_records: [],
     ai_memory: [],
@@ -163,6 +163,7 @@ function defaultSeed() {
     establishment_disciplines: [{ id: 'ed-1', establishment_id: 'est-1', discipline_id: 'disc-karate', is_active: true }],
     app_settings: [{ id: 'as-1', establishment_id: null, settings_key: '__ai__', settings_value: null, updated_at: null }],
     notifications: [],
+    class_notification_events: [],
     guardian_students: [],
     student_charges: [],
     student_charge_payments: [],

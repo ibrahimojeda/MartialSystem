@@ -21,6 +21,7 @@ const { normalizeUserMessage } = require('./ai-semantic');
 const receivables = require('./student-receivables');
 const messaging = require('./messaging');
 const calendar = require('./calendar');
+const classNotifs = require('./class-notifications');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
 let APP_VERSION = '0.0.0';
@@ -3552,7 +3553,18 @@ app.post('/api/classes', requireAuth, async (req, res) => {
       .single();
 
     if (error) throw new Error(error.message);
-    return res.json({ ok: true, data: { ...data, discipline: targetDiscipline } });
+    const created = data;
+    let notified = 0;
+    try {
+      const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: targetDiscipline.id, instructorProfileId: targetInstructor });
+      const r = await classNotifs.notifyClassEvent(supabaseAdmin, {
+        classId: created.id, establishmentId, eventType: 'class_created',
+        title: 'Nueva clase', body: 'Se creó la clase "' + created.title + '".',
+        version: String(new Date().toISOString()), recipients
+      });
+      notified = r.notified;
+    } catch (_) { /* notificación best-effort */ }
+    return res.json({ ok: true, data: { ...created, discipline: targetDiscipline, notified } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not create class' });
   }
@@ -3596,6 +3608,70 @@ app.delete('/api/classes/:id', requireAuth, async (req, res) => {
     return res.json({ ok: true, data: { deletedId: id, title: cls.title } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not delete class' });
+  }
+});
+
+// PATCH /api/classes/:id — actualizar/reprogramar/cancelar clase + notificar.
+app.patch('/api/classes/:id', requireAuth, async (req, res) => {
+  const profileId = req.authUser.id;
+  const { id } = req.params;
+  const patch = req.body || {};
+  const ALLOWED = ['title', 'scheduledDate', 'startTime', 'endTime', 'location', 'notes', 'instructorProfileId', 'status'];
+  for (const k of Object.keys(patch)) {
+    if (!ALLOWED.includes(k)) return res.status(400).json({ ok: false, error: 'Campo no permitido: ' + k });
+  }
+  try {
+    const { data: cls, error: cErr } = await supabaseAdmin.from('class_sessions').select('*').eq('id', id).maybeSingle();
+    if (cErr) throw new Error(cErr.message);
+    if (!cls) return res.status(404).json({ ok: false, error: 'Clase no encontrada' });
+
+    let authorized = false;
+    if (req.isSuperadmin) authorized = true;
+    else {
+      const membership = await getMembership(profileId, cls.establishment_id);
+      if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
+      if ([ROLE_OWNER, ROLE_ADMIN, ROLE_SENSEI].includes(membership.role)) authorized = true;
+      else if (membership.role === ROLE_INSTRUCTOR && cls.instructor_profile_id === profileId) authorized = true;
+    }
+    if (!authorized) return res.status(403).json({ ok: false, error: 'Tu rol no permite modificar esta clase' });
+
+    if (patch.status && !['scheduled', 'completed', 'cancelled'].includes(patch.status)) return res.status(400).json({ ok: false, error: 'Estado inválido' });
+    if (patch.location && String(patch.location).length > 200) return res.status(400).json({ ok: false, error: 'Ubicación demasiado larga' });
+    if (patch.scheduledDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(patch.scheduledDate))) return res.status(400).json({ ok: false, error: 'Fecha inválida' });
+    if (patch.instructorProfileId) {
+      const { data: m } = await supabaseAdmin.from('establishment_members').select('id').eq('establishment_id', cls.establishment_id).eq('profile_id', patch.instructorProfileId).maybeSingle();
+      if (!m) return res.status(400).json({ ok: false, error: 'El instructor no pertenece al establecimiento' });
+    }
+
+    const upd = classNotifs.buildClassUpdate(cls, patch);
+    if (Object.keys(upd).length === 0) {
+      return res.json({ ok: true, data: { ...cls, notified: 0, changed: false } });
+    }
+    // Snapshot de eventos ANTES del update (cls será mutado por el mock en memoria).
+    const events = classNotifs.detectClassEventTypes(cls, patch);
+    upd.updated_at = new Date().toISOString();
+
+    const { error: uErr } = await supabaseAdmin.from('class_sessions').update(upd).eq('id', id);
+    if (uErr) throw new Error(uErr.message);
+
+    const { data: updated, error: uErr2 } = await supabaseAdmin.from('class_sessions').select('*').eq('id', id).maybeSingle();
+    if (uErr2 || !updated) throw new Error('No se pudo leer la clase actualizada');
+
+    let notified = 0;
+    if (events.length) {
+      const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: updated.discipline_id, instructorProfileId: updated.instructor_profile_id });
+      for (const evt of events) {
+        const r = await classNotifs.notifyClassEvent(supabaseAdmin, {
+          classId: updated.id, establishmentId: updated.establishment_id, eventType: evt,
+          title: 'Clase actualizada', body: classNotifs.classEventBody(evt, updated),
+          version: String(updated.updated_at || ''), recipients
+        });
+        notified += r.notified;
+      }
+    }
+    return res.json({ ok: true, data: { ...updated, notified } });
+  } catch (err) {
+    return res.status(err.status || 500).json({ ok: false, error: err.message || 'Could not update class' });
   }
 });
 

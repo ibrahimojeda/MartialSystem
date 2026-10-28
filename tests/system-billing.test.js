@@ -364,3 +364,65 @@ test('23. POST mark-overdue requiere superadmin (403)', async () => {
   });
   assert.equal(res.status, 403);
 });
+
+test('24. Superadmin lista planes de todos los dojos (list_plans, solo lectura)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.establishment_plans = [
+    { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 },
+    { id: 'ep-2', establishment_id: 'est-2', plan_code: 'starter', price_usd: 49 }
+  ];
+  supabaseMock._tables.system_plans = [
+    { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] },
+    { id: 'sp-2', code: 'starter', name: 'Starter', features: [] }
+  ];
+  const res = await aiChat(superadminToken, 'Dame los planes que tiene cada dojo con MartialSystem');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('Dojo Bushido'));
+  assert.ok(String(json.data.content).includes('Academia Ajena'));
+  assert.ok(String(json.data.content).includes('Bushido'));
+  assert.ok(String(json.data.content).includes('Starter'));
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('25. Owner lista solo su propio plan', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.establishment_plans = [
+    { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 }
+  ];
+  supabaseMock._tables.system_plans = [
+    { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] }
+  ];
+  const res = await aiChat('tok_owner_1', 'Dame el plan de mi dojo', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(String(json.data.content).includes('Dojo Bushido'));
+  assert.ok(String(json.data.content).includes('Bushido'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('26. Owner no puede listar planes ajenos', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', 'Dame los planes de todos los dojos', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar los planes de otros establecimientos.'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('27. Instructor no puede consultar planes de la plataforma', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_instructor_1', 'Dame los planes que tiene cada dojo', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar la facturación o suscripciones de la plataforma.'));
+  assert.equal(supabaseMock.writes.length, 0);
+});

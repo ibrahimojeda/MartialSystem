@@ -700,6 +700,37 @@ module.exports = {
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
-  formatCurrencyAmount, formatEstablishmentBilling
+  formatCurrencyAmount, formatEstablishmentBilling,
+  aiDetectPlansQuery, formatPlansResult
 };
+
+// Detecta consultas de lectura sobre los planes/suscripciones de los dojos.
+function aiDetectPlansQuery(message) {
+  const text = String(message || '').toLowerCase().trim();
+  const hasPlanWord = /plan|planes|suscripci[oó]n|suscripciones|subscription|subscriptions/.test(text);
+  if (!hasPlanWord) return null;
+  const hasEntity = /dojo|academia|establecimiento|martialsystem|plataforma/.test(text) || /contratad/.test(text);
+  const isOwn = /mi dojo|mi academia|mi establecimiento/.test(text);
+  if (!hasEntity && !isOwn) return null;
+  return {
+    intent: 'read',
+    domain: 'system_billing',
+    operation: 'list_plans',
+    scope: isOwn ? 'own' : 'global',
+    filters: {},
+    confidence: 1
+  };
+}
+
+// Formatea el listado de planes de los dojos (sin IDs internos).
+function formatPlansResult(rows, scope) {
+  const list = rows || [];
+  if (!list.length) {
+    return scope === 'all'
+      ? 'No encontré planes configurados para los dojos en el sistema.'
+      : 'No encontré planes configurados para los dojos dentro de tu alcance autorizado.';
+  }
+  const lines = list.map(r => '- ' + (r.establishment_name || 'Dojo') + ' — ' + (r.plan_name || 'Plan'));
+  return 'Planes actuales de los dojos:\n\n' + lines.join('\n') + '\n\nTotal de dojos: ' + list.length;
+}
 

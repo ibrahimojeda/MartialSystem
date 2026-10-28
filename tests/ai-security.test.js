@@ -10,7 +10,7 @@ const {
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
-  formatCurrencyAmount, formatEstablishmentBilling
+  formatCurrencyAmount, formatEstablishmentBilling, aiDetectPlansQuery, formatPlansResult
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -577,6 +577,41 @@ test('formatCountResult billing vacío distingue superadmin de owner', () => {
     formatCountResult({ tool: 'billing', kind: 'overdue_establishments' }, { count: 0 }, { role: 'owner' }),
     'No encontré dojos con facturas vencidas dentro de tu alcance autorizado.'
   );
+});
+
+test('aiDetectPlansQuery detecta consultas de planes de dojos', () => {
+  const q = aiDetectPlansQuery('Dame los planes que tiene cada dojo con MartialSystem');
+  assert.ok(q);
+  assert.equal(q.intent, 'read');
+  assert.equal(q.operation, 'list_plans');
+  assert.equal(q.scope, 'global');
+});
+
+test('aiDetectPlansQuery detecta "mi dojo" como scope own', () => {
+  const q = aiDetectPlansQuery('Dame el plan de mi dojo');
+  assert.ok(q);
+  assert.equal(q.scope, 'own');
+});
+
+test('aiDetectPlansQuery no confunde plan de entrenamiento', () => {
+  assert.equal(aiDetectPlansQuery('¿Cuál es mi plan de entrenamiento?'), null);
+  assert.equal(aiDetectPlansQuery('¿Cuántos alumnos hay?'), null);
+});
+
+test('formatPlansResult produce listado legible sin IDs', () => {
+  const s = formatPlansResult(
+    [{ establishment_name: 'Dojo Bushido', plan_name: 'Profesional' }, { establishment_name: 'Academia MMA', plan_name: 'Básico' }],
+    'all'
+  );
+  assert.ok(s.includes('Dojo Bushido'));
+  assert.ok(s.includes('Profesional'));
+  assert.ok(s.includes('Total de dojos: 2'));
+  assert.ok(!s.includes('establishment_id'));
+});
+
+test('formatPlansResult vacío distingue superadmin de owner', () => {
+  assert.equal(formatPlansResult([], 'all'), 'No encontré planes configurados para los dojos en el sistema.');
+  assert.equal(formatPlansResult([], 'own'), 'No encontré planes configurados para los dojos dentro de tu alcance autorizado.');
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

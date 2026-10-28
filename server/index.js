@@ -13,7 +13,8 @@ const {
   buildAIIntent, normalizeAISemantics, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
-  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope, formatEstablishmentBilling
+  aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope, formatEstablishmentBilling,
+  aiDetectPlansQuery, formatPlansResult
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9079,6 +9080,48 @@ async function resolveEstablishmentByName(message, ctx, establishmentId) {
   return { status: 'general' };
 }
 
+// Lista los planes vigentes de los dojos (fuente canónica: establishment_plans + system_plans).
+async function aiListPlansTool(ctx, estId, page, pageSize) {
+  const scope = systemBillingScope(ctx);
+  if (scope === 'none') return { rows: [], scope: 'none', meta: { total: 0 } };
+  const p = Math.max(Number(page) || 1, 1);
+  const ps = Math.min(Math.max(Number(pageSize) || 25, 1), 50);
+  const from = (p - 1) * ps;
+  const to = from + ps - 1;
+
+  let effectiveEstId = null;
+  if (scope === 'own') {
+    effectiveEstId = ctx.establishmentId || estId || null;
+    if (!effectiveEstId) return { rows: [], scope: 'own', meta: { total: 0 } };
+  } else {
+    effectiveEstId = estId || null;
+  }
+
+  let query = supabaseAdmin.from('establishment_plans').select('establishment_id, plan_code, price_usd');
+  if (effectiveEstId) query = query.eq('establishment_id', effectiveEstId);
+  const { data, error } = await query.limit(5000);
+  if (error) throw new Error(error.message);
+  const epRows = data || [];
+
+  const estIds = [...new Set(epRows.map(r => r.establishment_id).filter(Boolean))];
+  const planCodes = [...new Set(epRows.map(r => r.plan_code).filter(Boolean))];
+  let estMap = {}, planMap = {};
+  if (estIds.length) {
+    const { data: ests } = await supabaseAdmin.from('establishments').select('id, name').in('id', estIds).limit(5000);
+    (ests || []).forEach(e => { estMap[e.id] = e.name; });
+  }
+  if (planCodes.length) {
+    const { data: plans } = await supabaseAdmin.from('system_plans').select('code, name').in('code', planCodes).limit(200);
+    (plans || []).forEach(pl => { planMap[pl.code] = pl.name; });
+  }
+
+  const rows = epRows.slice(from, to + 1).map(r => ({
+    establishment_name: estMap[r.establishment_id] || null,
+    plan_name: planMap[r.plan_code] || r.plan_code
+  }));
+  return { rows, scope, meta: { total: epRows.length, page: p, pageSize: ps } };
+}
+
 // Constructor de contexto Fase 1: datos REALES y acotados según rol/establecimiento.
 // La regla de oro: la IA solo recibe datos que el rol puede ver.
 async function buildAIContext(req, establishmentId) {
@@ -10478,6 +10521,28 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       const identity = getCurrentUserIdentity(ctx);
       const identityContent = formatIdentityResult(identity);
       return res.json({ ok: true, data: { content: identityContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, identity } });
+    }
+
+    // ── Planes de los dojos (lectura determinística) ──────────────────
+    const plansQuery = aiDetectPlansQuery(message);
+    if (plansQuery) {
+      const scope = systemBillingScope(ctx);
+      if (scope === 'none') {
+        return res.json({ ok: true, data: { content: 'No tienes permisos para consultar la facturación o suscripciones de la plataforma.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+      }
+      if (scope === 'own' && plansQuery.scope === 'global') {
+        return res.json({ ok: true, data: { content: 'No tienes permisos para consultar los planes de otros establecimientos.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+      }
+      if (scope === 'own' && !ctx.establishmentId) {
+        return res.json({ ok: true, data: { content: 'No encontré planes configurados para los dojos dentro de tu alcance autorizado.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+      }
+      try {
+        const plans = await aiListPlansTool(ctx, establishmentId, 1, 25);
+        const content = formatPlansResult(plans.rows, scope);
+        return res.json({ ok: true, data: { content, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, list: plans } });
+      } catch (e) {
+        return res.status(500).json({ ok: false, error: 'No pude consultar los planes de los dojos: ' + (e && e.message || 'error de base de datos') });
+      }
     }
 
     // ── Conteos determinísticos eficientes ─────────────────────────────

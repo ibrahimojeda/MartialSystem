@@ -9094,9 +9094,8 @@ async function aiListPlansTool(ctx, estId, page, pageSize) {
   if (scope === 'own') {
     effectiveEstId = ctx.establishmentId || estId || null;
     if (!effectiveEstId) return { rows: [], scope: 'own', meta: { total: 0 } };
-  } else {
-    effectiveEstId = estId || null;
   }
+  // scope 'all' (superadmin): effectiveEstId permanece null → sin filtro por establishmentId.
 
   let query = supabaseAdmin.from('establishment_plans').select('establishment_id, plan_code, price_usd');
   if (effectiveEstId) query = query.eq('establishment_id', effectiveEstId);
@@ -9169,14 +9168,34 @@ async function aiGetProfileSummaryTool(ctx, targetProfileId, message, establishm
       // 2) Coincidencia parcial: un token del mensaje aparece dentro del username/full_name.
       const STOP = new Set(['muéstrame', 'muestrame', 'dame', 'resumen', 'detalles', 'información', 'informacion', 'del', 'de', 'este', 'esta', 'el', 'la', 'usuario', 'perfil', 'que', 'cuál', 'cual', 'quiero', 'ver', 'los', 'las', 'qué', 'mi']);
       const tokens = text.split(/[^\p{L}0-9_@.]+/u).filter(t => t && t.length >= 3 && !STOP.has(t));
-      const partial = all.filter(p => {
-        const uname = String(p.username || '').toLowerCase();
-        const fname = String(p.full_name || '').toLowerCase();
-        return tokens.some(t => uname.includes(t) || fname.includes(t));
-      });
-      if (partial.length === 1) { profile = partial[0]; }
-      else if (partial.length > 1) { return { status: 'ambiguous' }; }
-      else { return { status: 'no_target' }; }
+
+      // 2a) Self: el mensaje menciona el username del usuario actual (p. ej. el
+      // superadmin "venta" no existe en la tabla profiles). Devuelve un resumen
+      // de la sesión, sin inventar ni crear un perfil.
+      const selfUname = String((ctx && ctx.username) || '').toLowerCase().trim();
+      if (selfUname && tokens.includes(selfUname)) {
+        profile = {
+          id: (ctx && ctx.profileId) || null,
+          username: (ctx && ctx.username) || '',
+          full_name: (ctx && ctx.fullName) || (ctx && ctx.username) || '',
+          role: (ctx && ctx.role) || '',
+          is_active: true,
+          created_at: null
+        };
+      } else {
+        const partial = all.filter(p => {
+          const uname = String(p.username || '').toLowerCase();
+          const fname = String(p.full_name || '').toLowerCase();
+          return tokens.some(t => uname.includes(t) || fname.includes(t));
+        });
+        if (partial.length === 1) { profile = partial[0]; }
+        else if (partial.length > 1) { return { status: 'ambiguous' }; }
+        else {
+          // Sin token significativo → pedir selección; con token sin match → no encontrado.
+          if (tokens.length === 0) return { status: 'no_target' };
+          return { status: 'not_found' };
+        }
+      }
     }
   }
 
@@ -10611,6 +10630,9 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const plansQuery = aiDetectPlansQuery(message);
     if (plansQuery) {
       const scope = systemBillingScope(ctx);
+      if (process.env.NODE_ENV === 'test') {
+        console.log('[ai-debug] list_plans', JSON.stringify({ intent: plansQuery.intent, operation: plansQuery.operation, scope, establishmentId, role: ctx.role }));
+      }
       if (scope === 'none') {
         return res.json({ ok: true, data: { content: 'No tienes permisos para consultar la facturación o suscripciones de la plataforma.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
       }
@@ -10635,6 +10657,9 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
       const targetProfileId = String((req.body && req.body.targetProfileId) || '').trim() || null;
       try {
         const result = await aiGetProfileSummaryTool(ctx, targetProfileId, message, establishmentId);
+        if (process.env.NODE_ENV === 'test') {
+          console.log('[ai-debug] profile_summary', JSON.stringify({ intent: profileQuery.intent, domain: profileQuery.domain, operation: profileQuery.operation, role: ctx.role, targetProfileId, status: result.status }));
+        }
         if (result.status === 'no_target') {
           return res.json({ ok: true, data: { content: '¿Qué perfil deseas consultar? Selecciona un perfil o indícame su nombre de usuario.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
         }
@@ -10642,7 +10667,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
           return res.json({ ok: true, data: { content: 'Encontré varios perfiles con ese nombre. Por favor, indícame el nombre de usuario exacto.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
         }
         if (result.status === 'not_found') {
-          return res.json({ ok: true, data: { content: 'No encontré el perfil solicitado.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
+          return res.json({ ok: true, data: { content: 'No encontré ese usuario.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
         }
         if (result.status === 'forbidden') {
           return res.json({ ok: true, data: { content: 'No tienes permisos para consultar ese perfil.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });

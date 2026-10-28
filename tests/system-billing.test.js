@@ -598,3 +598,88 @@ test('39. Resumen de perfil no expone campos sensibles (student)', async () => {
   assert.ok(!('password' in profile));
   assert.equal(supabaseMock.writes.length, 0);
 });
+
+test('40. Superadmin lista TODOS los planes aunque envíe establishmentId visual', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.establishment_plans = [
+    { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 },
+    { id: 'ep-2', establishment_id: 'est-2', plan_code: 'starter', price_usd: 49 },
+    { id: 'ep-3', establishment_id: 'est-3', plan_code: 'starter', price_usd: 49 }
+  ];
+  supabaseMock._tables.system_plans = [
+    { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] },
+    { id: 'sp-2', code: 'starter', name: 'Starter', features: [] }
+  ];
+  supabaseMock._tables.establishments.push({ id: 'est-3', name: 'Dojo Tres', city: 'C3', country: 'PA', is_active: true, created_at: '2026-01-01' });
+  const res = await aiChat(superadminToken, 'Dame los planes que tiene cada dojo con MartialSystem', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('Dojo Bushido'), 'debe incluir est-1');
+  assert.ok(c.includes('Academia Ajena'), 'debe incluir est-2');
+  assert.ok(c.includes('Dojo Tres'), 'debe incluir est-3');
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('41. Owner lista solo su plan (own) con establishmentId propio', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.establishment_plans = [
+    { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 },
+    { id: 'ep-2', establishment_id: 'est-2', plan_code: 'starter', price_usd: 49 }
+  ];
+  supabaseMock._tables.system_plans = [
+    { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] },
+    { id: 'sp-2', code: 'starter', name: 'Starter', features: [] }
+  ];
+  const res = await aiChat('tok_owner_1', 'Dame el plan de mi dojo', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('Dojo Bushido'), 'debe incluir su dojo');
+  assert.ok(!c.includes('Academia Ajena'), 'no debe incluir est-2');
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('42. Owner no devuelve planes de un establishmentId ajeno', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.establishment_plans = [
+    { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 },
+    { id: 'ep-2', establishment_id: 'est-2', plan_code: 'bushido', price_usd: 49 }
+  ];
+  supabaseMock._tables.system_plans = [
+    { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] },
+    { id: 'sp-2', code: 'starter', name: 'Starter', features: [] }
+  ];
+  const res = await aiChat('tok_owner_1', 'Dame el plan de mi dojo', 'est-2');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('No tienes permisos'), 'debe denegar el establecimiento ajeno');
+  assert.ok(!c.includes('Academia Ajena'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('43. Superadmin consulta su propio resumen por username (venta)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat(superadminToken, 'Muéstrame el resumen del usuario venta');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('venta'), 'debe identificar el username del superadmin');
+  assert.ok(c.includes('superadmin'), 'debe indicar el rol');
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('44. Superadmin busca un usuario inexistente → no encontrado', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat(superadminToken, 'Muéstrame el resumen del usuario inexistente_xyz');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(String(json.data.content).includes('No encontré ese usuario.'));
+  assert.equal(supabaseMock.writes.length, 0);
+});

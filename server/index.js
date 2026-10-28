@@ -10,7 +10,7 @@ const {
   AI_TOOLS, aiToolAllowed, aiParseToolBlock, detectImageType,
   isSSRFUnsafeUrl, aiSanitizeBaseUrl, aiSanitizeModel,
   hasAIFeatureWith, shouldBlockBilling, aiDetectIntent, aiExtractSearchParams,
-  buildAIIntent, normalizeAISemantics, validateAIIntent,
+  buildAIIntent, validateAIIntent,
   needsModelInterpretation, parseStructuredAIIntent, formatDeterministicAIResult,
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope, formatEstablishmentBilling,
@@ -3989,35 +3989,11 @@ app.post('/api/student-charges', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/student-charges/summary — resumen de cargos por estado y montos
-app.get('/api/student-charges/summary', requireAuth, async (req, res) => {
-  const profileId = req.authUser.id;
-  const { establishmentId } = req.query;
-  if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
-  try {
-    const membership = await getMembership(profileId, establishmentId);
-    if (!membership) return res.status(403).json({ ok: false, error: 'No access' });
-    const ctx = { profileId, role: membership.role, isSuperadmin: Boolean(req.isSuperadmin), establishmentId };
-    const scope = await getChargeStudentScope(ctx, establishmentId);
-
-    let query = supabaseAdmin.from('student_charges').select('id, amount, paid_amount, status').eq('establishment_id', establishmentId).limit(10000);
-    if (scope !== null) query = query.in('student_id', scope.length ? scope : ['__none__']);
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-
-    const counts = { pending: 0, partial: 0, paid: 0, overdue: 0, cancelled: 0 };
-    let totalPending = 0, totalOverdue = 0;
-    for (const r of (data || [])) {
-      counts[r.status] = (counts[r.status] || 0) + 1;
-      const rem = Number(r.amount) - Number(r.paid_amount || 0);
-      if (r.status === 'pending' || r.status === 'partial') totalPending += rem;
-      if (r.status === 'overdue') totalOverdue += rem;
-    }
-    return res.json({ ok: true, data: { counts, totalPending: Number(totalPending.toFixed(2)), totalOverdue: Number(totalOverdue.toFixed(2)) } });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message || 'Could not load summary' });
-  }
-});
+// GET /api/student-charges/summary — (deprecated) wrapper del servicio canónico student-receivables.
+app.get('/api/student-charges/summary', requireAuth, (req, res) => handleReceivables(req, res, async (rc) => {
+  const summary = await receivables.getStudentReceivablesSummary(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope, from: req.query.from, to: req.query.to, period: req.query.period });
+  return Object.assign({}, summary, { deprecated: true });
+}));
 
 // GET /api/student-charges/:id — ver un cargo (scoped)
 app.get('/api/student-charges/:id', requireAuth, async (req, res) => {
@@ -4243,7 +4219,7 @@ async function handleReceivables(req, res, fn) {
 }
 
 app.get('/api/student-receivables', requireAuth, (req, res) => handleReceivables(req, res, (rc) => receivables.getStudentBalances(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope })));
-app.get('/api/student-receivables/summary', requireAuth, (req, res) => handleReceivables(req, res, (rc) => receivables.getStudentReceivablesSummary(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope })));
+app.get('/api/student-receivables/summary', requireAuth, (req, res) => handleReceivables(req, res, (rc) => receivables.getStudentReceivablesSummary(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope, from: req.query.from, to: req.query.to, period: req.query.period })));
 app.get('/api/student-receivables/overdue', requireAuth, (req, res) => handleReceivables(req, res, (rc) => receivables.getOverdueStudentCharges(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope })));
 app.get('/api/student-receivables/paid', requireAuth, (req, res) => handleReceivables(req, res, (rc) => receivables.getPaidStudents(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope })));
 app.get('/api/student-receivables/:studentId', requireAuth, (req, res) => handleReceivables(req, res, async (rc) => {

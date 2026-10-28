@@ -45,23 +45,36 @@ test('aggregateStudentBalances: agrupa por alumno y separa monedas', () => {
   assert.equal(s2.number_of_overdue_charges, 0);
 });
 
-test('buildReceivablesSummary: cuenta personas únicas y no mezcla monedas', () => {
+test('buildReceivablesSummary: separa métricas y no mezcla monedas', () => {
   const balances = [
-    { student_id: 's1', amount_due: 100, paid_amount: 0, balance_due: 100, status: 'overdue', currency_balances: { ARS: 100 }, currency_paid: {} },
-    { student_id: 's2', amount_due: 60, paid_amount: 20, balance_due: 40, status: 'partial', currency_balances: { ARS: 40 }, currency_paid: { ARS: 20 } },
-    { student_id: 's3', amount_due: 40, paid_amount: 40, balance_due: 0, status: 'paid', currency_balances: { USD: 0 }, currency_paid: { USD: 40 } }
+    { student_id: 's1', amount_due: 100, paid_amount: 0, balance_due: 100, status: 'overdue', number_of_overdue_charges: 1, currency_balances: { ARS: 100 }, currency_paid: {} },
+    { student_id: 's2', amount_due: 60, paid_amount: 20, balance_due: 40, status: 'partial', number_of_overdue_charges: 0, currency_balances: { ARS: 40 }, currency_paid: { ARS: 20 } },
+    { student_id: 's3', amount_due: 40, paid_amount: 40, balance_due: 0, status: 'paid', number_of_overdue_charges: 0, currency_balances: { USD: 0 }, currency_paid: { USD: 40 } }
   ];
-  const s = sr.buildReceivablesSummary(balances, '2026-10-28');
-  assert.equal(s.peopleOwing, 2);
-  assert.equal(s.peoplePaid, 1);
-  assert.equal(s.peoplePartial, 1);
+  const pm = { peopleWhoMadePayments: 2, totalCollected: 60, collectedByCurrency: { ARS: 20, USD: 40 } };
+  const s = sr.buildReceivablesSummary(balances, pm, { from: '2026-10-01', to: '2026-10-28', period: 'this_month' });
+  assert.equal(s.peopleWithOutstandingBalance, 2);
+  assert.equal(s.peopleWithPaidCharges, 1);
+  assert.equal(s.peopleWithPartialCharges, 1);
+  assert.equal(s.peopleWithOverdueCharges, 1);
+  assert.equal(s.peopleWhoMadePayments, 2);
   assert.equal(s.totalOutstanding, 140);
-  assert.equal(s.totalPaid, 60);
+  assert.equal(s.totalCollected, 60);
   assert.deepEqual(s.currencyBreakdown, [
-    { currency: 'ARS', outstanding: 140, paid: 20 },
-    { currency: 'USD', outstanding: 0, paid: 40 }
+    { currency: 'ARS', outstanding: 140, paid: 20, collected: 20 },
+    { currency: 'USD', outstanding: 0, paid: 40, collected: 40 }
   ]);
-  assert.equal(s.asOf, '2026-10-28');
+  assert.equal(s.period, 'this_month');
+  assert.equal(s.from, '2026-10-01');
+});
+
+test('resolveDateRange: periodos y rango personalizado', () => {
+  assert.deepEqual(sr.resolveDateRange({ from: '2026-10-01', to: '2026-10-31' }), { from: '2026-10-01', to: '2026-10-31' });
+  for (const p of ['this_month', 'last_month', 'this_week', 'last_30_days']) {
+    const r = sr.resolveDateRange({ period: p });
+    assert.ok(r.from && r.to && r.from <= r.to, p + ' debe dar un rango válido');
+  }
+  assert.deepEqual(sr.resolveDateRange({}), { from: null, to: null });
 });
 
 // ── HTTP (servicios + endpoints + tenancy) ────────────────────────────
@@ -120,18 +133,20 @@ test('GET /api/student-receivables (owner) lista saldos y no escribe', async () 
   assert.equal(supabaseMock.writes.length, 0);
 });
 
-test('GET /api/student-receivables/summary calcula personas y monedas', async () => {
+test('GET /api/student-receivables/summary separa métricas y monedas', async () => {
   const res = await req('GET', '/api/student-receivables/summary?establishmentId=est-1', 'tok_owner_1');
   assert.equal(res.status, 200);
   const s = (await res.json()).data;
-  assert.equal(s.peopleOwing, 2);
-  assert.equal(s.peoplePaid, 1);
-  assert.equal(s.peoplePartial, 1);
+  assert.equal(s.peopleWithOutstandingBalance, 2);
+  assert.equal(s.peopleWithPaidCharges, 1);
+  assert.equal(s.peopleWithPartialCharges, 1);
+  assert.equal(s.peopleWithOverdueCharges, 1);
+  assert.equal(s.peopleWhoMadePayments, 2);
   assert.equal(s.totalOutstanding, 140);
-  assert.equal(s.totalPaid, 60);
+  assert.equal(s.totalCollected, 60);
   assert.deepEqual(s.currencyBreakdown, [
-    { currency: 'ARS', outstanding: 140, paid: 20 },
-    { currency: 'USD', outstanding: 0, paid: 40 }
+    { currency: 'ARS', outstanding: 140, paid: 20, collected: 20 },
+    { currency: 'USD', outstanding: 0, paid: 40, collected: 40 }
   ]);
   assert.equal(supabaseMock.writes.length, 0);
 });
@@ -188,6 +203,36 @@ test('error de Supabase no inventa cifras (500)', async () => {
   assert.equal(res.status, 500);
   const json = await res.json();
   assert.ok(json.error);
+});
+
+test('summary con rango personalizado filtra pagos por período', async () => {
+  const res = await req('GET', '/api/student-receivables/summary?establishmentId=est-1&from=2026-10-01&to=2026-10-31', 'tok_owner_1');
+  assert.equal(res.status, 200);
+  const s = (await res.json()).data;
+  assert.equal(s.peopleWhoMadePayments, 2);
+  assert.equal(s.totalCollected, 60);
+  assert.equal(s.from, '2026-10-01');
+  assert.equal(s.to, '2026-10-31');
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('summary rango sin pagos → peopleWhoMadePayments 0', async () => {
+  const res = await req('GET', '/api/student-receivables/summary?establishmentId=est-1&from=2026-11-01&to=2026-11-30', 'tok_owner_1');
+  assert.equal(res.status, 200);
+  const s = (await res.json()).data;
+  assert.equal(s.peopleWhoMadePayments, 0);
+  assert.equal(s.totalCollected, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('GET /api/student-charges/summary es wrapper deprecated del canónico', async () => {
+  const res = await req('GET', '/api/student-charges/summary?establishmentId=est-1', 'tok_owner_1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.deprecated, true);
+  assert.equal(typeof json.data.peopleWithOutstandingBalance, 'number');
+  assert.equal(typeof json.data.peopleWhoMadePayments, 'number');
+  assert.equal(supabaseMock.writes.length, 0);
 });
 
 console.log('Suite student-receivables: ejecutada con node:test');

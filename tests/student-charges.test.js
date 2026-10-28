@@ -184,12 +184,12 @@ test('L. Impide sobreaplicación', async () => {
   assert.equal(res.status, 400, 'supera saldo pendiente');
 });
 
-test('M. Summary por estado', async () => {
+test('M. Summary (wrapper deprecated del canónico)', async () => {
   const res = await req('GET', '/api/student-charges/summary?establishmentId=est-1', 'tok_owner_1');
   assert.equal(res.status, 200);
   const json = await res.json();
-  assert.equal(typeof json.data.counts.pending, 'number');
-  assert.equal(typeof json.data.totalPending, 'number');
+  assert.equal(json.data.deprecated, true);
+  assert.equal(typeof json.data.peopleWithOutstandingBalance, 'number');
 });
 
 test('N. No cambia pagos históricos', async () => {

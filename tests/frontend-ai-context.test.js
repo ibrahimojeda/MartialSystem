@@ -37,13 +37,17 @@ test('contexto visible para el usuario', () => {
   requireIn("'No hay un perfil seleccionado.'");
 });
 
-test('solo los selectores de instructor y guardian fijan el contexto IA (nunca studentId)', () => {
+test('instructor, guardian y student fijan el contexto IA con profileId (nunca studentId)', () => {
   requireIn("setAISelectedProfile(profileId, instr.name, 'instructor');");
   requireIn("setAISelectedProfile(profileId, tutor.name, 'guardian');");
-  // selectStudentForCurriculum recibe students.id, NO debe alimentar el contexto IA.
-  requireIn('window.selectStudentForCurriculum = (studentId) =>', 'selectStudentForCurriculum usa studentId');
+  // student: se resuelve students.profile_id → profiles.id, nunca students.id.
+  requireIn("setAISelectedProfile(studentProfileId, studentName, 'student', academyId);");
+  requireIn("const studentProfileId = st?.profile_id || st?.profileId || selected?.profile_id || selected?.profileId || '';");
+  requireIn("setAIContextHint('Este alumno no tiene un perfil de acceso asociado.');");
   const calls = (html.match(/setAISelectedProfile\(/g) || []).length;
-  assert.equal(calls, 2, 'solo instructor y guardian deben llamar setAISelectedProfile (encontrados ' + calls + ')');
+  assert.equal(calls, 3, 'instructor, guardian y student deben llamar setAISelectedProfile (encontrados ' + calls + ')');
+  // Ninguna llamada usa el studentId crudo (students.id) como targetProfileId.
+  assert.ok(!/setAISelectedProfile\(\s*studentId\b/.test(html), 'no debe pasar students.id como profileId');
 });
 
 test('se limpia el perfil al cambiar de establecimiento y al cerrar sesión', () => {
@@ -81,10 +85,10 @@ test('buildAIChatBody (código real) arma el body correcto', () => {
 });
 
 // ── 3. Ejecución del CÓDIGO REAL (cambio de perfil / cierre) ─────────
-test('setAISelectedProfile / clearAISelectedProfile (código real) gestionan el estado', () => {
+test('setAISelectedProfile / clearAISelectedProfile / setAIContextHint (código real) gestionan el estado', () => {
   const block = extractBlock('AI_PROFILE_SELECT_START', 'AI_PROFILE_SELECT_END');
   const sandbox = {
-    state: { aiSelectedProfile: { profileId: null, profileName: null, profileType: null, establishmentId: null } },
+    state: { aiSelectedProfile: { profileId: null, profileName: null, profileType: null, establishmentId: null }, aiContextHint: null },
     renderAIContext: () => {}
   };
   const win = new Function('window', 'state', 'renderAIContext', block + '\nreturn window;')({}, sandbox.state, sandbox.renderAIContext);
@@ -92,15 +96,22 @@ test('setAISelectedProfile / clearAISelectedProfile (código real) gestionan el 
   // perfil A → A
   win.setAISelectedProfile('profile-A', 'A', 'instructor', 'est-1');
   assert.equal(sandbox.state.aiSelectedProfile.profileId, 'profile-A');
+  assert.equal(sandbox.state.aiContextHint, null);
 
   // perfil B → B (cambiar de perfil)
   win.setAISelectedProfile('profile-B', 'B', 'instructor', 'est-1');
   assert.equal(sandbox.state.aiSelectedProfile.profileId, 'profile-B');
 
-  // cerrar detalle → sin A ni B
+  // alumno sin profile_id → hint controlado + sin perfil
   win.clearAISelectedProfile();
+  win.setAIContextHint('Este alumno no tiene un perfil de acceso asociado.');
   assert.equal(sandbox.state.aiSelectedProfile.profileId, null);
-  assert.equal(sandbox.state.aiSelectedProfile.profileName, null);
+  assert.equal(sandbox.state.aiContextHint, 'Este alumno no tiene un perfil de acceso asociado.');
+
+  // al seleccionar un perfil válido, se limpia el hint
+  win.setAISelectedProfile('profile-C', 'C', 'student', 'est-1');
+  assert.equal(sandbox.state.aiContextHint, null);
+  assert.equal(sandbox.state.aiSelectedProfile.profileId, 'profile-C');
 });
 
 console.log('Suite frontend-ai-context: ejecutada con node:test');

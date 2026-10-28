@@ -2769,7 +2769,8 @@
       marketPage: 1,
       marketPageSize: 12,
       marketplacePanelMode: 'catalog',
-      aiSelectedProfile: { profileId: null, profileName: null, profileType: null, establishmentId: null }
+      aiSelectedProfile: { profileId: null, profileName: null, profileType: null, establishmentId: null },
+      aiContextHint: null
     };
 
     // ─── CONTEXTO DE PERFIL PARA EL ASISTENTE IA ────────────────────────
@@ -2778,6 +2779,7 @@
     // Solo se usa profile.id; nunca student.id ni establishment.id.
     /* AI_PROFILE_SELECT_START */
     window.setAISelectedProfile = (profileId, profileName, profileType, establishmentId) => {
+      state.aiContextHint = null;
       state.aiSelectedProfile = {
         profileId: profileId || null,
         profileName: profileName || '',
@@ -2787,13 +2789,23 @@
       renderAIContext();
     };
     window.clearAISelectedProfile = () => {
+      state.aiContextHint = null;
       state.aiSelectedProfile = { profileId: null, profileName: null, profileType: null, establishmentId: null };
+      renderAIContext();
+    };
+    window.setAIContextHint = (msg) => {
+      state.aiContextHint = msg || null;
       renderAIContext();
     };
     /* AI_PROFILE_SELECT_END */
     function renderAIContext() {
       const el = ids('ai-context-line');
       if (!el) return;
+      if (state.aiContextHint) {
+        el.textContent = state.aiContextHint;
+        el.style.color = '#ffb86b';
+        return;
+      }
       const p = state.aiSelectedProfile || {};
       if (p.profileId) {
         el.textContent = 'Contexto actual: ' + (p.profileName || p.profileId);
@@ -6004,6 +6016,15 @@
         || state.memberships.find((m) => m?.establishment?.id === academyId)?.establishment?.name
         || academyId
         || '-';
+      // Contexto IA: resolver students.profile_id → profiles.id (NUNCA students.id).
+      const studentProfileId = st?.profile_id || st?.profileId || selected?.profile_id || selected?.profileId || '';
+      const studentName = st?.full_name || getStudentNameFromRow(selected) || 'Alumno';
+      if (studentProfileId) {
+        setAISelectedProfile(studentProfileId, studentName, 'student', academyId);
+      } else {
+        clearAISelectedProfile();
+        setAIContextHint('Este alumno no tiene un perfil de acceso asociado.');
+      }
       const detail = ids('students-detail-wrap');
       if (detail) {
         detail.innerHTML = `<div style="padding:10px;border:1px solid var(--line);border-radius:10px;">

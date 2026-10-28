@@ -9127,7 +9127,20 @@ async function aiListPlansTool(ctx, estId, page, pageSize) {
 async function profileInScope(ctx, targetProfileId, establishmentId) {
   const role = String((ctx && ctx.role) || '').toLowerCase();
   if (role === 'superadmin') return true;
-  if (role === 'student' || role === 'guardian') return targetProfileId === ctx.profileId;
+  if (role === 'student') return targetProfileId === ctx.profileId;
+  if (role === 'guardian') {
+    // El guardián puede consultar su propio perfil y los perfiles de los alumnos vinculados.
+    if (targetProfileId === ctx.profileId) return true;
+    const { data: links } = await supabaseAdmin.from('guardian_students')
+      .select('student_id')
+      .eq('guardian_profile_id', ctx.profileId);
+    const studentIds = (links || []).map((l) => l.student_id).filter(Boolean);
+    if (!studentIds.length) return false;
+    const { data: students } = await supabaseAdmin.from('students')
+      .select('profile_id')
+      .in('id', studentIds);
+    return Boolean((students || []).find((s) => s.profile_id === targetProfileId));
+  }
   const estId = ctx.establishmentId || establishmentId;
   if (!estId) return false;
   const { data: m } = await supabaseAdmin.from('establishment_members').select('id').eq('establishment_id', estId).eq('profile_id', targetProfileId).maybeSingle();

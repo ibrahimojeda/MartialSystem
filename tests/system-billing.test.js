@@ -21,6 +21,14 @@ function aiChat(token, message, establishmentId) {
   });
 }
 
+function aiChatTarget(token, message, establishmentId, targetProfileId) {
+  return fetch(baseUrl + '/api/ai/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ message, establishmentId, targetProfileId })
+  });
+}
+
 before(async () => {
   process.env.NODE_ENV = 'test';
   process.env.SUPERADMIN_USERNAME = 'venta';
@@ -44,6 +52,11 @@ before(async () => {
   supabaseMock.setToken('tok_sensei_1', { id: 'sensei-1', email: null, role: 'sensei', user_metadata: {} });
   supabaseMock.setToken('tok_student_1', { id: 'student-1', email: null, role: 'student', user_metadata: {} });
   supabaseMock.setToken('tok_guardian_1', { id: 'guardian-1', email: null, role: 'guardian', user_metadata: {} });
+  // Membresías para que getAIContextRole resuelva el rol real de student/guardian en est-1.
+  supabaseMock._tables.establishment_members.push(
+    { id: 'm-student', establishment_id: 'est-1', profile_id: 'student-1', role: 'student', created_at: '2026-01-01' },
+    { id: 'm-guardian', establishment_id: 'est-1', profile_id: 'guardian-1', role: 'guardian', created_at: '2026-01-01' }
+  );
 
   // Facturas del sistema: est-1 (propia) y est-2 (ajena).
   supabaseMock._tables.system_usage_bills = [
@@ -504,5 +517,84 @@ test('33. Resumen de perfil no expone email/teléfono/datos sensibles', async ()
   const profile = json.data.profile || {};
   assert.ok(!('email' in profile));
   assert.ok(!('phone' in profile));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('34. Student consulta su propio perfil (targetProfileId propio)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChatTarget('tok_student_1', 'Muéstrame el resumen de este perfil', 'est-1', 'student-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('Student 1'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('35. Student no consulta un perfil ajeno', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChatTarget('tok_student_1', 'Muéstrame el resumen de este perfil', 'est-1', 'owner-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar ese perfil.'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('36. Guardian consulta su propio perfil', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChatTarget('tok_guardian_1', 'Muéstrame el resumen de este perfil', 'est-1', 'guardian-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(String(json.data.content).includes('Guardian 1'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('37. Guardian consulta el perfil de un alumno vinculado', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const stu = supabaseMock._tables.students.find((s) => s.id === 'stu-1');
+  if (stu) stu.profile_id = 'student-1';
+  supabaseMock._tables.guardian_students = [
+    { guardian_profile_id: 'guardian-1', student_id: 'stu-1', establishment_id: 'est-1', relationship: 'tutor' }
+  ];
+  const res = await aiChatTarget('tok_guardian_1', 'Muéstrame el resumen de este perfil', 'est-1', 'student-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(String(json.data.content).includes('Student 1'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('38. Guardian no consulta un perfil no vinculado', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.guardian_students = [];
+  const res = await aiChatTarget('tok_guardian_1', 'Muéstrame el resumen de este perfil', 'est-1', 'owner-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar ese perfil.'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('39. Resumen de perfil no expone campos sensibles (student)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const prof = supabaseMock._tables.profiles.find((p) => p.id === 'student-1');
+  if (prof) { prof.email = 'secreto@x.invalid'; prof.phone = '999'; prof.password = 'pw'; }
+  const res = await aiChatTarget('tok_student_1', 'Muéstrame el resumen de este perfil', 'est-1', 'student-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('Student 1'));
+  assert.ok(!c.includes('secreto@x.invalid'));
+  assert.ok(!c.includes('999'));
+  assert.ok(!c.includes('pw'));
+  const profile = json.data.profile || {};
+  assert.ok(!('email' in profile));
+  assert.ok(!('phone' in profile));
+  assert.ok(!('password' in profile));
   assert.equal(supabaseMock.writes.length, 0);
 });

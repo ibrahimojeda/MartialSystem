@@ -680,6 +680,19 @@ test('formatProfileSummary aplica whitelist por rol del solicitante', () => {
   assert.ok(!s.includes('SECRETO_XYZ'));
 });
 
+test('sanitizeProfileForRole no expone campos sensibles para ningún rol', () => {
+  const sensitive = {
+    id: 'prof_interno', created_at: '2024-01-01', email: 'e@x.com', phone: '+1',
+    password: 'p', password_hash: 'ph', access_token: 'at', refresh_token: 'rt',
+    api_key: 'k', auth_secret: 's', medical_notes: 'm', balance_due: 99, stack: 'trace'
+  };
+  ['superadmin', 'owner', 'admin', 'instructor', 'sensei', 'student', 'guardian'].forEach((role) => {
+    const clean = sanitizeProfileForRole({ full_name: 'A', username: 'u', role, is_active: true, establishment_name: 'E', ...sensitive }, role);
+    Object.keys(sensitive).forEach((f) => assert.ok(!(f in clean), role + ' no debe exponer ' + f));
+    assert.deepEqual(Object.keys(clean).sort(), ['establishment_name', 'full_name', 'is_active', 'role', 'username']);
+  });
+});
+
 console.log('Suite ai-security: ejecutada con node:test');
 
 

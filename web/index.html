@@ -2776,6 +2776,7 @@
     // Guarda el perfil seleccionado en la UI para que /api/ai/chat reciba
     // targetProfileId y responda "sobre este perfil" sin ambigüedad.
     // Solo se usa profile.id; nunca student.id ni establishment.id.
+    /* AI_PROFILE_SELECT_START */
     window.setAISelectedProfile = (profileId, profileName, profileType, establishmentId) => {
       state.aiSelectedProfile = {
         profileId: profileId || null,
@@ -2789,6 +2790,7 @@
       state.aiSelectedProfile = { profileId: null, profileName: null, profileType: null, establishmentId: null };
       renderAIContext();
     };
+    /* AI_PROFILE_SELECT_END */
     function renderAIContext() {
       const el = ids('ai-context-line');
       if (!el) return;
@@ -10883,6 +10885,7 @@
     window.selectGuardianDetail = (profileId) => {
       const tutor = (state.guardiansData || []).find(g => g.profileId === profileId);
       if (!tutor) return;
+      setAISelectedProfile(profileId, tutor.name, 'guardian');
       const detail = ids('guardians-detail-wrap');
       if (detail) {
         detail.innerHTML = `
@@ -11623,6 +11626,17 @@
         if (st) st.textContent = 'Error al probar: ' + err.message;
       }
     }
+    /* AI_BODY_BUILDER_START */
+    // Construye el body de /api/ai/chat de forma pura y testeable.
+    // targetProfileId solo se incluye si hay profileId seleccionado (profiles.id);
+    // nunca se envía students.id ni establishments.id.
+    window.buildAIChatBody = (sel, msg, eid) => {
+      const body = { message: msg, establishmentId: eid || null };
+      if (sel && sel.profileId) body.targetProfileId = sel.profileId;
+      return body;
+    };
+    /* AI_BODY_BUILDER_END */
+
     async function aiSendPrompt() {
       const input = ids('ai-prompt');
       const out = ids('ai-output');
@@ -11632,9 +11646,7 @@
       out.style.display = 'block';
       out.innerHTML = '⏳ Consultando al asistente...';
       try {
-        const sel = state.aiSelectedProfile || {};
-        const body = { message: msg, establishmentId: eid || null };
-        if (sel.profileId) body.targetProfileId = sel.profileId;
+        const body = window.buildAIChatBody(state.aiSelectedProfile, msg, eid);
         const r = await api('/api/ai/chat', {
           method: 'POST',
           body: JSON.stringify(body)

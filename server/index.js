@@ -19,6 +19,7 @@ const {
 } = require('./ai-security');
 const { normalizeUserMessage } = require('./ai-semantic');
 const receivables = require('./student-receivables');
+const messaging = require('./messaging');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
 let APP_VERSION = '0.0.0';
@@ -4229,6 +4230,35 @@ app.get('/api/student-receivables/:studentId', requireAuth, (req, res) => handle
   const rows = await receivables.getStudentBalances(supabaseAdmin, { establishmentId: rc.estId, scope: rc.scope, studentId: req.params.studentId });
   return rows[0] || null;
 }));
+
+// ── Mensajería interna (Fase B) ────────────────────────────────────────
+async function resolveMessagingContext(req) {
+  const profileId = req.authUser.id;
+  const establishmentId = req.query.establishmentId || (req.body && req.body.establishmentId) || null;
+  if (req.isSuperadmin) return { ctx: { profileId, role: 'superadmin', isSuperadmin: true, establishmentId } };
+  if (!establishmentId) return { error: 'establishmentId is required', status: 400 };
+  const membership = await getMembership(profileId, establishmentId);
+  if (!membership) return { error: 'No access', status: 403 };
+  return { ctx: { profileId, role: membership.role, isSuperadmin: false, establishmentId } };
+}
+
+async function handleMessaging(req, res, fn) {
+  const rc = await resolveMessagingContext(req);
+  if (rc.error) return res.status(rc.status || 400).json({ ok: false, error: rc.error });
+  try {
+    const data = await fn(rc.ctx);
+    return res.json({ ok: true, data });
+  } catch (err) {
+    return res.status(err.status || 500).json({ ok: false, error: err.message || 'Error de mensajería' });
+  }
+}
+
+app.post('/api/conversations', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.createConversation(supabaseAdmin, ctx, { subject: req.body && req.body.subject, memberProfileIds: req.body && req.body.memberProfileIds })));
+app.get('/api/conversations', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.listConversations(supabaseAdmin, ctx)));
+app.get('/api/conversations/:id', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.getConversation(supabaseAdmin, ctx, req.params.id)));
+app.post('/api/conversations/:id/messages', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.addMessage(supabaseAdmin, ctx, req.params.id, req.body && req.body.body)));
+app.put('/api/messages/:id/read', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.markMessageRead(supabaseAdmin, ctx, req.params.id)));
+app.put('/api/conversations/:id/archive', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.archiveConversation(supabaseAdmin, ctx, req.params.id)));
 
 app.get('/api/reports/summary', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;

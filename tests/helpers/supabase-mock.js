@@ -148,7 +148,11 @@ function defaultSeed() {
     notifications: [],
     guardian_students: [],
     student_charges: [],
-    student_charge_payments: []
+    student_charge_payments: [],
+    conversations: [],
+    conversation_members: [],
+    messages: [],
+    message_recipients: []
   };
 }
 

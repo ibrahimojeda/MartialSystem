@@ -128,6 +128,8 @@ async function createConversation(db, ctx, { subject, memberProfileIds }) {
 }
 
 async function addMessage(db, ctx, conversationId, body) {
+  // El superadmin no tiene perfil UUID; administra pero no envía mensajes.
+  if (ctx.isSuperadmin) throw httpError(403, 'El superadmin no puede enviar mensajes: no tiene un perfil de usuario asociado.');
   const text = String(body || '').trim();
   if (!text) throw httpError(400, 'body is required');
   const { data: c, error: cErr } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
@@ -149,6 +151,8 @@ async function markMessageRead(db, ctx, messageId) {
   const { data: c, error: cErr } = await db.from('conversations').select('*').eq('id', msg.conversation_id).maybeSingle();
   if (cErr) throw httpError(500, 'Error leyendo la conversación: ' + cErr.message);
   if (!c || !(await canAccessConversation(db, ctx, c))) throw httpError(403, 'No access to this conversation');
+  // El superadmin no trackea lectura (no tiene profile_id UUID).
+  if (ctx.isSuperadmin) return { ok: true };
   const { data: existing } = await db.from('message_recipients').select('id').eq('message_id', messageId).eq('profile_id', ctx.profileId).maybeSingle();
   if (!existing) {
     const { error: rErr } = await db.from('message_recipients').insert({ id: crypto.randomUUID(), message_id: messageId, profile_id: ctx.profileId, read_at: new Date().toISOString() });

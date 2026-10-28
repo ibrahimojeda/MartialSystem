@@ -166,4 +166,26 @@ test('no deja conversación parcial si falla un miembro', async () => {
   assert.ok(!supabaseMock._tables.conversations.some((c) => c.subject === 'Parcial'), 'no debe quedar conversación parcial');
 });
 
+test('superadmin crea conversación (administrativa)', async () => {
+  const res = await req('POST', '/api/conversations', 'tok_superadmin', { establishmentId: 'est-1', subject: 'SA Admin', memberProfileIds: ['owner-1', 'instructor-1'] });
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(json.data && json.data.id);
+  assert.equal(json.data.created_by, null);
+});
+
+test('superadmin no puede enviar mensajes (403)', async () => {
+  const res = await req('POST', `/api/conversations/${convId}/messages?establishmentId=est-1`, 'tok_superadmin', { body: 'hola' });
+  assert.equal(res.status, 403);
+});
+
+test('instructor envía mensaje con sender_profile_id válido', async () => {
+  const res = await req('POST', `/api/conversations/${convId}/messages?establishmentId=est-1`, 'tok_instructor_1', { body: 'Hola desde instructor' });
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(json.data && json.data.id);
+  assert.equal(json.data.sender_profile_id, 'instructor-1');
+  assert.ok(json.data.sender_profile_id !== 'superadmin');
+});
+
 console.log('Suite messaging: ejecutada con node:test');

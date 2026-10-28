@@ -642,23 +642,30 @@ test('41. Owner lista solo su plan (own) con establishmentId propio', async () =
   assert.equal(supabaseMock.writes.length, 0);
 });
 
-test('42. Owner no devuelve planes de un establishmentId ajeno', async () => {
+test('42. Owner aislado: no ve el plan de un establecimiento ajeno (est-2)', async () => {
   setConfig();
   supabaseMock.writes.length = 0;
+  // est-2 tiene su propio plan con ia_features para pasar el gating de plan y
+  // llegar a la verificación de alcance (no confundir con el gating PLAN_NO_IA).
   supabaseMock._tables.establishment_plans = [
     { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 },
-    { id: 'ep-2', establishment_id: 'est-2', plan_code: 'bushido', price_usd: 49 }
+    { id: 'ep-2', establishment_id: 'est-2', plan_code: 'premium', price_usd: 99 }
   ];
   supabaseMock._tables.system_plans = [
     { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] },
-    { id: 'sp-2', code: 'starter', name: 'Starter', features: [] }
+    { id: 'sp-2', code: 'premium', name: 'Premium', features: ['ia_features'] }
   ];
+  // El mismo token que es owner en est-1 pide el plan con establishmentId ajeno (est-2).
+  // getAIContextRole degrada su rol a 'user' → systemBillingScope('user') = 'none'.
   const res = await aiChat('tok_owner_1', 'Dame el plan de mi dojo', 'est-2');
   assert.equal(res.status, 200);
   const json = await res.json();
   const c = String(json.data.content);
-  assert.ok(c.includes('No tienes permisos'), 'debe denegar el establecimiento ajeno');
-  assert.ok(!c.includes('Academia Ajena'));
+  assert.ok(c.includes('No tienes permisos'), 'debe denegar');
+  // No debe filtrar NADA del establecimiento ajeno.
+  assert.ok(!c.includes('Academia Ajena'), 'no debe filtrar el nombre de est-2');
+  assert.ok(!c.includes('Premium'), 'no debe filtrar el plan_name de est-2');
+  assert.ok(!c.includes('99'), 'no debe filtrar el price_usd de est-2');
   assert.equal(supabaseMock.writes.length, 0);
 });
 

@@ -478,6 +478,10 @@ test('aiDetectIntent enruta "¿qué dojos deben?" a read_billing', () => {
 });
 
 // ─── Permisos de facturación del sistema ───
+// Regla pura de alcance para planes/facturación de plataforma.
+// Nota: cuando un owner/admin solicita un establecimiento AJENO, getAIContextRole
+// degrada su rol a 'user' (no es miembro de ese establecimiento), por lo que
+// systemBillingScope devuelve 'none'. Esa degradación ES el aislamiento cross-tenant.
 test('systemBillingScope aplica permisos por rol', () => {
   assert.equal(systemBillingScope({ role: 'superadmin' }), 'all');
   assert.equal(systemBillingScope({ role: 'owner' }), 'own');
@@ -486,6 +490,7 @@ test('systemBillingScope aplica permisos por rol', () => {
   assert.equal(systemBillingScope({ role: 'sensei' }), 'none');
   assert.equal(systemBillingScope({ role: 'student' }), 'none');
   assert.equal(systemBillingScope({ role: 'guardian' }), 'none');
+  assert.equal(systemBillingScope({ role: 'user' }), 'none', 'rol degradado (owner en establecimiento ajeno)');
 });
 
 // ─── formatCountResult billing ───

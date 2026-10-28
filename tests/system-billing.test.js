@@ -472,3 +472,37 @@ test('31. Owner no consulta perfil de otro establecimiento', async () => {
   assert.ok(String(json.data.content).includes('No tienes permisos para consultar ese perfil.'));
   assert.equal(supabaseMock.writes.length, 0);
 });
+
+test('32. Nombre ambiguo de perfil pide aclaración (no escoge el primero)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.profiles.push(
+    { id: 'tanaka-1', username: 'tanaka1', role: 'instructor', full_name: 'Kenji Tanaka', is_active: true, auth_email: 't1@x.invalid' },
+    { id: 'tanaka-2', username: 'tanaka2', role: 'instructor', full_name: 'Hiroshi Tanaka', is_active: true, auth_email: 't2@x.invalid' }
+  );
+  const res = await aiChat(superadminToken, 'Muéstrame el resumen del usuario Tanaka');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('varios perfiles'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('33. Resumen de perfil no expone email/teléfono/datos sensibles', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  supabaseMock._tables.profiles.push(
+    { id: 'priv-1', username: 'priv1', role: 'owner', full_name: 'Privado Uno', is_active: true, auth_email: 'priv1@x.invalid', email: 'secreto@x.invalid', phone: '555-1234' }
+  );
+  const res = await aiChat(superadminToken, 'Muéstrame el resumen del usuario priv1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('Privado Uno'));
+  assert.ok(!c.includes('secreto@x.invalid'));
+  assert.ok(!c.includes('555-1234'));
+  const profile = json.data.profile || {};
+  assert.ok(!('email' in profile));
+  assert.ok(!('phone' in profile));
+  assert.equal(supabaseMock.writes.length, 0);
+});

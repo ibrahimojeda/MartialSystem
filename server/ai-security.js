@@ -714,7 +714,10 @@ function aiDetectProfileSummaryQuery(message) {
   return null;
 }
 
-// Formatea el resumen de un perfil (sin IDs internos ni secretos).
+// Formatea el resumen de un perfil — WHITELIST EXPLÍCITA de campos.
+// Campos permitidos: full_name, username, role, establishment_name, is_active.
+// Excluidos SIEMPRE (aunque existan en la fila): email, phone, birth_date,
+// datos médicos, notas, pagos, password, tokens, API keys, auth secrets, IDs internos.
 function formatProfileSummary(profile) {
   return [
     'Resumen del perfil:',

@@ -9143,13 +9143,28 @@ async function aiGetProfileSummaryTool(ctx, targetProfileId, message, establishm
   } else {
     const text = String(message || '').toLowerCase();
     const { data: profs } = await supabaseAdmin.from('profiles').select('id, username, full_name, role, is_active, created_at').limit(500);
-    const matches = (profs || []).filter(p =>
+    const all = profs || [];
+
+    // 1) Coincidencia exacta: username o full_name aparece completo en el mensaje.
+    const exact = all.filter(p =>
       (p.username && text.includes(String(p.username).toLowerCase())) ||
       (p.full_name && text.includes(String(p.full_name).toLowerCase()))
     );
-    if (matches.length === 1) profile = matches[0];
-    else if (matches.length > 1) return { status: 'ambiguous' };
-    else return { status: 'no_target' };
+    if (exact.length === 1) { profile = exact[0]; }
+    else if (exact.length > 1) { return { status: 'ambiguous' }; }
+    else {
+      // 2) Coincidencia parcial: un token del mensaje aparece dentro del username/full_name.
+      const STOP = new Set(['muéstrame', 'muestrame', 'dame', 'resumen', 'detalles', 'información', 'informacion', 'del', 'de', 'este', 'esta', 'el', 'la', 'usuario', 'perfil', 'que', 'cuál', 'cual', 'quiero', 'ver', 'los', 'las', 'qué', 'mi']);
+      const tokens = text.split(/[^\p{L}0-9_@.]+/u).filter(t => t && t.length >= 3 && !STOP.has(t));
+      const partial = all.filter(p => {
+        const uname = String(p.username || '').toLowerCase();
+        const fname = String(p.full_name || '').toLowerCase();
+        return tokens.some(t => uname.includes(t) || fname.includes(t));
+      });
+      if (partial.length === 1) { profile = partial[0]; }
+      else if (partial.length > 1) { return { status: 'ambiguous' }; }
+      else { return { status: 'no_target' }; }
+    }
   }
 
   if (!profile) return { status: 'not_found' };

@@ -54,20 +54,27 @@ function createSupabaseMock(seed = {}) {
     };
     q.insert = (payload) => {
       const recs = Array.isArray(payload) ? payload : [payload];
+      if (mock._errors[table]) {
+        const err = { message: mock._errors[table] };
+        return { select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }), then: (r) => Promise.resolve({ data: null, error: err }).then(r) };
+      }
       recs.forEach(p => { mock.writes.push({ table, operation: 'insert', payload: p }); rows.push(p); });
       return { select: () => ({ single: () => Promise.resolve({ data: recs[0], error: null }) }), then: (r) => Promise.resolve({ data: recs, error: null }).then(r) };
     };
     q.update = (payload) => {
+      const errResp = () => (mock._errors[table] ? { data: null, error: { message: mock._errors[table] } } : null);
       const upd = {
         eq: (col, val) => { state.filters.push({ type: 'eq', col, val }); return upd; },
         select: () => upd,
         single: () => {
+          const e = errResp(); if (e) return Promise.resolve(e);
           const targets = filtered();
           targets.forEach(r => Object.assign(r, payload));
           mock.writes.push({ table, operation: 'update', payload });
           return Promise.resolve(targets.length ? { data: targets[0], error: null } : { data: null, error: { message: 'not found' } });
         },
         then: (resolve, reject) => {
+          const e = errResp(); if (e) return Promise.resolve(e).then(resolve, reject);
           const targets = filtered();
           targets.forEach(r => Object.assign(r, payload));
           mock.writes.push({ table, operation: 'update', payload });
@@ -77,8 +84,18 @@ function createSupabaseMock(seed = {}) {
       return upd;
     };
     q.delete = () => {
-      mock.writes.push({ table, operation: 'delete', payload: null });
-      return { in: () => q, eq: () => q, then: (r) => Promise.resolve({ data: null, error: null }).then(r) };
+      const del = {
+        eq: (col, val) => { state.filters.push({ type: 'eq', col, val }); return del; },
+        in: (col, val) => { state.filters.push({ type: 'in', col, val }); return del; },
+        then: (resolve, reject) => {
+          if (mock._errors[table]) return Promise.resolve({ data: null, error: { message: mock._errors[table] } }).then(resolve, reject);
+          const targets = filtered();
+          for (const t of targets) { const idx = rows.indexOf(t); if (idx >= 0) rows.splice(idx, 1); }
+          mock.writes.push({ table, operation: 'delete', payload: { count: targets.length } });
+          return Promise.resolve({ data: null, error: null }).then(resolve, reject);
+        }
+      };
+      return del;
     };
     return q;
   }

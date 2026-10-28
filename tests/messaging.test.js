@@ -134,4 +134,36 @@ test('lecturas de mensajería no escriben', async () => {
   assert.equal(supabaseMock.writes.length, 0);
 });
 
+test('miembro de otro establecimiento rechazado (400)', async () => {
+  const res = await req('POST', '/api/conversations', 'tok_owner_1', { establishmentId: 'est-1', subject: 'X', memberProfileIds: ['instructor-2'] });
+  assert.equal(res.status, 400);
+});
+
+test('error al insertar conversación → 500 (nunca 200)', async () => {
+  supabaseMock.setError('conversations', 'boom');
+  const res = await req('POST', '/api/conversations', 'tok_owner_1', { establishmentId: 'est-1', subject: 'X', memberProfileIds: ['instructor-1'] });
+  assert.equal(res.status, 500);
+  const json = await res.json();
+  assert.equal(json.ok, false);
+  assert.ok(json.error);
+});
+
+test('error al insertar mensaje → 500', async () => {
+  supabaseMock.setError('messages', 'boom');
+  const res = await req('POST', `/api/conversations/${convId}/messages?establishmentId=est-1`, 'tok_owner_1', { body: 'x' });
+  assert.equal(res.status, 500);
+});
+
+test('marcar leído un mensaje inexistente → 404', async () => {
+  const res = await req('PUT', '/api/messages/nonexistent/read?establishmentId=est-1', 'tok_owner_1');
+  assert.equal(res.status, 404);
+});
+
+test('no deja conversación parcial si falla un miembro', async () => {
+  supabaseMock.setError('conversation_members', 'boom');
+  const res = await req('POST', '/api/conversations', 'tok_owner_1', { establishmentId: 'est-1', subject: 'Parcial', memberProfileIds: ['instructor-1'] });
+  assert.equal(res.status, 500);
+  assert.ok(!supabaseMock._tables.conversations.some((c) => c.subject === 'Parcial'), 'no debe quedar conversación parcial');
+});
+
 console.log('Suite messaging: ejecutada con node:test');

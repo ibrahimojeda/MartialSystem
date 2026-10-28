@@ -5,6 +5,8 @@
 
 const crypto = require('crypto');
 
+function httpError(status, message) { const e = new Error(message); e.status = status; return e; }
+
 async function getLinkedStudentProfileIds(db, guardianProfileId) {
   const { data: links } = await db.from('guardian_students').select('student_id').eq('guardian_profile_id', guardianProfileId).limit(5000);
   const studentIds = [...new Set((links || []).map((l) => l.student_id).filter(Boolean))];
@@ -96,50 +98,74 @@ async function getConversation(db, ctx, id) {
 }
 
 async function createConversation(db, ctx, { subject, memberProfileIds }) {
-  if (!ctx.establishmentId) { const e = new Error('establishmentId is required'); e.status = 400; throw e; }
-  const members = [...new Set([ctx.profileId].concat(Array.isArray(memberProfileIds) ? memberProfileIds : []).filter(Boolean))];
-  const convId = crypto.randomUUID();
-  await db.from('conversations').insert({ id: convId, establishment_id: ctx.establishmentId, subject: subject || null, created_by: ctx.profileId });
+  if (!ctx.establishmentId) throw httpError(400, 'establishmentId is required');
+  const isSuperadmin = String(ctx.role) === 'superadmin';
+  const creatorId = isSuperadmin ? null : ctx.profileId;
+  const members = [...new Set((creatorId ? [creatorId] : []).concat(Array.isArray(memberProfileIds) ? memberProfileIds : []).filter(Boolean))];
+
+  // Validar que todos los miembros pertenecen al establecimiento (fail-closed).
   for (const pid of members) {
-    const { data: mem } = await db.from('establishment_members').select('id').eq('establishment_id', ctx.establishmentId).eq('profile_id', pid).maybeSingle();
-    if (mem) {
-      await db.from('conversation_members').insert({ id: crypto.randomUUID(), conversation_id: convId, profile_id: pid, joined_at: new Date().toISOString() });
+    const { data: mem, error: memErr } = await db.from('establishment_members').select('id').eq('establishment_id', ctx.establishmentId).eq('profile_id', pid).maybeSingle();
+    if (memErr) throw httpError(500, 'Error validando miembros: ' + memErr.message);
+    if (!mem) throw httpError(400, 'El perfil no pertenece al establecimiento: ' + pid);
+  }
+
+  const convId = crypto.randomUUID();
+  const { data: created, error: convErr } = await db.from('conversations')
+    .insert({ id: convId, establishment_id: ctx.establishmentId, subject: subject || null, created_by: creatorId })
+    .select().single();
+  if (convErr || !created) throw httpError(500, 'No se pudo crear la conversación' + (convErr ? ': ' + convErr.message : ''));
+
+  for (const pid of members) {
+    const { error: mErr } = await db.from('conversation_members').insert({ id: crypto.randomUUID(), conversation_id: convId, profile_id: pid, joined_at: new Date().toISOString() });
+    if (mErr) {
+      // Compensación: borrar la conversación creada (cascada a miembros) para no dejar estado parcial.
+      await db.from('conversations').delete().eq('id', convId);
+      throw httpError(500, 'No se pudo registrar un miembro: ' + mErr.message);
     }
   }
-  const { data: created } = await db.from('conversations').select('*').eq('id', convId).maybeSingle();
   return created;
 }
 
 async function addMessage(db, ctx, conversationId, body) {
   const text = String(body || '').trim();
-  if (!text) { const e = new Error('body is required'); e.status = 400; throw e; }
-  const { data: c } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
-  if (!c) { const e = new Error('Conversación no encontrada'); e.status = 404; throw e; }
-  if (!(await canAccessConversation(db, ctx, c))) { const e = new Error('No access to this conversation'); e.status = 403; throw e; }
+  if (!text) throw httpError(400, 'body is required');
+  const { data: c, error: cErr } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
+  if (cErr) throw httpError(500, 'Error leyendo la conversación: ' + cErr.message);
+  if (!c) throw httpError(404, 'Conversación no encontrada');
+  if (!(await canAccessConversation(db, ctx, c))) throw httpError(403, 'No access to this conversation');
   const id = crypto.randomUUID();
-  await db.from('messages').insert({ id, conversation_id: conversationId, sender_profile_id: ctx.profileId, body: text, created_at: new Date().toISOString() });
-  const { data: msg } = await db.from('messages').select('*').eq('id', id).maybeSingle();
+  const { data: msg, error: mErr } = await db.from('messages')
+    .insert({ id, conversation_id: conversationId, sender_profile_id: ctx.profileId, body: text, created_at: new Date().toISOString() })
+    .select().single();
+  if (mErr || !msg) throw httpError(500, 'No se pudo enviar el mensaje' + (mErr ? ': ' + mErr.message : ''));
   return msg;
 }
 
 async function markMessageRead(db, ctx, messageId) {
-  const { data: msg } = await db.from('messages').select('id, conversation_id').eq('id', messageId).maybeSingle();
-  if (!msg) { const e = new Error('Mensaje no encontrado'); e.status = 404; throw e; }
-  const { data: c } = await db.from('conversations').select('*').eq('id', msg.conversation_id).maybeSingle();
-  if (!c || !(await canAccessConversation(db, ctx, c))) { const e = new Error('No access to this conversation'); e.status = 403; throw e; }
+  const { data: msg, error: mErr } = await db.from('messages').select('id, conversation_id').eq('id', messageId).maybeSingle();
+  if (mErr) throw httpError(500, 'Error leyendo el mensaje: ' + mErr.message);
+  if (!msg) throw httpError(404, 'Mensaje no encontrado');
+  const { data: c, error: cErr } = await db.from('conversations').select('*').eq('id', msg.conversation_id).maybeSingle();
+  if (cErr) throw httpError(500, 'Error leyendo la conversación: ' + cErr.message);
+  if (!c || !(await canAccessConversation(db, ctx, c))) throw httpError(403, 'No access to this conversation');
   const { data: existing } = await db.from('message_recipients').select('id').eq('message_id', messageId).eq('profile_id', ctx.profileId).maybeSingle();
   if (!existing) {
-    await db.from('message_recipients').insert({ id: crypto.randomUUID(), message_id: messageId, profile_id: ctx.profileId, read_at: new Date().toISOString() });
+    const { error: rErr } = await db.from('message_recipients').insert({ id: crypto.randomUUID(), message_id: messageId, profile_id: ctx.profileId, read_at: new Date().toISOString() });
+    if (rErr) throw httpError(500, 'No se pudo marcar el mensaje como leído: ' + rErr.message);
   }
   return { ok: true };
 }
 
 async function archiveConversation(db, ctx, conversationId) {
-  const { data: c } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
-  if (!c) { const e = new Error('Conversación no encontrada'); e.status = 404; throw e; }
-  if (!(await canAccessConversation(db, ctx, c))) { const e = new Error('No access to this conversation'); e.status = 403; throw e; }
-  await db.from('conversations').update({ archived_at: new Date().toISOString() }).eq('id', conversationId);
-  const { data: updated } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
+  const { data: c, error: cErr } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
+  if (cErr) throw httpError(500, 'Error leyendo la conversación: ' + cErr.message);
+  if (!c) throw httpError(404, 'Conversación no encontrada');
+  if (!(await canAccessConversation(db, ctx, c))) throw httpError(403, 'No access to this conversation');
+  const { error: uErr } = await db.from('conversations').update({ archived_at: new Date().toISOString() }).eq('id', conversationId);
+  if (uErr) throw httpError(500, 'No se pudo archivar: ' + uErr.message);
+  const { data: updated, error: uErr2 } = await db.from('conversations').select('*').eq('id', conversationId).maybeSingle();
+  if (uErr2 || !updated) throw httpError(500, 'No se pudo leer la conversación archivada');
   return updated;
 }
 

@@ -11,7 +11,7 @@ const {
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
   formatCurrencyAmount, formatEstablishmentBilling, aiDetectPlansQuery, formatPlansResult,
-  aiDetectProfileSummaryQuery, formatProfileSummary
+  aiDetectProfileSummaryQuery, formatProfileSummary, sanitizeProfileForRole
 } = require('../server/ai-security');
 
 // ─── aiParseToolBlock: prompt injection / tool injection ───
@@ -637,6 +637,47 @@ test('formatProfileSummary no expone secretos ni IDs', () => {
   assert.ok(s.includes('activo'));
   assert.ok(!s.includes('password'));
   assert.ok(!s.includes('token'));
+});
+
+test('sanitizeProfileForRole devuelve solo la whitelist del rol', () => {
+  const raw = {
+    id: 'prof_interno_1',
+    full_name: 'Kenji Matsuda',
+    username: 'kenji_matsuda',
+    role: 'instructor',
+    establishment_name: 'Dojo Bushido',
+    is_active: true,
+    created_at: '2024-01-01',
+    email: 'kenji@example.com',
+    phone: '+52 555 1234',
+    password: 'hash_secreto',
+    access_token: 'tok',
+    refresh_token: 'rtok',
+    api_key: 'sk-...',
+    medical_notes: 'asma',
+    balance_due: 123.45
+  };
+  const clean = sanitizeProfileForRole(raw, 'instructor');
+  assert.deepEqual(Object.keys(clean).sort(), ['establishment_name', 'full_name', 'is_active', 'role', 'username']);
+  assert.equal(clean.full_name, 'Kenji Matsuda');
+  ['id', 'created_at', 'email', 'phone', 'password', 'access_token', 'refresh_token', 'api_key', 'medical_notes', 'balance_due']
+    .forEach(f => assert.ok(!(f in clean), 'no debe exponer ' + f));
+});
+
+test('sanitizeProfileForRole usa default seguro para rol desconocido', () => {
+  const clean = sanitizeProfileForRole({ full_name: 'A', username: 'u', role: 'owner', is_active: false, email: 'x@y.z' }, 'rol_inexistente');
+  assert.deepEqual(Object.keys(clean).sort(), ['full_name', 'is_active', 'role', 'username']);
+  assert.ok(!('email' in clean));
+});
+
+test('formatProfileSummary aplica whitelist por rol del solicitante', () => {
+  const s = formatProfileSummary({
+    full_name: 'Hiroshi Tanaka', username: 'hiroshi_tanaka', role: 'owner',
+    is_active: true, establishment_name: 'Dojo Bushido', email: 'h@x.com', password: 'SECRETO_XYZ'
+  }, 'student');
+  assert.ok(s.includes('Hiroshi Tanaka'));
+  assert.ok(!s.includes('h@x.com'));
+  assert.ok(!s.includes('SECRETO_XYZ'));
 });
 
 console.log('Suite ai-security: ejecutada con node:test');

@@ -1159,6 +1159,7 @@
         <strong>🚫 Mensualidad vencida.</strong> El establecimiento tiene una factura severamente vencida. Regulariza tu mensualidad para usar la IA.
       </div>
       <div id="ai-status-line" class="muted" style="font-size:12px;margin-bottom:8px;">Verificando acceso...</div>
+      <div id="ai-context-line" style="font-size:12px;margin-bottom:8px;font-weight:600;color:var(--muted);">No hay un perfil seleccionado.</div>
       <div style="display:flex;gap:8px;align-items:flex-start;">
         <input id="ai-prompt" style="flex:1;" placeholder="Ej.: ¿Cuántos alumnos tiene mi dojo? ¿Quiénes deben pagos? ¿Cuántas clases hay hoy? Explica el churn...">
         <button class="btn" id="ai-send" type="button">Enviar ➤</button>
@@ -2767,8 +2768,39 @@
       studentsPageSize: 20,
       marketPage: 1,
       marketPageSize: 12,
-      marketplacePanelMode: 'catalog'
+      marketplacePanelMode: 'catalog',
+      aiSelectedProfile: { profileId: null, profileName: null, profileType: null, establishmentId: null }
     };
+
+    // ─── CONTEXTO DE PERFIL PARA EL ASISTENTE IA ────────────────────────
+    // Guarda el perfil seleccionado en la UI para que /api/ai/chat reciba
+    // targetProfileId y responda "sobre este perfil" sin ambigüedad.
+    // Solo se usa profile.id; nunca student.id ni establishment.id.
+    window.setAISelectedProfile = (profileId, profileName, profileType, establishmentId) => {
+      state.aiSelectedProfile = {
+        profileId: profileId || null,
+        profileName: profileName || '',
+        profileType: profileType || null,
+        establishmentId: establishmentId || null
+      };
+      renderAIContext();
+    };
+    window.clearAISelectedProfile = () => {
+      state.aiSelectedProfile = { profileId: null, profileName: null, profileType: null, establishmentId: null };
+      renderAIContext();
+    };
+    function renderAIContext() {
+      const el = ids('ai-context-line');
+      if (!el) return;
+      const p = state.aiSelectedProfile || {};
+      if (p.profileId) {
+        el.textContent = 'Contexto actual: ' + (p.profileName || p.profileId);
+        el.style.color = '#7ec6ff';
+      } else {
+        el.textContent = 'No hay un perfil seleccionado.';
+        el.style.color = '';
+      }
+    }
 
     // ─── DIAGNÓSTICO DE CARGA DEL DASHBOARD ─────────────────────────────
     // Registra en una caja flotante cada fetch a /api/dashboard con su
@@ -6566,10 +6598,12 @@
       const calEst = ids('cal-establishment');
       if (calEst) calEst.innerHTML = '<option value="">Sin membresias</option>';
       syncAdminPanelAccess();
+      clearAISelectedProfile();
       setAuthenticated(false);
     });
 
     ids('tree-establishment')?.addEventListener('change', () => {
+      clearAISelectedProfile();
       syncTopTabsVisibility();
       ids('admin-role').dispatchEvent(new Event('change'));
       loadPeopleSelectorsForStudents();
@@ -10711,6 +10745,7 @@
       // Load and show detail panel
       const instr = (state.instructorsData || []).find(i => i.profileId === profileId);
       if (!instr) return;
+      setAISelectedProfile(profileId, instr.name, 'instructor');
       const detail = ids('instructors-detail-wrap');
       if (detail) {
         detail.innerHTML = `
@@ -11597,9 +11632,12 @@
       out.style.display = 'block';
       out.innerHTML = '⏳ Consultando al asistente...';
       try {
+        const sel = state.aiSelectedProfile || {};
+        const body = { message: msg, establishmentId: eid || null };
+        if (sel.profileId) body.targetProfileId = sel.profileId;
         const r = await api('/api/ai/chat', {
           method: 'POST',
-          body: JSON.stringify({ message: msg, establishmentId: eid || null })
+          body: JSON.stringify(body)
         });
         const content = (r.data && r.data.content) ? r.data.content : '(sin respuesta)';
         const tools = Array.isArray(r.data && r.data.tools) ? r.data.tools : ((r.data && r.data.tool) ? [r.data.tool] : []);

@@ -15,7 +15,7 @@ const {
   aiDetectCountQuery, formatCountResult, aiDetectDetailedQuery, isPaginationRequest, formatDetailedListResult,
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope, formatEstablishmentBilling,
   aiDetectPlansQuery, formatPlansResult,
-  aiDetectProfileSummaryQuery, formatProfileSummary
+  aiDetectProfileSummaryQuery, formatProfileSummary, sanitizeProfileForRole
 } = require('./ai-security');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
@@ -9182,14 +9182,14 @@ async function aiGetProfileSummaryTool(ctx, targetProfileId, message, establishm
 
   return {
     status: 'ok',
-    profile: {
+    profile: sanitizeProfileForRole({
       username: profile.username,
       full_name: profile.full_name,
       role: profile.role,
       is_active: profile.is_active,
       created_at: profile.created_at,
       establishment_name: estNames.join(', ') || null
-    }
+    }, (ctx && ctx.role) || '')
   };
 }
 
@@ -10634,7 +10634,7 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
         if (result.status === 'forbidden') {
           return res.json({ ok: true, data: { content: 'No tienes permisos para consultar ese perfil.', model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null } });
         }
-        const content = formatProfileSummary(result.profile);
+        const content = formatProfileSummary(result.profile, (ctx && ctx.role) || '');
         return res.json({ ok: true, data: { content, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, profile: result.profile } });
       } catch (e) {
         return res.status(500).json({ ok: false, error: 'No pude consultar el perfil: ' + (e && e.message || 'error de base de datos') });

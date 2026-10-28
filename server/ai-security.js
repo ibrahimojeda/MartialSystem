@@ -702,7 +702,8 @@ module.exports = {
   aiDetectIdentityQuery, getCurrentUserIdentity, formatIdentityResult, systemBillingScope,
   formatCurrencyAmount, formatEstablishmentBilling,
   aiDetectPlansQuery, formatPlansResult,
-  aiDetectProfileSummaryQuery, formatProfileSummary
+  aiDetectProfileSummaryQuery, formatProfileSummary,
+  sanitizeProfileForRole
 };
 
 // Detecta consultas de lectura sobre el resumen de un perfil/usuario.
@@ -714,19 +715,42 @@ function aiDetectProfileSummaryQuery(message) {
   return null;
 }
 
-// Formatea el resumen de un perfil — WHITELIST EXPLÍCITA de campos.
-// Campos permitidos: full_name, username, role, establishment_name, is_active.
+// ─── PRIVACIDAD POR ROL: WHITELIST DE CAMPOS DE PERFIL ─────────────────
+// Protección base: cada rol solo ve estos campos. La estructura queda lista
+// para endurecer por rol (p. ej. instructor podría ver disciplinas autorizadas).
 // Excluidos SIEMPRE (aunque existan en la fila): email, phone, birth_date,
 // datos médicos, notas, pagos, password, tokens, API keys, auth secrets, IDs internos.
-function formatProfileSummary(profile) {
+const PROFILE_FIELDS_BY_ROLE = {
+  superadmin: ['full_name', 'username', 'role', 'establishment_name', 'is_active'],
+  owner: ['full_name', 'username', 'role', 'establishment_name', 'is_active'],
+  admin: ['full_name', 'username', 'role', 'establishment_name', 'is_active'],
+  instructor: ['full_name', 'username', 'role', 'establishment_name', 'is_active'],
+  sensei: ['full_name', 'username', 'role', 'establishment_name', 'is_active'],
+  student: ['full_name', 'username', 'role', 'establishment_name', 'is_active'],
+  guardian: ['full_name', 'username', 'role', 'establishment_name', 'is_active']
+};
+
+// Filtra un perfil dejando solo los campos permitidos para el rol indicado.
+function sanitizeProfileForRole(profile, role) {
+  const allowed = PROFILE_FIELDS_BY_ROLE[String(role || '').toLowerCase()] || PROFILE_FIELDS_BY_ROLE.student;
+  const out = {};
+  allowed.forEach(function (f) {
+    if (profile && profile[f] !== undefined) out[f] = profile[f];
+  });
+  return out;
+}
+
+// Formatea el resumen de un perfil — WHITELIST EXPLÍCITA de campos.
+function formatProfileSummary(profile, requesterRole) {
+  const p = sanitizeProfileForRole(profile, requesterRole);
   return [
     'Resumen del perfil:',
     '',
-    'Nombre: ' + (profile.full_name || '—'),
-    'Usuario: ' + (profile.username || '—'),
-    'Rol: ' + (profile.role || '—'),
-    'Establecimiento: ' + (profile.establishment_name || '—'),
-    'Estado: ' + (profile.is_active ? 'activo' : 'inactivo')
+    'Nombre: ' + (p.full_name || '—'),
+    'Usuario: ' + (p.username || '—'),
+    'Rol: ' + (p.role || '—'),
+    'Establecimiento: ' + (p.establishment_name || '—'),
+    'Estado: ' + (p.is_active ? 'activo' : 'inactivo')
   ].join('\n');
 }
 

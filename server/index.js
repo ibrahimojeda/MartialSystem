@@ -20,6 +20,7 @@ const {
 const { normalizeUserMessage } = require('./ai-semantic');
 const receivables = require('./student-receivables');
 const messaging = require('./messaging');
+const calendar = require('./calendar');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
 let APP_VERSION = '0.0.0';
@@ -4261,6 +4262,26 @@ app.get('/api/conversations/:id', requireAuth, (req, res) => handleMessaging(req
 app.post('/api/conversations/:id/messages', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.addMessage(supabaseAdmin, ctx, req.params.id, req.body && req.body.body)));
 app.put('/api/messages/:id/read', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.markMessageRead(supabaseAdmin, ctx, req.params.id)));
 app.put('/api/conversations/:id/archive', requireAuth, (req, res) => handleMessaging(req, res, (ctx) => messaging.archiveConversation(supabaseAdmin, ctx, req.params.id)));
+
+// ── Calendario por rol (Fase C, solo lectura) ──────────────────────────
+app.get('/api/calendar/events', requireAuth, async (req, res) => {
+  const rc = await resolveMessagingContext(req);
+  if (rc.error) return res.status(rc.status || 400).json({ ok: false, error: rc.error });
+  try {
+    const result = await calendar.getCalendarEvents(supabaseAdmin, {
+      ctx: rc.ctx,
+      establishmentId: req.query.establishmentId,
+      from: req.query.from, to: req.query.to,
+      disciplineId: req.query.disciplineId,
+      instructorProfileId: req.query.instructorProfileId,
+      status: req.query.status,
+      page: req.query.page, pageSize: req.query.pageSize
+    });
+    return res.json({ ok: true, data: result });
+  } catch (err) {
+    return res.status(err.status || 500).json({ ok: false, error: err.message || 'Error cargando calendario' });
+  }
+});
 
 app.get('/api/reports/summary', requireAuth, async (req, res) => {
   const profileId = req.authUser.id;

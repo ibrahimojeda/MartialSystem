@@ -3166,6 +3166,26 @@
           return ds.formatResult({ profile, memberships });
         }
 
+        // AI status: leer el flag habilitado/sin-key directo de Supabase (sin exponer keys)
+        if (pathLower.includes('/api/ai/status')) {
+          try {
+            const sb = (window.MartialSupabaseAPI && window.MartialSupabaseAPI.getClient && window.MartialSupabaseAPI.getClient()) || window.MartialSupabase || null;
+            let st = { enabled: false, hasKey: false };
+            if (sb && typeof sb.rpc === 'function') {
+              const rpc = await sb.rpc('get_ai_enabled_status');
+              if (rpc && rpc.data && typeof rpc.data === 'object') st = rpc.data;
+            }
+            return { ok: true, data: Object.assign({}, st, {
+              role: state.profileRole || '',
+              planOk: true,
+              billing: { hasBill: false, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 },
+              cooldown: null
+            }) };
+          } catch (_) {
+            return { ok: true, data: { enabled: false, hasKey: false, role: state.profileRole || '', planOk: true, billing: { hasBill: false, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 }, cooldown: null } };
+          }
+        }
+
         // Fallback: intentar servidor Express, si falla devolver error
         try {
           const res = await fetch(path, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });

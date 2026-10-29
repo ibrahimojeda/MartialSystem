@@ -1,10 +1,12 @@
 // tests/helpers/supabase-mock.js
 // Mock chainable de Supabase para pruebas E2E locales (sin red, sin datos reales).
 // Registra escrituras en mock.writes (cada insert/update/delete).
+const crypto = require('crypto');
 
 function createSupabaseMock(seed = {}) {
   const mock = { writes: [], tokenMap: {}, _errors: {} };
   const tables = Object.assign({}, defaultSeed(), seed);
+  mock._rpc = defaultRpcHandlers(mock, tables);
 
   function makeQuery(table, rows) {
     const state = { filters: [], limit: null, count: null, head: false, range: null };
@@ -58,6 +60,15 @@ function createSupabaseMock(seed = {}) {
         const err = { message: mock._errors[table] };
         return { select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }), then: (r) => Promise.resolve({ data: null, error: err }).then(r) };
       }
+      // Emula el unique parcial notifications.class_notification_outbox_id.
+      if (table === 'notifications') {
+        for (const p of recs) {
+          if (p.class_notification_outbox_id != null && rows.some((r) => r.class_notification_outbox_id === p.class_notification_outbox_id)) {
+            const err = { message: 'duplicate key value violates unique constraint "uq_notifications_class_outbox"', code: '23505' };
+            return { select: () => ({ single: () => Promise.resolve({ data: null, error: err }) }), then: (r) => Promise.resolve({ data: null, error: err }).then(r) };
+          }
+        }
+      }
       recs.forEach(p => { mock.writes.push({ table, operation: 'insert', payload: p }); rows.push(p); });
       return { select: () => ({ single: () => Promise.resolve({ data: recs[0], error: null }) }), then: (r) => Promise.resolve({ data: recs, error: null }).then(r) };
     };
@@ -110,12 +121,132 @@ function createSupabaseMock(seed = {}) {
       signInWithPassword: () => Promise.resolve({ data: { session: null }, error: { message: 'mock: not implemented' } })
     },
     storage: { from: () => ({ upload: () => Promise.resolve({ error: null }), getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
-    rpc: () => Promise.resolve({ data: null, error: null }),
+    rpc: (fn, args) => {
+      const handler = mock._rpc[fn];
+      if (handler) {
+        return Promise.resolve().then(() => handler(args || {})).then(
+          (r) => ((r && r.data !== undefined && r.error !== undefined) ? r : { data: r, error: null }),
+          (e) => ({ data: null, error: { message: e.message } })
+        );
+      }
+      return Promise.resolve({ data: null, error: { message: 'mock: rpc not implemented: ' + fn } });
+    },
     writes: mock.writes,
     setToken: (token, user) => { mock.tokenMap[token] = user; },
     setError: (table, message) => { mock._errors[table] = message; },
     clearErrors: () => { mock._errors = {}; },
+    setRpc: (fn, handler) => { mock._rpc[fn] = handler; },
     _tables: tables
+  };
+}
+
+function defaultRpcHandlers(mock, tables) {
+  const nowIso = () => new Date().toISOString();
+  return {
+    update_class_and_enqueue_notifications: (args) => {
+      const cls = tables.class_sessions.find((c) => c.id === args.p_class_id);
+      if (!cls) return { data: null, error: { message: 'CLASS_NOT_FOUND' } };
+      const snapshot = { ...cls };
+      const updates = args.p_updates || {};
+      const allowed = ['title', 'scheduled_date', 'start_time', 'end_time', 'location', 'notes', 'instructor_profile_id', 'status'];
+      for (const k of allowed) {
+        if (updates[k] !== undefined) cls[k] = updates[k];
+      }
+      cls.updated_at = nowIso();
+      let queued = 0;
+      const jobs = Array.isArray(args.p_jobs) ? args.p_jobs : [];
+      const toInsert = [];
+      for (const job of jobs) {
+        const dup = tables.class_notification_outbox.some((o) =>
+          o.class_id === cls.id && o.event_type === job.event_type &&
+          o.recipient_profile_id === job.recipient_profile_id && o.version === args.p_version);
+        if (dup) continue;
+        if (mock._errors['class_notification_outbox']) {
+          Object.assign(cls, snapshot); // rollback completo
+          return { data: null, error: { message: mock._errors['class_notification_outbox'] } };
+        }
+        toInsert.push({
+          id: 'ob-' + crypto.randomUUID(),
+          class_id: cls.id, establishment_id: cls.establishment_id,
+          event_type: job.event_type, recipient_profile_id: job.recipient_profile_id,
+          version: args.p_version, title: job.title, body: job.body,
+          status: 'pending', attempts: 0, available_at: nowIso(), created_at: nowIso(), updated_at: nowIso()
+        });
+        queued += 1;
+      }
+      mock.writes.push({ table: 'class_notification_outbox', operation: 'insert', payload: toInsert });
+      tables.class_notification_outbox.push(...toInsert);
+      return { data: { ...cls, notifications_queued: queued }, error: null };
+    },
+    create_class_and_enqueue_notifications: (args) => {
+      const created = {
+        id: 'cls-' + crypto.randomUUID(),
+        establishment_id: args.p_establishment_id,
+        discipline_id: args.p_discipline_id,
+        instructor_profile_id: args.p_instructor_profile_id || null,
+        title: args.p_title, scheduled_date: args.p_scheduled_date,
+        start_time: args.p_start_time, end_time: args.p_end_time || null,
+        location: args.p_location || null, notes: args.p_notes || null,
+        status: 'scheduled', created_at: nowIso(), updated_at: nowIso()
+      };
+      let queued = 0;
+      const jobs = Array.isArray(args.p_jobs) ? args.p_jobs : [];
+      const toInsert = [];
+      for (const job of jobs) {
+        if (mock._errors['class_notification_outbox']) {
+          return { data: null, error: { message: mock._errors['class_notification_outbox'] } };
+        }
+        toInsert.push({
+          id: 'ob-' + crypto.randomUUID(),
+          class_id: created.id, establishment_id: created.establishment_id,
+          event_type: job.event_type, recipient_profile_id: job.recipient_profile_id,
+          version: args.p_version, title: job.title, body: job.body,
+          status: 'pending', attempts: 0, available_at: nowIso(), created_at: nowIso(), updated_at: nowIso()
+        });
+        queued += 1;
+      }
+      tables.class_sessions.push(created);
+      tables.class_notification_outbox.push(...toInsert);
+      mock.writes.push({ table: 'class_sessions', operation: 'insert', payload: created });
+      return { data: { ...created, notifications_queued: queued }, error: null };
+    },
+    claim_class_notification_outbox: (args) => {
+      const now = nowIso();
+      const leaseMs = (args.p_lease_seconds || 60) * 1000;
+      const candidates = tables.class_notification_outbox
+        .filter((o) => {
+          if ((o.status === 'pending' || o.status === 'failed') && o.available_at <= now) return true;
+          if (o.status === 'processing' && o.locked_at && (Date.parse(now) - Date.parse(o.locked_at)) > leaseMs) return true;
+          return false;
+        })
+        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))
+        .slice(0, args.p_limit || 20);
+      const claimed = candidates.map((c) => {
+        c.status = 'processing'; c.locked_by = args.p_worker_id; c.locked_at = now; c.updated_at = now;
+        return { ...c };
+      });
+      return { data: claimed, error: null };
+    },
+    mark_class_notification_sent: (args) => {
+      const job = tables.class_notification_outbox.find((o) => o.id === args.p_id);
+      if (!job || job.status !== 'processing' || job.locked_by !== args.p_worker_id) return { data: false, error: null };
+      job.status = 'sent'; job.sent_at = nowIso(); job.locked_at = null; job.locked_by = null; job.last_error = null; job.updated_at = nowIso();
+      return { data: true, error: null };
+    },
+    mark_class_notification_failed: (args) => {
+      const job = tables.class_notification_outbox.find((o) => o.id === args.p_id);
+      if (!job || job.status !== 'processing' || job.locked_by !== args.p_worker_id) return { data: null, error: null };
+      job.attempts = (job.attempts || 0) + 1;
+      if (job.attempts >= 5) {
+        job.status = 'dead';
+      } else {
+        job.status = 'failed';
+        job.available_at = args.p_next_available_at;
+      }
+      job.last_error = args.p_error;
+      job.locked_at = null; job.locked_by = null; job.updated_at = nowIso();
+      return { data: job.status, error: null };
+    }
   };
 }
 

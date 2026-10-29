@@ -111,6 +111,12 @@ test('fecha inválida (400)', async () => {
   assert.equal(res.status, 400);
 });
 
+test('PATCH de clase inexistente devuelve 404 (no 200 + data=null)', async () => {
+  const res = await req('PATCH', '/api/classes/no-existe', 'tok_owner_1', { location: 'X' });
+  assert.equal(res.status, 404);
+  assert.equal((await res.json()).ok, false);
+});
+
 test('repetir el mismo PATCH no duplica trabajos en outbox', async () => {
   await req('PATCH', '/api/classes/cls-1', 'tok_owner_1', { scheduledDate: '2026-10-26' });
   const before = supabaseMock._tables.class_notification_outbox.length;

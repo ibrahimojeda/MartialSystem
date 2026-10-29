@@ -83,12 +83,33 @@ function classEventBody(eventType, cls) {
   const t = cls.title || 'Clase';
   const d = cls.scheduled_date || '';
   const h = cls.start_time ? String(cls.start_time).slice(0, 5) : '';
+  if (eventType === 'class_created') return 'Se creó la clase "' + t + '" (el ' + d + ' a las ' + h + ').';
   if (eventType === 'class_cancelled') return 'La clase "' + t + '" fue cancelada.';
   if (eventType === 'class_rescheduled') return 'La clase "' + t + '" fue reprogramada para el ' + d + ' a las ' + h + '.';
   if (eventType === 'instructor_assigned') return 'Se asignó un instructor a la clase "' + t + '".';
   if (eventType === 'class_location_changed') return 'La clase "' + t + '" cambió de ubicación.';
   return 'La clase "' + t + '" fue actualizada.';
 }
+
+// Construye los jobs de outbox (evento + destinatario + título + cuerpo) para
+// la RPC atómica. `upd` son las columnas ya validadas que cambian (para que el
+// cuerpo refleje el estado final de la clase).
+function buildClassNotificationJobs(cls, upd, events, recipients) {
+  const merged = { ...cls, ...(upd || {}) };
+  const targets = [...new Set([
+    ...(recipients.students || []),
+    ...(recipients.guardians || []),
+    ...(recipients.instructor ? [recipients.instructor] : [])
+  ].filter(Boolean))];
+  const jobs = [];
+  for (const evt of events) {
+    for (const pid of targets) {
+      jobs.push({ event_type: evt, recipient_profile_id: pid, title: 'Clase actualizada', body: classEventBody(evt, merged) });
+    }
+  }
+  return jobs;
+}
+
 
 // Encola trabajos en la outbox (idempotente por class+event+recipient+version).
 async function enqueueClassNotifications(db, { classId, establishmentId, events, recipients, version, cls }) {
@@ -116,4 +137,4 @@ async function enqueueClassNotifications(db, { classId, establishmentId, events,
   return { queued };
 }
 
-module.exports = { httpError, resolveClassRecipients, notifyClassEvent, detectClassEventTypes, buildClassUpdate, classEventBody, enqueueClassNotifications };
+module.exports = { httpError, resolveClassRecipients, notifyClassEvent, detectClassEventTypes, buildClassUpdate, classEventBody, buildClassNotificationJobs, enqueueClassNotifications };

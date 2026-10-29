@@ -3536,34 +3536,37 @@ app.post('/api/classes', requireAuth, async (req, res) => {
       ? profileId
       : (instructorProfileId || null);
 
-    const { data, error } = await supabaseAdmin
-      .from('class_sessions')
-      .insert({
-        establishment_id: establishmentId,
-        discipline_id: targetDiscipline.id,
-        instructor_profile_id: targetInstructor,
-        title,
-        scheduled_date: scheduledDate,
-        start_time: startTime,
-        end_time: endTime || null,
-        location: location || null,
-        notes: notes || null,
-        status: 'scheduled'
-      })
-      .select('id, title, scheduled_date, start_time, end_time, location, status')
-      .single();
-
-    if (error) throw new Error(error.message);
-    const created = data;
-    let notifications_queued = 0;
-    try {
-      const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: targetDiscipline.id, instructorProfileId: targetInstructor });
-      const r = await classNotifs.enqueueClassNotifications(supabaseAdmin, {
-        classId: created.id, establishmentId, events: ['class_created'], recipients,
-        version: String(new Date().toISOString()), cls: created
-      });
-      notifications_queued = r.queued;
-    } catch (_) { /* enqueue best-effort */ }
+    const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: targetDiscipline.id, instructorProfileId: targetInstructor });
+    const newCls = {
+      establishment_id: establishmentId,
+      discipline_id: targetDiscipline.id,
+      instructor_profile_id: targetInstructor,
+      title,
+      scheduled_date: scheduledDate,
+      start_time: startTime,
+      end_time: endTime || null,
+      location: location || null,
+      notes: notes || null,
+      status: 'scheduled'
+    };
+    const jobs = classNotifs.buildClassNotificationJobs(newCls, {}, ['class_created'], recipients);
+    const version = new Date().toISOString();
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc('create_class_and_enqueue_notifications', {
+      p_establishment_id: establishmentId,
+      p_discipline_id: targetDiscipline.id,
+      p_instructor_profile_id: targetInstructor,
+      p_title: title,
+      p_scheduled_date: scheduledDate,
+      p_start_time: startTime,
+      p_end_time: endTime || null,
+      p_location: location || null,
+      p_notes: notes || null,
+      p_version: version,
+      p_jobs: jobs
+    });
+    if (rpcErr) throw new Error(rpcErr.message);
+    const created = rpcData;
+    const notifications_queued = created && created.notifications_queued ? created.notifications_queued : 0;
     return res.json({ ok: true, data: { ...created, discipline: targetDiscipline, notification_status: 'queued', notifications_queued } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not create class' });
@@ -3649,26 +3652,27 @@ app.patch('/api/classes/:id', requireAuth, async (req, res) => {
     }
     // Snapshot de eventos ANTES del update (cls será mutado por el mock en memoria).
     const events = classNotifs.detectClassEventTypes(cls, patch);
-    upd.updated_at = new Date().toISOString();
 
-    const { error: uErr } = await supabaseAdmin.from('class_sessions').update(upd).eq('id', id);
-    if (uErr) throw new Error(uErr.message);
-
-    const { data: updated, error: uErr2 } = await supabaseAdmin.from('class_sessions').select('*').eq('id', id).maybeSingle();
-    if (uErr2 || !updated) throw new Error('No se pudo leer la clase actualizada');
-
-    let notification_status = 'none';
-    let notifications_queued = 0;
+    let jobs = [];
     if (events.length) {
-      const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: updated.discipline_id, instructorProfileId: updated.instructor_profile_id });
-      const r = await classNotifs.enqueueClassNotifications(supabaseAdmin, {
-        classId: updated.id, establishmentId: updated.establishment_id, events, recipients,
-        version: String(updated.updated_at || ''), cls: updated
+      const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, {
+        disciplineId: cls.discipline_id,
+        instructorProfileId: (upd.instructor_profile_id !== undefined ? upd.instructor_profile_id : cls.instructor_profile_id)
       });
-      notification_status = 'queued';
-      notifications_queued = r.queued;
+      jobs = classNotifs.buildClassNotificationJobs(cls, upd, events, recipients);
     }
-    return res.json({ ok: true, data: { ...updated, notification_status, notifications_queued } });
+    const version = new Date().toISOString();
+    const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc('update_class_and_enqueue_notifications', {
+      p_class_id: id, p_updates: upd, p_version: version, p_jobs: jobs
+    });
+    if (rpcErr) {
+      if (String(rpcErr.message || '').includes('CLASS_NOT_FOUND')) {
+        return res.status(404).json({ ok: false, error: 'Clase no encontrada' });
+      }
+      throw new Error(rpcErr.message);
+    }
+    const notifications_queued = rpcData && rpcData.notifications_queued ? rpcData.notifications_queued : 0;
+    return res.json({ ok: true, data: { ...rpcData, notification_status: events.length ? 'queued' : 'none', notifications_queued } });
   } catch (err) {
     return res.status(err.status || 500).json({ ok: false, error: err.message || 'Could not update class' });
   }

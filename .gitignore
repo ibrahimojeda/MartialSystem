@@ -33,6 +33,13 @@ tok.txt
 console.log(
 m[1]))]
 
+# Artefactos de build/debug (APK, push, procesos, reportes generados)
+apk_build*.txt
+build_*.txt
+push_*.txt
+srv_pid.txt
+tests/tenancy-report.json
+
 # Sistema operativo
 Thumbs.db
 .DS_Store

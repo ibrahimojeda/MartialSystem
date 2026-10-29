@@ -90,4 +90,30 @@ function classEventBody(eventType, cls) {
   return 'La clase "' + t + '" fue actualizada.';
 }
 
-module.exports = { httpError, resolveClassRecipients, notifyClassEvent, detectClassEventTypes, buildClassUpdate, classEventBody };
+// Encola trabajos en la outbox (idempotente por class+event+recipient+version).
+async function enqueueClassNotifications(db, { classId, establishmentId, events, recipients, version, cls }) {
+  let queued = 0;
+  for (const evt of events) {
+    const targets = [...new Set([
+      ...(recipients.students || []),
+      ...(recipients.guardians || []),
+      ...(recipients.instructor ? [recipients.instructor] : [])
+    ].filter(Boolean))];
+    for (const pid of targets) {
+      const { data: existing } = await db.from('class_notification_outbox')
+        .select('id').eq('class_id', classId).eq('event_type', evt).eq('recipient_profile_id', pid).eq('version', version).maybeSingle();
+      if (existing) continue;
+      const { error: oErr } = await db.from('class_notification_outbox').insert({
+        id: crypto.randomUUID(), class_id: classId, establishment_id: establishmentId,
+        event_type: evt, recipient_profile_id: pid, version,
+        title: 'Clase actualizada', body: classEventBody(evt, cls),
+        status: 'pending', attempts: 0, available_at: new Date().toISOString()
+      });
+      if (oErr) throw httpError(500, 'No se pudo encolar notificación: ' + oErr.message);
+      queued += 1;
+    }
+  }
+  return { queued };
+}
+
+module.exports = { httpError, resolveClassRecipients, notifyClassEvent, detectClassEventTypes, buildClassUpdate, classEventBody, enqueueClassNotifications };

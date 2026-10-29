@@ -56,13 +56,16 @@ before(async () => {
 after(async () => { if (server) await new Promise((r) => server.close(r)); });
 beforeEach(() => { supabaseMock.writes.length = 0; supabaseMock.clearErrors(); });
 
-test('owner reprograma clase y notifica a estudiante/guardian/instructor', async () => {
+test('owner reprograma clase y encola notificaciones en la outbox', async () => {
   const res = await req('PATCH', '/api/classes/cls-1', 'tok_owner_1', { scheduledDate: '2026-10-25' });
   assert.equal(res.status, 200);
   const json = await res.json();
   assert.equal(json.data.scheduled_date, '2026-10-25');
-  assert.ok(json.data.notified >= 3);
-  const recip = supabaseMock._tables.notifications.map((n) => n.recipient_profile_id).sort();
+  assert.equal(json.data.notification_status, 'queued');
+  assert.ok(json.data.notifications_queued >= 3);
+  // Aún no se crearon notificaciones (el worker no corrió).
+  assert.equal(supabaseMock._tables.notifications.length, 0);
+  const recip = supabaseMock._tables.class_notification_outbox.map((n) => n.recipient_profile_id).sort();
   assert.ok(recip.includes('student-1'));
   assert.ok(recip.includes('guardian-1'));
   assert.ok(recip.includes('instructor-1'));
@@ -108,18 +111,18 @@ test('fecha inválida (400)', async () => {
   assert.equal(res.status, 400);
 });
 
-test('repetir el mismo PATCH no duplica notificaciones', async () => {
+test('repetir el mismo PATCH no duplica trabajos en outbox', async () => {
   await req('PATCH', '/api/classes/cls-1', 'tok_owner_1', { scheduledDate: '2026-10-26' });
-  const before = supabaseMock._tables.notifications.length;
+  const before = supabaseMock._tables.class_notification_outbox.length;
   const res2 = await req('PATCH', '/api/classes/cls-1', 'tok_owner_1', { scheduledDate: '2026-10-26' });
   const json2 = await res2.json();
   assert.equal(json2.data.changed, false);
-  assert.equal(json2.data.notified, 0);
-  assert.equal(supabaseMock._tables.notifications.length, before);
+  assert.equal(json2.data.notifications_queued, 0);
+  assert.equal(supabaseMock._tables.class_notification_outbox.length, before);
 });
 
-test('error al notificar no devuelve 200 (500)', async () => {
-  supabaseMock.setError('notifications', 'boom');
+test('error al encolar en la outbox devuelve 500', async () => {
+  supabaseMock.setError('class_notification_outbox', 'boom');
   const res = await req('PATCH', '/api/classes/cls-1', 'tok_owner_1', { location: 'Sala 3' });
   assert.equal(res.status, 500);
   assert.equal((await res.json()).ok, false);
@@ -129,6 +132,72 @@ test('lecturas del calendario no escriben (sigue solo lectura)', async () => {
   supabaseMock.writes.length = 0;
   await req('GET', '/api/calendar/events?establishmentId=est-1', 'tok_owner_1');
   assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('worker procesa la outbox y crea notificaciones idempotentes', async () => {
+  supabaseMock._tables.class_notification_outbox.length = 0;
+  supabaseMock._tables.class_notification_outbox.push({ id: 'ob-1', class_id: 'cls-1', establishment_id: 'est-1', event_type: 'class_rescheduled', recipient_profile_id: 'student-1', version: 'v1', title: 'Clase actualizada', body: 'Hola', status: 'pending', attempts: 0, available_at: '2020-01-01T00:00:00.000Z' });
+  const classWorker = require('../server/class-notification-worker');
+  const r = await classWorker.processOutboxBatch(supabaseMock, 'test-worker', 100);
+  assert.ok(r.sent >= 1);
+  const notif = supabaseMock._tables.notifications.find((n) => n.class_notification_outbox_id === 'ob-1');
+  assert.ok(notif, 'debe crear la notificación vinculada al outbox');
+  const job = supabaseMock._tables.class_notification_outbox.find((o) => o.id === 'ob-1');
+  assert.equal(job.status, 'sent');
+});
+
+test('worker no reintenta trabajos ya enviados (idempotencia real)', async () => {
+  supabaseMock._tables.class_notification_outbox.length = 0;
+  supabaseMock._tables.notifications.length = 0;
+  supabaseMock._tables.class_notification_outbox.push({ id: 'ob-idem', class_id: 'cls-1', establishment_id: 'est-1', event_type: 'class_rescheduled', recipient_profile_id: 'student-1', version: 'v1', title: 'T', body: 'B', status: 'pending', attempts: 0, available_at: '2020-01-01T00:00:00.000Z' });
+  const classWorker = require('../server/class-notification-worker');
+  const r1 = await classWorker.processOutboxBatch(supabaseMock, 'w', 100);
+  assert.equal(r1.sent, 1);
+  assert.equal(supabaseMock._tables.notifications.filter((n) => n.class_notification_outbox_id === 'ob-idem').length, 1);
+  const r2 = await classWorker.processOutboxBatch(supabaseMock, 'w', 100);
+  assert.equal(r2.sent, 0);
+  assert.equal(supabaseMock._tables.notifications.filter((n) => n.class_notification_outbox_id === 'ob-idem').length, 1);
+});
+
+test('worker reintenta con backoff y marca failed si falla la inserción', async () => {
+  supabaseMock._tables.class_notification_outbox.length = 0;
+  supabaseMock._tables.class_notification_outbox.push({ id: 'ob-retry', class_id: 'cls-1', establishment_id: 'est-1', event_type: 'class_rescheduled', recipient_profile_id: 'student-1', version: 'v1', title: 'T', body: 'B', status: 'pending', attempts: 0, available_at: '2020-01-01T00:00:00.000Z' });
+  supabaseMock.setError('notifications', 'boom');
+  const classWorker = require('../server/class-notification-worker');
+  const r = await classWorker.processOutboxBatch(supabaseMock, 'w-retry', 100);
+  assert.equal(r.failed, 1);
+  assert.equal(r.dead, 0);
+  const job = supabaseMock._tables.class_notification_outbox.find((o) => o.id === 'ob-retry');
+  assert.equal(job.status, 'failed');
+  assert.equal(job.attempts, 1);
+  assert.equal(job.locked_by, null);
+  assert.equal(job.locked_at, null);
+  assert.ok(job.available_at > '2020-01-01T00:00:00.000Z');
+  assert.ok(job.last_error);
+});
+
+test('worker pasa a dead tras agotar reintentos', async () => {
+  supabaseMock._tables.class_notification_outbox.length = 0;
+  supabaseMock._tables.class_notification_outbox.push({ id: 'ob-dead', class_id: 'cls-1', establishment_id: 'est-1', event_type: 'class_rescheduled', recipient_profile_id: 'student-1', version: 'v1', title: 'T', body: 'B', status: 'pending', attempts: 4, available_at: '2020-01-01T00:00:00.000Z' });
+  supabaseMock.setError('notifications', 'boom');
+  const classWorker = require('../server/class-notification-worker');
+  const r = await classWorker.processOutboxBatch(supabaseMock, 'w', 100);
+  assert.equal(r.dead, 1);
+  assert.equal(r.failed, 0);
+  const job = supabaseMock._tables.class_notification_outbox.find((o) => o.id === 'ob-dead');
+  assert.equal(job.status, 'dead');
+  assert.equal(job.attempts, 5);
+  assert.equal(job.locked_by, null);
+  assert.ok(job.last_error);
+});
+
+test('GET notifications superadmin no usa UUID lógico (sin error)', async () => {
+  supabaseMock._tables.notifications.push({ id: 'n-1', establishment_id: 'est-1', recipient_profile_id: null, audience_role: 'all', title: 'T', body: 'B', is_read: false });
+  const res = await req('GET', '/api/notifications?establishmentId=est-1', 'tok_superadmin');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(Array.isArray(json.data));
+  assert.ok(json.data.some((n) => n.id === 'n-1'));
 });
 
 console.log('Suite class-notifications: ejecutada con node:test');

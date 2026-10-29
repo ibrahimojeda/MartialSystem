@@ -164,6 +164,7 @@ function defaultSeed() {
     app_settings: [{ id: 'as-1', establishment_id: null, settings_key: '__ai__', settings_value: null, updated_at: null }],
     notifications: [],
     class_notification_events: [],
+    class_notification_outbox: [],
     guardian_students: [],
     student_charges: [],
     student_charge_payments: [],

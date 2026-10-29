@@ -22,6 +22,7 @@ const receivables = require('./student-receivables');
 const messaging = require('./messaging');
 const calendar = require('./calendar');
 const classNotifs = require('./class-notifications');
+const classWorker = require('./class-notification-worker');
 
 // ── Metadatos de despliegue para /api/health (versión, build y commit) ──
 let APP_VERSION = '0.0.0';
@@ -3554,17 +3555,16 @@ app.post('/api/classes', requireAuth, async (req, res) => {
 
     if (error) throw new Error(error.message);
     const created = data;
-    let notified = 0;
+    let notifications_queued = 0;
     try {
       const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: targetDiscipline.id, instructorProfileId: targetInstructor });
-      const r = await classNotifs.notifyClassEvent(supabaseAdmin, {
-        classId: created.id, establishmentId, eventType: 'class_created',
-        title: 'Nueva clase', body: 'Se creó la clase "' + created.title + '".',
-        version: String(new Date().toISOString()), recipients
+      const r = await classNotifs.enqueueClassNotifications(supabaseAdmin, {
+        classId: created.id, establishmentId, events: ['class_created'], recipients,
+        version: String(new Date().toISOString()), cls: created
       });
-      notified = r.notified;
-    } catch (_) { /* notificación best-effort */ }
-    return res.json({ ok: true, data: { ...created, discipline: targetDiscipline, notified } });
+      notifications_queued = r.queued;
+    } catch (_) { /* enqueue best-effort */ }
+    return res.json({ ok: true, data: { ...created, discipline: targetDiscipline, notification_status: 'queued', notifications_queued } });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not create class' });
   }
@@ -3645,7 +3645,7 @@ app.patch('/api/classes/:id', requireAuth, async (req, res) => {
 
     const upd = classNotifs.buildClassUpdate(cls, patch);
     if (Object.keys(upd).length === 0) {
-      return res.json({ ok: true, data: { ...cls, notified: 0, changed: false } });
+      return res.json({ ok: true, data: { ...cls, notification_status: 'none', notifications_queued: 0, changed: false } });
     }
     // Snapshot de eventos ANTES del update (cls será mutado por el mock en memoria).
     const events = classNotifs.detectClassEventTypes(cls, patch);
@@ -3657,19 +3657,18 @@ app.patch('/api/classes/:id', requireAuth, async (req, res) => {
     const { data: updated, error: uErr2 } = await supabaseAdmin.from('class_sessions').select('*').eq('id', id).maybeSingle();
     if (uErr2 || !updated) throw new Error('No se pudo leer la clase actualizada');
 
-    let notified = 0;
+    let notification_status = 'none';
+    let notifications_queued = 0;
     if (events.length) {
       const recipients = await classNotifs.resolveClassRecipients(supabaseAdmin, { disciplineId: updated.discipline_id, instructorProfileId: updated.instructor_profile_id });
-      for (const evt of events) {
-        const r = await classNotifs.notifyClassEvent(supabaseAdmin, {
-          classId: updated.id, establishmentId: updated.establishment_id, eventType: evt,
-          title: 'Clase actualizada', body: classNotifs.classEventBody(evt, updated),
-          version: String(updated.updated_at || ''), recipients
-        });
-        notified += r.notified;
-      }
+      const r = await classNotifs.enqueueClassNotifications(supabaseAdmin, {
+        classId: updated.id, establishmentId: updated.establishment_id, events, recipients,
+        version: String(updated.updated_at || ''), cls: updated
+      });
+      notification_status = 'queued';
+      notifications_queued = r.queued;
     }
-    return res.json({ ok: true, data: { ...updated, notified } });
+    return res.json({ ok: true, data: { ...updated, notification_status, notifications_queued } });
   } catch (err) {
     return res.status(err.status || 500).json({ ok: false, error: err.message || 'Could not update class' });
   }
@@ -4806,28 +4805,28 @@ app.get('/api/notifications', requireAuth, async (req, res) => {
   if (!establishmentId) return res.status(400).json({ ok: false, error: 'establishmentId is required' });
 
   try {
-    const membership = await getMembership(profileId, establishmentId);
-    if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
-
-    const allowedDisciplineIds = await getAllowedDisciplineIds(membership.role, profileId, establishmentId);
-    const targetDiscipline = await resolveDisciplineFilter(establishmentId, disciplineCode, allowedDisciplineIds).catch((e) => {
-      if (e.message === 'Invalid disciplineCode' || e.message === 'Discipline is not allowed for this user') throw e;
-      return null;
-    });
+    let membership = null;
+    if (!req.isSuperadmin) {
+      membership = await getMembership(profileId, establishmentId);
+      if (!membership) return res.status(403).json({ ok: false, error: 'No access to this establishment' });
+    }
 
     let query = supabaseAdmin
       .from('notifications')
       .select('id, establishment_id, discipline_id, recipient_profile_id, audience_role, title, body, is_read, created_by, created_at')
-      .eq('establishment_id', establishmentId)
-      .or(`recipient_profile_id.is.null,recipient_profile_id.eq.${profileId},audience_role.eq.all,audience_role.eq.${membership.role}`)
-      .order('created_at', { ascending: false })
-      .limit(200);
+      .eq('establishment_id', establishmentId);
 
-    if (targetDiscipline) query = query.eq('discipline_id', targetDiscipline.id);
+    if (req.isSuperadmin) {
+      // superadmin: todas las notificaciones del establecimiento (sin filtrar por UUID lógico).
+    } else {
+      const allowedDisciplineIds = await getAllowedDisciplineIds(membership.role, profileId, establishmentId);
+      const targetDiscipline = await resolveDisciplineFilter(establishmentId, disciplineCode, allowedDisciplineIds).catch(() => null);
+      query = query.or(`recipient_profile_id.is.null,recipient_profile_id.eq.${profileId},audience_role.eq.all,audience_role.eq.${membership.role}`);
+      if (targetDiscipline) query = query.eq('discipline_id', targetDiscipline.id);
+    }
 
     const { data, error } = await query;
     if (error) throw new Error(error.message);
-
     return res.json({ ok: true, data: data || [] });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message || 'Could not load notifications' });
@@ -11569,6 +11568,11 @@ app.get('*', (_req, res) => {
 // Permite sobrescribir los clientes Supabase y exportar la app para pruebas E2E locales.
 if (globalThis.__TEST_SUPABASE_ADMIN__) supabaseAdmin = globalThis.__TEST_SUPABASE_ADMIN__;
 if (globalThis.__TEST_SUPABASE_PUBLIC__) supabasePublic = globalThis.__TEST_SUPABASE_PUBLIC__;
+
+// Worker de outbox de notificaciones de clases (solo producción; en tests se invoca processOutboxBatch).
+if (process.env.NODE_ENV !== 'test') {
+  classWorker.startWorker(supabaseAdmin);
+}
 
 module.exports = {
   app,

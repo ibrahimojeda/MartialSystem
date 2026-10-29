@@ -17,7 +17,7 @@ where table_schema = 'public' and table_name = 'notifications'
 -- Unique de dedup (debe devolver 1 fila).
 select indexname from pg_indexes
 where schemaname = 'public' and tablename = 'class_notification_outbox'
-  and indexdef like '%unique%';
+  and indexdef ilike '%unique%';
 
 -- Unique parcial en notifications.
 select indexname from pg_indexes

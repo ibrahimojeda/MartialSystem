@@ -11,7 +11,7 @@ with checks(check_name, ok) as (
   union all
   select '023 outbox unique (dedup) exists',
     exists (select 1 from pg_indexes
-            where schemaname='public' and tablename='class_notification_outbox' and indexdef like '%unique%')
+            where schemaname='public' and tablename='class_notification_outbox' and indexdef ilike '%unique%')
   union all
   select '023 notifications unique partial exists',
     exists (select 1 from pg_indexes

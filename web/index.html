@@ -931,6 +931,124 @@
       .wrap { padding: 0 3px; margin: 3px auto; }
     }
   </style>
+<style>
+    /* ─── Modal flotante genérico (reutilizable) ─── */
+    .ms-modal-overlay {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(7, 12, 18, 0.74);
+      display: none; align-items: flex-start; justify-content: center;
+      padding: 24px 16px; overflow-y: auto;
+    }
+    .ms-modal-overlay.open { display: flex; }
+    .ms-modal {
+      background: #0f1826;
+      border: 1px solid #334760;
+      border-radius: 14px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+      width: min(640px, 100%);
+      max-width: 100%;
+      margin: auto;
+      overflow: hidden;
+    }
+    .ms-modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 12px 16px;
+      border-bottom: 1px solid #334760;
+      background: linear-gradient(120deg, #1a212d 0%, #202a38 100%);
+    }
+    .ms-modal-head h4 {
+      margin: 0; font-family: Rajdhani, sans-serif; letter-spacing: .4px;
+      text-transform: uppercase; font-size: 1.1rem; color: #f0f0f0;
+    }
+    .ms-modal-close {
+      background: #28374d; border: 1px solid #435f84; color: #d4e7ff;
+      border-radius: 8px; width: 32px; height: 32px; cursor: pointer;
+      font-weight: 700; line-height: 1; font-size: 16px; flex: 0 0 auto;
+    }
+    .ms-modal-close:hover { background: #334760; }
+    .ms-modal-body { padding: 14px 16px; max-height: 72vh; overflow-y: auto; }
+    @media (min-width: 768px) {
+      .ms-modal-overlay { align-items: center; }
+    }
+    /* ─── Sidebar: tab-btn con iconos ─── */
+    .tab-btn { display: flex; align-items: center; gap: 9px; }
+    .tab-btn .tab-icon, .tab-btn .tab-icon-active {
+      width: 17px; height: 17px; flex: 0 0 auto; object-fit: contain;
+    }
+    .tab-btn .tab-icon-active { display: none; }
+    .tab-btn.active .tab-icon { display: none; }
+    .tab-btn.active .tab-icon-active { display: inline-block; }
+    /* ─── Header: buscador, notificaciones, perfil ─── */
+    .hero-search-input {
+      min-width: 170px; max-width: 260px; min-height: 36px;
+      padding: 7px 12px; font-size: 12px;
+      background: #111a27; color: #f0f0f0;
+      border: 1px solid #3a4960; border-radius: 999px;
+      outline: none; transition: border-color 140ms ease;
+    }
+    .hero-search-input:focus { border-color: #5682b8; }
+    .hero-notif {
+      position: relative; cursor: pointer;
+      width: 36px; height: 36px; min-width: 36px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 999px; font-size: 16px;
+      background: #1a2230; border: 1px solid #344157;
+    }
+    .hero-notif:hover { border-color: #4a6a94; background: #232e40; }
+    .hero-notif-badge {
+      position: absolute; top: 6px; right: 7px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #c64834; box-shadow: 0 0 0 2px #1a2230;
+    }
+    .hero-profile {
+      font-size: 12px; color: #f0f0f0; font-weight: 600;
+      padding: 6px 10px; border-radius: 999px;
+      background: rgba(201, 162, 39, .12); border: 1px solid rgba(201, 162, 39, .35);
+      white-space: nowrap;
+    }
+  </style>
+  <script>
+    // ─── Sistema de modal genérico ───
+    window.msOpenModal = function (id) {
+      var o = document.getElementById(id);
+      if (o) o.classList.add('open');
+    };
+    window.msCloseModal = function (id) {
+      var o = document.getElementById(id);
+      if (o) o.classList.remove('open');
+    };
+    document.addEventListener('click', function (e) {
+      var el = e.target;
+      var openBtn = el && el.closest ? el.closest('[data-modal-open]') : null;
+      if (openBtn) {
+        var target = document.getElementById(openBtn.getAttribute('data-modal-open'));
+        if (target) target.classList.add('open');
+        return;
+      }
+      var closeBtn = el && el.closest ? el.closest('[data-modal-close],[data-modal-dismiss]') : null;
+      if (closeBtn) {
+        var ov = closeBtn.closest('.ms-modal-overlay');
+        if (ov) ov.classList.remove('open');
+        return;
+      }
+      if (el && el.classList && el.classList.contains('ms-modal-overlay')) {
+        el.classList.remove('open');
+      }
+    });
+    // Filtro de búsqueda del sidebar (respeta roles con syncTopTabsVisibility)
+    document.addEventListener('input', function (e) {
+      if (e.target && e.target.id === 'global-search') {
+        var q = (e.target.value || '').trim().toLowerCase();
+        if (!q) {
+          if (typeof syncTopTabsVisibility === 'function') syncTopTabsVisibility();
+          return;
+        }
+        document.querySelectorAll('#app-tabs .tab-btn').forEach(function (b) {
+          b.style.display = (b.textContent || '').toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+        });
+      }
+    });
+  </script>
 </head>
 <body>
   <script src="/supabase-direct.js"></script>
@@ -956,24 +1074,26 @@
       </div>
       <button class="hamburger-btn" id="hamburger-btn" type="button" aria-label="Menu">☰</button>
       <div class="hero-right">
+        <input class="hero-search-input" id="global-search" type="text" placeholder="Buscar módulo..." autocomplete="off">
+        <span class="hero-notif" title="Notificaciones — ver Comunidad" onclick="if(typeof showTab==='function')showTab('comunidad')">🔔<i class="hero-notif-badge"></i></span>
         <button class="mode-btn" id="ui-clean-btn" type="button">Ultra Clean</button>
         <button class="mode-btn active" id="ui-dojo-btn" type="button">Dojo Competitiva</button>
         <span class="pill">Dojo Operations Suite</span>
-        <span id="user-info" style="display:none;font-size:12px;color:var(--text);margin-right:6px;"></span>
+        <span id="user-info" class="hero-profile" style="display:none;"></span>
         <button class="btn alt hidden" id="logout-btn" type="button">Cerrar sesion</button>
       </div>
 
       <div class="tabs hidden" id="app-tabs">
-        <button class="tab-btn" data-tab="operacion">Dashboard</button>
-        <button class="tab-btn" data-tab="prospectos">Prospectos</button>
-        <button class="tab-btn" data-tab="calendario">Calendario</button>
-        <button class="tab-btn" data-tab="academico">Academico</button>
-        <button class="tab-btn" data-tab="administracion">Administracion</button>
-        <button class="tab-btn" data-tab="torneos">Torneos</button>
-        <button class="tab-btn" data-tab="comunidad">Comunidad</button>
-        <button class="tab-btn" data-tab="marketplace">Marketplace</button>
-        <button class="tab-btn" data-tab="finanzas">Finanzas</button>
-        <button class="tab-btn" data-tab="configuracion">Configuracion</button>
+        <button class="tab-btn" data-tab="operacion"><img class="tab-icon" src="/assets-ui/nav-icons/dashboard.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/dashboard-active.svg" alt=""><span>Dashboard</span></button>
+        <button class="tab-btn" data-tab="prospectos"><img class="tab-icon" src="/assets-ui/nav-icons/users.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/users-active.svg" alt=""><span>Prospectos</span></button>
+        <button class="tab-btn" data-tab="calendario"><img class="tab-icon" src="/assets-ui/nav-icons/calendar.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/calendar-active.svg" alt=""><span>Calendario</span></button>
+        <button class="tab-btn" data-tab="academico"><img class="tab-icon" src="/assets-ui/nav-icons/athletes.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/athletes-active.svg" alt=""><span>Academico</span></button>
+        <button class="tab-btn" data-tab="administracion"><img class="tab-icon" src="/assets-ui/nav-icons/organizations.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/organizations-active.svg" alt=""><span>Administracion</span></button>
+        <button class="tab-btn" data-tab="torneos"><img class="tab-icon" src="/assets-ui/nav-icons/tournaments.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/tournaments-active.svg" alt=""><span>Torneos</span></button>
+        <button class="tab-btn" data-tab="comunidad"><img class="tab-icon" src="/assets-ui/nav-icons/chat.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/chat-active.svg" alt=""><span>Comunidad</span></button>
+        <button class="tab-btn" data-tab="marketplace"><img class="tab-icon" src="/assets-ui/nav-icons/cart.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/cart-active.svg" alt=""><span>Marketplace</span></button>
+        <button class="tab-btn" data-tab="finanzas"><img class="tab-icon" src="/assets-ui/nav-icons/coins.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/coins-active.svg" alt=""><span>Finanzas</span></button>
+        <button class="tab-btn" data-tab="configuracion"><img class="tab-icon" src="/assets-ui/nav-icons/settings.svg" alt=""><img class="tab-icon-active" src="/assets-ui/nav-icons/settings-active.svg" alt=""><span>Configuracion</span></button>
       </div>
     </section>
 
@@ -1101,8 +1221,70 @@
     </section>
 
     <!-- â•â•â•â•â•â•â•â•â•â• DASHBOARD OPERACIONAL (ROLE-BASED) â•â•â•â•â•â•â•â•â•â• -->
+    <!-- DASHBOARD REDESIGNED - Martial System -->
     <section id="tab-operacion" class="grid hidden">
-    <article class="card full" id="ai-user-info-card" style="display:none;margin-top:16px;">
+      <article class="card full" style="border-color:#4a1f1f;background:linear-gradient(120deg,#1a212d 0%,#202a38 44%,#2f2430 100%);">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0;">Dashboard del Dojo</h3>
+            <p class="muted" style="margin:0;">Resumen operativo del establecimiento</p>
+          </div>
+          <span class="pill">Dojo Operations Suite</span>
+        </div>
+      </article>
+
+      <div class="finance-kpis" style="grid-column:1/-1;margin-top:12px;">
+        <div class="kpi-tile"><div class="kpi-label">Atletas activos</div><div class="kpi-value" id="kpi-athletes">—</div></div>
+        <div class="kpi-tile"><div class="kpi-label">Categorías</div><div class="kpi-value" id="kpi-categories">—</div></div>
+        <div class="kpi-tile"><div class="kpi-label">Partidos programados</div><div class="kpi-value" id="kpi-matches">—</div></div>
+        <div class="kpi-tile"><div class="kpi-label">Días restantes</div><div class="kpi-value" id="kpi-days">18</div></div>
+      </div>
+
+      <article class="card" style="grid-column: span 8;">
+        <h3>🏆 Torneo Nacional 2026</h3>
+        <div id="bracket-loading" style="text-align:center;padding:20px;color:var(--muted);font-size:12px;">Cargando llave del torneo...</div>
+        <div id="bracket-content"></div>
+      </article>
+
+      <article class="card" style="grid-column: span 4;">
+        <h3>Category Progress</h3>
+        <div id="category-progress-list"></div>
+      </article>
+
+<article class="card full" id="visual-catalog-card">
+        <h3>Catálogo visual</h3>
+        <div style="margin-bottom:14px;">
+          <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Disciplinas</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/disciplines/karate-512.png" alt="Karate" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Karate</span></div>
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/disciplines/bjj-512.png" alt="BJJ" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">BJJ</span></div>
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/disciplines/judo-512.png" alt="Judo" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Judo</span></div>
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/disciplines/taekwondo-512.png" alt="Taekwondo" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Taekwondo</span></div>
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/disciplines/kickboxing-512.png" alt="Kickboxing" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Kickboxing</span></div>
+          </div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Cinturones</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <img src="/assets-ui/belts/belt-white-96x32.png" alt="Blanco" title="Blanco" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+            <img src="/assets-ui/belts/belt-yellow-96x32.png" alt="Amarillo" title="Amarillo" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+            <img src="/assets-ui/belts/belt-orange-96x32.png" alt="Naranja" title="Naranja" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+            <img src="/assets-ui/belts/belt-green-96x32.png" alt="Verde" title="Verde" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+            <img src="/assets-ui/belts/belt-blue-96x32.png" alt="Azul" title="Azul" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+            <img src="/assets-ui/belts/belt-brown-96x32.png" alt="Marrón" title="Marrón" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+            <img src="/assets-ui/belts/belt-black-96x32.png" alt="Negro" title="Negro" loading="lazy" style="height:22px;width:auto;object-fit:contain;">
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Productos</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/products/gi-512.png" alt="Gi" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Gi</span></div>
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/products/mouthguard-512.png" alt="Mouthguard" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Mouthguard</span></div>
+            <div style="text-align:center;width:72px;"><img src="/assets-ui/products/private-class-512.png" alt="Clase privada" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #283140;background:#101825;"><span style="display:block;font-size:11px;margin-top:4px;color:var(--text);">Clase privada</span></div>
+          </div>
+        </div>
+      </article>
+      <article class="card full" id="ai-user-info-card" style="display:none;margin-top:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
         <h3 style="margin:0;">Mi Información</h3>
         <span class="chip" style="font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Conectado</span>
@@ -1171,6 +1353,27 @@
       </div>
     </article>
 
+      <article class="card full" id="recent-matches-card">
+        <div>
+          <h3 style="margin:0;">Recent Matches</h3>
+        </div>
+        <div class="table-scroll" style="margin-top:8px;">
+          <table style="width:100%;font-size:12px;border-collapse:collapse;">
+            <thead><tr style="border-bottom:1px solid var(--line);"><th style="padding:8px;color:var(--muted);text-align:left;">Match</th><th style="padding:8px;color:var(--muted);text-align:left;">Category</th><th style="padding:8px;color:var(--muted);text-align:left;">Result</th><th style="padding:8px;color:var(--muted);text-align:left;">Status</th></tr></thead>
+            <tbody id="recent-matches-body"><tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted);">Cargando partidos...</td></tr></tbody>
+          </table>
+        </div>
+        <div id="matches-loading" style="text-align:center;padding:10px;color:var(--muted);font-size:12px;display:none;">Cargando...</div>
+      </article>
+      <style>
+        .progress-track { background:#262626; border:1px solid #3a3a3a; border-radius:999px; overflow:hidden; height:8px; }
+        .progress-fill { height:100%; border-radius:999px; transition:width .6s ease; background:linear-gradient(90deg,#b03030,#c94a4a); }
+        .progress-fill.gold { background:linear-gradient(90deg,#c9a227,#e8c866); }
+        .animate-spin { animation:spin 1s linear infinite; }
+        @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        .badge-completed { background:rgba(46,139,87,.15); color:#8ee0a8; border:1px solid rgba(46,139,87,.35); border-radius:999px; padding:2px 8px; font-size:10px; font-weight:700; }
+      </style>
+
 <article class="card full" id="tree-card">
         <h3>Arbol de Distribucion por Local/Academia</h3>
         <p class="muted">Selecciona el local y carga el arbol para ver disciplinas y distribucion operativa.</p>
@@ -1190,46 +1393,10 @@
         <h3>CRM - Prospectos</h3>
         <p class="muted">Registra personas que preguntan por clases pero aun no se inscriben. El sistema te recordara hacer seguimiento.</p>
         <div class="row" style="margin-bottom:12px;">
-          <button class="btn" id="prospect-load" type="button">Cargar prospectos</button>
+          <button class="btn" type="button" data-modal-open="modal-prospecto">＋ Registrar prospecto</button>
+          <button class="btn alt" id="prospect-load" type="button">Cargar prospectos</button>
           <button class="btn alt" id="prospect-reminders" type="button">Ver recordatorios</button>
         </div>
-        <form id="prospect-form" class="form" style="margin-bottom:12px;">
-          <div>
-            <label>Nombre</label>
-            <input id="prospect-name" placeholder="Nombre del prospecto" required>
-          </div>
-          <div>
-            <label>Telefono</label>
-            <input id="prospect-phone" placeholder="6000-0000" required>
-          </div>
-          <div>
-            <label>Email</label>
-            <input id="prospect-email" placeholder="correo@ejemplo.com">
-          </div>
-          <div>
-            <label>Fuente</label>
-            <select id="prospect-source">
-              <option value="direct">Directo</option>
-              <option value="instagram">Instagram</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="facebook">Facebook</option>
-              <option value="referido">Referido</option>
-              <option value="web">Pagina web</option>
-              <option value="llamada">Llamada</option>
-            </select>
-          </div>
-          <div>
-            <label>Disciplina de interes</label>
-            <input id="prospect-discipline" placeholder="karate, judo, bjj...">
-          </div>
-          <div class="full">
-            <label>Notas</label>
-            <textarea id="prospect-notes" placeholder="Informacion adicional"></textarea>
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Registrar prospecto</button>
-          </div>
-        </form>
         <div id="prospect-filters" class="row" style="margin-bottom:10px;">
           <select id="prospect-filter-status">
             <option value="">Todos los estados</option>
@@ -1255,6 +1422,52 @@
         <div id="prospect-list-wrap"><span class="muted">Presiona "Cargar prospectos" para ver la lista.</span></div>
         <pre id="prospect-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Registrar prospecto -->
+      <div class="ms-modal-overlay" id="modal-prospecto">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Registrar prospecto</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="prospect-form" class="form">
+              <div>
+                <label>Nombre</label>
+                <input id="prospect-name" placeholder="Nombre del prospecto" required>
+              </div>
+              <div>
+                <label>Telefono</label>
+                <input id="prospect-phone" placeholder="6000-0000" required>
+              </div>
+              <div>
+                <label>Email</label>
+                <input id="prospect-email" placeholder="correo@ejemplo.com">
+              </div>
+              <div>
+                <label>Fuente</label>
+                <select id="prospect-source">
+                  <option value="direct">Directo</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="referido">Referido</option>
+                  <option value="web">Pagina web</option>
+                  <option value="llamada">Llamada</option>
+                </select>
+              </div>
+              <div>
+                <label>Disciplina de interes</label>
+                <input id="prospect-discipline" placeholder="karate, judo, bjj...">
+              </div>
+              <div class="full">
+                <label>Notas</label>
+                <textarea id="prospect-notes" placeholder="Informacion adicional"></textarea>
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Registrar prospecto</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
     <section id="tab-finanzas" class="grid hidden">
       <article class="card full" id="finance-panel-card">
@@ -1288,69 +1501,68 @@
       </article>
 
       <article class="card full" id="finance-payments-card">
-        <h3>Pagos</h3>
-        <form id="payment-form" class="form">
-          <div>
-            <label>Disciplina (code, opcional)</label>
-            <select id="pay-discipline"><option value="">Todas</option></select>
-          </div>
-          <div>
-            <label>Student ID</label>
-            <input id="pay-student-id" placeholder="uuid alumno">
-          </div>
-          <div>
-            <label>Monto</label>
-            <input id="pay-amount" type="number" step="0.01" placeholder="50.00">
-          </div>
-          <div>
-            <label>Moneda</label>
-            <input id="pay-currency" placeholder="USD" value="USD">
-          </div>
-          <div>
-            <label>Metodo</label>
-            <input id="pay-method" placeholder="cash, transfer, yappy">
-          </div>
-          <div>
-            <label>Concepto</label>
-            <input id="pay-concept" placeholder="Mensualidad mayo">
-          </div>
-          <div>
-            <label>Fecha pago</label>
-            <input id="pay-date" type="datetime-local">
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Registrar pago</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Pagos</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-pago">＋ Registrar pago</button>
             <button class="btn alt" id="pay-load" type="button">Cargar pagos</button>
           </div>
-        </form>
+        </div>
         <div id="payments-table-wrap" style="margin-top:10px;"><span class="muted">Sin datos</span></div>
         <pre id="payments-output" style="display:none;">Sin datos</pre>
       </article>
 
+      <!-- Modal: Registrar pago -->
+      <div class="ms-modal-overlay" id="modal-pago">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Registrar pago</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="payment-form" class="form">
+              <div>
+                <label>Disciplina (code, opcional)</label>
+                <select id="pay-discipline"><option value="">Todas</option></select>
+              </div>
+              <div>
+                <label>Student ID</label>
+                <input id="pay-student-id" placeholder="uuid alumno">
+              </div>
+              <div>
+                <label>Monto</label>
+                <input id="pay-amount" type="number" step="0.01" placeholder="50.00">
+              </div>
+              <div>
+                <label>Moneda</label>
+                <input id="pay-currency" placeholder="USD" value="USD">
+              </div>
+              <div>
+                <label>Metodo</label>
+                <input id="pay-method" placeholder="cash, transfer, yappy">
+              </div>
+              <div>
+                <label>Concepto</label>
+                <input id="pay-concept" placeholder="Mensualidad mayo">
+              </div>
+              <div>
+                <label>Fecha pago</label>
+                <input id="pay-date" type="datetime-local">
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Registrar pago</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <article class="card full" id="finance-reports-card">
-        <h3>Reportes</h3>
-        <form id="report-form" class="form">
-          <div>
-            <label>Disciplina (code, opcional)</label>
-            <select id="rp-discipline"><option value="">Todas</option></select>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Reportes</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-reporte">＋ Configurar resumen</button>
+            <button class="btn alt" id="rp-operational" type="button">Cargar reporte operativo</button>
+            <button class="btn alt" id="rp-churn" type="button">Churn Rate (abandono)</button>
+            <button class="btn alt" id="rp-export-operational" type="button">Exportar detalle CSV</button>
           </div>
-          <div>
-            <label>Ingreso esperado por alumno (mes)</label>
-            <input id="rp-expected-fee" type="number" step="0.01" min="0" placeholder="50.00">
-          </div>
-          <div>
-            <label>Tipo</label>
-            <input value="summary" disabled>
-          </div>
-          <div class="full">
-            <button class="btn alt" id="rp-save-target" type="button">Guardar objetivo</button>
-            <button class="btn" id="rp-load" type="button">Cargar resumen</button>
-          </div>
-        </form>
-        <div class="row" style="margin-bottom:8px;">
-          <button class="btn alt" id="rp-operational" type="button">Cargar reporte operativo</button>
-          <button class="btn alt" id="rp-churn" type="button">Churn Rate (abandono)</button>
-          <button class="btn alt" id="rp-export-operational" type="button">Exportar detalle CSV</button>
         </div>
         <div id="reports-kpi-wrap" class="finance-kpis" style="display:none;"></div>
         <div class="finance-charts-grid" id="reports-finance-charts" style="display:none;margin-top:12px;">
@@ -1370,6 +1582,33 @@
         <div id="reports-operational-wrap" style="display:none;margin-top:12px;"></div>
         <pre id="reports-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Reporte financiero -->
+      <div class="ms-modal-overlay" id="modal-reporte">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Configurar resumen</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="report-form" class="form">
+              <div>
+                <label>Disciplina (code, opcional)</label>
+                <select id="rp-discipline"><option value="">Todas</option></select>
+              </div>
+              <div>
+                <label>Ingreso esperado por alumno (mes)</label>
+                <input id="rp-expected-fee" type="number" step="0.01" min="0" placeholder="50.00">
+              </div>
+              <div>
+                <label>Tipo</label>
+                <input value="summary" disabled>
+              </div>
+              <div class="full">
+                <button class="btn alt" id="rp-save-target" type="button">Guardar objetivo</button>
+                <button class="btn" id="rp-load" type="button">Cargar resumen</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="tab-calendario" class="grid hidden">
@@ -1509,50 +1748,10 @@
 
       <article class="card">
         <h3>Notificaciones</h3>
-        <form id="notification-form" class="form">
-          <div>
-            <label>Disciplina (code, opcional)</label>
-            <select id="nt-discipline"><option value="">Todas</option></select>
-          </div>
-          <div>
-            <label>Audience role</label>
-            <select id="nt-audience">
-              <option value="all">all</option>
-              <option value="owner">owner</option>
-              <option value="admin">admin</option>
-              <option value="instructor">instructor</option>
-              <option value="student">student</option>
-              <option value="guardian">guardian</option>
-            </select>
-          </div>
-          <div class="full">
-            <label>Recipient profile ID (opcional)</label>
-            <input id="nt-recipient" placeholder="uuid perfil destino">
-          </div>
-          <div class="full">
-            <label>Seleccionar alumno por nombre (opcional)</label>
-            <select id="nt-student-select">
-              <option value="">-- Carga alumnos y selecciona --</option>
-            </select>
-          </div>
-          <div>
-            <label>Filtrar por rango (evento especial)</label>
-            <select id="nt-rank-filter"><option value="">Todos los rangos</option></select>
-          </div>
-          <div class="full">
-            <label>Titulo</label>
-            <input id="nt-title" placeholder="Recordatorio de examen">
-          </div>
-          <div class="full">
-            <label>Mensaje</label>
-            <textarea id="nt-body" placeholder="Texto de la notificacion"></textarea>
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Enviar notificacion</button>
-            <button class="btn alt" id="ai-draft-notification" type="button">✨ Redactar con IA</button>
-            <button class="btn alt" id="nt-load" type="button">Cargar notificaciones</button>
-          </div>
-        </form>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn" type="button" data-modal-open="modal-notificacion">＋ Enviar notificación</button>
+          <button class="btn alt" id="nt-load" type="button">Cargar notificaciones</button>
+        </div>
         <div class="row" style="margin-top:10px;">
           <input id="nt-read-id" placeholder="notification id" style="max-width:280px;">
           <button class="btn alt" id="nt-read" type="button">Marcar leida</button>
@@ -1560,29 +1759,64 @@
         <pre id="notifications-output" style="display:none;">Sin datos</pre>
       </article>
 
+      <!-- Modal: Notificación -->
+      <div class="ms-modal-overlay" id="modal-notificacion">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Enviar notificación</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="notification-form" class="form">
+              <div>
+                <label>Disciplina (code, opcional)</label>
+                <select id="nt-discipline"><option value="">Todas</option></select>
+              </div>
+              <div>
+                <label>Audience role</label>
+                <select id="nt-audience">
+                  <option value="all">all</option>
+                  <option value="owner">owner</option>
+                  <option value="admin">admin</option>
+                  <option value="instructor">instructor</option>
+                  <option value="student">student</option>
+                  <option value="guardian">guardian</option>
+                </select>
+              </div>
+              <div class="full">
+                <label>Recipient profile ID (opcional)</label>
+                <input id="nt-recipient" placeholder="uuid perfil destino">
+              </div>
+              <div class="full">
+                <label>Seleccionar alumno por nombre (opcional)</label>
+                <select id="nt-student-select">
+                  <option value="">-- Carga alumnos y selecciona --</option>
+                </select>
+              </div>
+              <div>
+                <label>Filtrar por rango (evento especial)</label>
+                <select id="nt-rank-filter"><option value="">Todos los rangos</option></select>
+              </div>
+              <div class="full">
+                <label>Titulo</label>
+                <input id="nt-title" placeholder="Recordatorio de examen">
+              </div>
+              <div class="full">
+                <label>Mensaje</label>
+                <textarea id="nt-body" placeholder="Texto de la notificacion"></textarea>
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Enviar notificacion</button>
+                <button class="btn alt" id="ai-draft-notification" type="button">✨ Redactar con IA</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <article class="card" style="margin-top:10px;">
         <h3>WhatsApp</h3>
-        <form id="whatsapp-config-form" class="form" style="margin-bottom:10px;">
-          <div>
-            <label>Habilitar WhatsApp</label>
-            <select id="wp-enabled">
-              <option value="false">No</option>
-              <option value="true">Si</option>
-            </select>
-          </div>
-          <div>
-            <label>Número del dojo (Twilio)</label>
-            <input id="wp-phone" placeholder="+50760000000">
-          </div>
-          <div class="full">
-            <label>Plantilla de mensaje</label>
-            <textarea id="wp-template" rows="2" placeholder="Hola {{name}}, te recordamos tu clase de {{discipline}} el {{date}} a las {{time}}."></textarea>
-          </div>
-          <div class="full">
-            <button class="btn alt" id="wp-save-config" type="button">Guardar config WhatsApp</button>
-            <button class="btn alt" id="wp-load-config" type="button">Cargar config</button>
-          </div>
-        </form>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn" type="button" data-modal-open="modal-whatsapp">＋ Configurar WhatsApp</button>
+          <button class="btn alt" id="wp-load-config" type="button">Cargar config</button>
+        </div>
         <div class="full" style="margin-top:8px;">
           <label>Enviar WhatsApp manual</label>
           <div class="row">
@@ -1594,37 +1828,44 @@
         <pre id="wp-output" style="display:none;font-size:11px;">Sin datos</pre>
       </article>
 
+      <!-- Modal: Config WhatsApp -->
+      <div class="ms-modal-overlay" id="modal-whatsapp">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Configurar WhatsApp</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="whatsapp-config-form" class="form">
+              <div>
+                <label>Habilitar WhatsApp</label>
+                <select id="wp-enabled">
+                  <option value="false">No</option>
+                  <option value="true">Si</option>
+                </select>
+              </div>
+              <div>
+                <label>Número del dojo (Twilio)</label>
+                <input id="wp-phone" placeholder="+50760000000">
+              </div>
+              <div class="full">
+                <label>Plantilla de mensaje</label>
+                <textarea id="wp-template" rows="2" placeholder="Hola {{name}}, te recordamos tu clase de {{discipline}} el {{date}} a las {{time}}."></textarea>
+              </div>
+              <div class="full">
+                <button class="btn alt" id="wp-save-config" type="button">Guardar config WhatsApp</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <article class="card full" id="portal-template-card">
-        <h3>Portal alumno/guardian</h3>
-        <form id="portal-student-form" class="form" style="margin-bottom:10px;">
-          <div>
-            <label>Student ID</label>
-            <input id="pt-student-id" placeholder="uuid alumno">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Portal alumno/guardian</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-portal-alumno">＋ Cargar portal alumno</button>
+            <button class="btn alt" type="button" data-modal-open="modal-vincular-guardian">＋ Vincular guardian</button>
           </div>
-          <div class="full">
-            <button class="btn" id="pt-load-student" type="button">Cargar portal alumno</button>
-          </div>
-        </form>
-
-        <form id="guardian-link-form" class="form" style="margin-bottom:10px;">
-          <div>
-            <label>Guardian profile ID</label>
-            <input id="pt-guardian-id" placeholder="uuid guardian">
-          </div>
-          <div>
-            <label>Student ID</label>
-            <input id="pt-link-student-id" placeholder="uuid alumno">
-          </div>
-          <div>
-            <label>Relacion</label>
-            <input id="pt-relationship" placeholder="madre, padre, tutor">
-          </div>
-          <div class="full">
-            <button class="btn alt" type="submit">Vincular guardian-alumno</button>
-          </div>
-        </form>
-
-        <div class="row">
+        </div>
+        <div class="row" style="margin-top:10px;">
           <input id="pt-guardian-query" placeholder="guardian profile id (opcional para owner/admin)" style="max-width:380px;">
           <button class="btn alt" id="pt-load-guardian" type="button">Cargar portal guardian</button>
           <button class="btn alt" id="pt-summary" type="button">Resumen visual portal</button>
@@ -1632,6 +1873,50 @@
         <div id="portal-summary" style="margin-top:10px;"></div>
         <pre id="portal-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Cargar portal alumno -->
+      <div class="ms-modal-overlay" id="modal-portal-alumno">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Cargar portal alumno</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="portal-student-form" class="form">
+              <div>
+                <label>Student ID</label>
+                <input id="pt-student-id" placeholder="uuid alumno">
+              </div>
+              <div class="full">
+                <button class="btn" id="pt-load-student" type="button">Cargar portal alumno</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal: Vincular guardian -->
+      <div class="ms-modal-overlay" id="modal-vincular-guardian">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Vincular guardian-alumno</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="guardian-link-form" class="form">
+              <div>
+                <label>Guardian profile ID</label>
+                <input id="pt-guardian-id" placeholder="uuid guardian">
+              </div>
+              <div>
+                <label>Student ID</label>
+                <input id="pt-link-student-id" placeholder="uuid alumno">
+              </div>
+              <div>
+                <label>Relacion</label>
+                <input id="pt-relationship" placeholder="madre, padre, tutor">
+              </div>
+              <div class="full">
+                <button class="btn alt" type="submit">Vincular guardian-alumno</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="tab-administracion" class="grid hidden">
@@ -1643,28 +1928,40 @@
         </div>
         
         <div id="inst-crear-view">
-          <form id="instructor-form" class="form" style="margin-bottom:12px;">
-            <div>
-              <label>Nombre instructor</label>
-              <input id="inst-name" placeholder="Sensei Mario">
-            </div>
-            <div>
-              <label>Usuario instructor</label>
-              <input id="inst-username" placeholder="inst_mario" autocomplete="username">
-            </div>
-            <div>
-              <label>Password instructor</label>
-              <input id="inst-password" type="password" placeholder="Min 6 caracteres" autocomplete="new-password">
-            </div>
-            <div>
-              <label>Disciplinas para instructor</label>
-              <select id="inst-codes" multiple size="5"></select>
-            </div>
-            <div class="full">
-              <button class="btn alt" type="submit">Crear instructor y asignar disciplinas</button>
-            </div>
-          </form>
+          <div class="row" style="margin-bottom:10px;">
+            <button class="btn" type="button" data-modal-open="modal-instructor">＋ Crear instructor</button>
+          </div>
           <pre id="instructor-output" style="display:none;">Sin operaciones</pre>
+        </div>
+
+        <!-- Modal: Crear instructor -->
+        <div class="ms-modal-overlay" id="modal-instructor">
+          <div class="ms-modal">
+            <div class="ms-modal-head"><h4>Crear instructor</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+            <div class="ms-modal-body">
+              <form id="instructor-form" class="form">
+                <div>
+                  <label>Nombre instructor</label>
+                  <input id="inst-name" placeholder="Sensei Mario">
+                </div>
+                <div>
+                  <label>Usuario instructor</label>
+                  <input id="inst-username" placeholder="inst_mario" autocomplete="username">
+                </div>
+                <div>
+                  <label>Password instructor</label>
+                  <input id="inst-password" type="password" placeholder="Min 6 caracteres" autocomplete="new-password">
+                </div>
+                <div>
+                  <label>Disciplinas para instructor</label>
+                  <select id="inst-codes" multiple size="5"></select>
+                </div>
+                <div class="full">
+                  <button class="btn alt" type="submit">Crear instructor y asignar disciplinas</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
 
         <div id="inst-ver-view" style="display:none;">
@@ -1710,30 +2007,40 @@
         </div>
         
         <div id="tutor-vincular-view">
-          <form id="guardian-link-form" class="form" style="margin-bottom:10px;">
-            <div>
-              <label>Guardian profile ID</label>
-              <input id="pt-guardian-id" placeholder="uuid guardian">
-            </div>
-            <div>
-              <label>Student ID</label>
-              <input id="pt-link-student-id" placeholder="uuid alumno">
-            </div>
-            <div>
-              <label>Relacion</label>
-              <input id="pt-relationship" placeholder="madre, padre, tutor">
-            </div>
-            <div class="full">
-              <button class="btn alt" type="submit">Vincular guardian-alumno</button>
-            </div>
-          </form>
-          <div class="row">
-            <input id="pt-guardian-query" placeholder="guardian profile id (opcional para owner/admin)" style="max-width:380px;">
-            <button class="btn alt" id="pt-load-guardian" type="button">Cargar portal guardian</button>
-            <button class="btn alt" id="pt-summary" type="button">Resumen visual portal</button>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-vincular-tutor">＋ Vincular guardian-alumno</button>
+            <input id="tutor-guardian-query" placeholder="guardian profile id (opcional para owner/admin)" style="max-width:380px;">
+            <button class="btn alt" id="tutor-load-guardian" type="button">Cargar portal guardian</button>
+            <button class="btn alt" id="tutor-summary" type="button">Resumen visual portal</button>
           </div>
-          <div id="portal-summary" style="margin-top:10px;"></div>
-          <pre id="portal-output" style="display:none;">Sin datos</pre>
+          <div id="tutor-portal-summary" style="margin-top:10px;"></div>
+          <pre id="tutor-portal-output" style="display:none;">Sin datos</pre>
+        </div>
+
+        <!-- Modal: Vincular guardian-alumno (tutores) -->
+        <div class="ms-modal-overlay" id="modal-vincular-tutor">
+          <div class="ms-modal">
+            <div class="ms-modal-head"><h4>Vincular guardian-alumno</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+            <div class="ms-modal-body">
+              <form id="tutor-guardian-link-form" class="form">
+                <div>
+                  <label>Guardian profile ID</label>
+                  <input id="tutor-guardian-id" placeholder="uuid guardian">
+                </div>
+                <div>
+                  <label>Student ID</label>
+                  <input id="tutor-link-student-id" placeholder="uuid alumno">
+                </div>
+                <div>
+                  <label>Relacion</label>
+                  <input id="tutor-relationship" placeholder="madre, padre, tutor">
+                </div>
+                <div class="full">
+                  <button class="btn" type="submit">Vincular guardian-alumno</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
 
         <div id="tutor-ver-view" style="display:none;">
@@ -1781,102 +2088,103 @@
 
         <div class="row" style="margin-bottom:12px;">
           <button class="btn" id="admin-load-members" type="button">Cargar equipo del establecimiento</button>
+          <button class="btn" type="button" data-modal-open="modal-crear-usuario">＋ Crear usuario</button>
+          <button class="btn alt" type="button" data-modal-open="modal-actualizar-miembro">＋ Actualizar miembro</button>
         </div>
 
-        <form id="admin-create-user-form" class="form" style="margin-bottom:12px;">
-          <div>
-            <label>Nombre completo</label>
-            <input id="admin-full-name" placeholder="Nombre del usuario">
+        <!-- Modal: Crear usuario -->
+        <div class="ms-modal-overlay" id="modal-crear-usuario">
+          <div class="ms-modal">
+            <div class="ms-modal-head"><h4>Crear usuario administrativo</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+            <div class="ms-modal-body">
+              <form id="admin-create-user-form" class="form">
+                <div>
+                  <label>Nombre completo</label>
+                  <input id="admin-full-name" placeholder="Nombre del usuario">
+                </div>
+                <div>
+                  <label>Usuario</label>
+                  <input id="admin-username" placeholder="usuario_nuevo" autocomplete="username">
+                </div>
+                <div>
+                  <label>Password</label>
+                  <input id="admin-password" type="password" placeholder="Min 6 caracteres" autocomplete="new-password">
+                </div>
+                <div>
+                  <label>Rol</label>
+                  <select id="admin-role">
+                    <option value="owner">owner</option>
+                    <option value="sensei">sensei</option>
+                    <option value="admin">admin</option>
+                    <option value="instructor">instructor</option>
+                    <option value="guardian">guardian</option>
+                    <option value="student">student</option>
+                  </select>
+                </div>
+                <div class="full" id="admin-discipline-wrap" style="display:none;">
+                  <label>Disciplinas (solo instructor)</label>
+                  <select id="admin-discipline-codes" multiple size="5"></select>
+                </div>
+                <div class="full" id="admin-sensei-wrap" style="display:none;">
+                  <label>Sensei Profile ID (requerido para instructor si crea superadmin/owner)</label>
+                  <input id="admin-sensei-id" placeholder="uuid de sensei del local">
+                </div>
+                <div class="full">
+                  <button class="btn" type="submit">Crear usuario administrativo</button>
+                </div>
+              </form>
+            </div>
           </div>
-          <div>
-            <label>Usuario</label>
-            <input id="admin-username" placeholder="usuario_nuevo" autocomplete="username">
-          </div>
-          <div>
-            <label>Password</label>
-            <input id="admin-password" type="password" placeholder="Min 6 caracteres" autocomplete="new-password">
-          </div>
-          <div>
-            <label>Rol</label>
-            <select id="admin-role">
-              <option value="owner">owner</option>
-              <option value="sensei">sensei</option>
-              <option value="admin">admin</option>
-              <option value="instructor">instructor</option>
-              <option value="guardian">guardian</option>
-              <option value="student">student</option>
-            </select>
-          </div>
-          <div class="full" id="admin-discipline-wrap" style="display:none;">
-            <label>Disciplinas (solo instructor)</label>
-            <select id="admin-discipline-codes" multiple size="5"></select>
-          </div>
-          <div class="full" id="admin-sensei-wrap" style="display:none;">
-            <label>Sensei Profile ID (requerido para instructor si crea superadmin/owner)</label>
-            <input id="admin-sensei-id" placeholder="uuid de sensei del local">
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Crear usuario administrativo</button>
-          </div>
-        </form>
+        </div>
 
-        <form id="admin-update-member-form" class="form" style="margin-bottom:12px;">
-          <div>
-            <label>Membership ID</label>
-            <input id="admin-membership-id" placeholder="Pegar membershipId del listado">
+        <!-- Modal: Actualizar miembro -->
+        <div class="ms-modal-overlay" id="modal-actualizar-miembro">
+          <div class="ms-modal">
+            <div class="ms-modal-head"><h4>Actualizar miembro</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+            <div class="ms-modal-body">
+              <form id="admin-update-member-form" class="form">
+                <div>
+                  <label>Membership ID</label>
+                  <input id="admin-membership-id" placeholder="Pegar membershipId del listado">
+                </div>
+                <div>
+                  <label>Nuevo rol</label>
+                  <select id="admin-new-role">
+                    <option value="">(sin cambio)</option>
+                    <option value="owner">owner</option>
+                    <option value="sensei">sensei</option>
+                    <option value="admin">admin</option>
+                    <option value="instructor">instructor</option>
+                    <option value="guardian">guardian</option>
+                    <option value="student">student</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Activo</label>
+                  <select id="admin-is-active">
+                    <option value="">(sin cambio)</option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </div>
+                <div class="full">
+                  <label>Disciplinas para instructor (opcional)</label>
+                  <select id="admin-update-discipline-codes" multiple size="5"></select>
+                </div>
+                <div class="full">
+                  <button class="btn alt" type="submit">Actualizar miembro</button>
+                </div>
+              </form>
+            </div>
           </div>
-          <div>
-            <label>Nuevo rol</label>
-            <select id="admin-new-role">
-              <option value="">(sin cambio)</option>
-              <option value="owner">owner</option>
-              <option value="sensei">sensei</option>
-              <option value="admin">admin</option>
-              <option value="instructor">instructor</option>
-              <option value="guardian">guardian</option>
-              <option value="student">student</option>
-            </select>
-          </div>
-          <div>
-            <label>Activo</label>
-            <select id="admin-is-active">
-              <option value="">(sin cambio)</option>
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-          </div>
-          <div class="full">
-            <label>Disciplinas para instructor (opcional)</label>
-            <select id="admin-update-discipline-codes" multiple size="5"></select>
-          </div>
-          <div class="full">
-            <button class="btn alt" type="submit">Actualizar miembro</button>
-          </div>
-        </form>
+        </div>
 
         <article class="card full" style="margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:10px;">
           <h4 style="margin:0 0 8px;">Organizaciones (Holding de Dojos)</h4>
-          <form id="org-create-form" class="form" style="margin-bottom:8px;">
-            <div>
-              <label>Nombre organizacion</label>
-              <input id="org-name" placeholder="Federacion Central">
-            </div>
-            <div>
-              <label>Logo (archivo)</label>
-              <input id="org-logo-file" type="file" accept="image/*">
-              <input id="org-logo" type="hidden">
-              <button class="btn alt" id="org-logo-upload" type="button" style="margin-top:6px;">Subir logo</button>
-              <div class="muted" id="org-logo-status" style="font-size:11px;margin-top:4px;">Sin archivo</div>
-            </div>
-            <div class="full">
-              <label>Descripcion</label>
-              <input id="org-description" placeholder="Grupo con varios locales y dojos asociados">
-            </div>
-            <div class="full">
-              <button class="btn" type="submit">Crear organizacion</button>
-              <button class="btn alt" id="org-load" type="button">Cargar organizaciones del dojo</button>
-            </div>
-          </form>
+          <div class="row" style="margin-bottom:8px;">
+            <button class="btn" type="button" data-modal-open="modal-organizacion">＋ Crear organización</button>
+            <button class="btn alt" id="org-load" type="button">Cargar organizaciones del dojo</button>
+          </div>
           <div class="row" style="margin-bottom:8px;">
             <input id="org-id-link" placeholder="Organization ID" style="max-width:260px;">
             <input id="org-est-link" placeholder="Establishment ID a vincular" style="max-width:260px;">
@@ -1884,6 +2192,36 @@
           </div>
           <pre id="org-output" style="display:none;">Sin datos</pre>
         </article>
+
+        <!-- Modal: Crear organización -->
+        <div class="ms-modal-overlay" id="modal-organizacion">
+          <div class="ms-modal">
+            <div class="ms-modal-head"><h4>Crear organización</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+            <div class="ms-modal-body">
+              <form id="org-create-form" class="form">
+                <div>
+                  <label>Nombre organizacion</label>
+                  <input id="org-name" placeholder="Federacion Central">
+                </div>
+                <div>
+                  <label>Logo (archivo)</label>
+                  <input id="org-logo-file" type="file" accept="image/*">
+                  <input id="org-logo" type="hidden">
+                  <button class="btn alt" id="org-logo-upload" type="button" style="margin-top:6px;">Subir logo</button>
+                  <div class="muted" id="org-logo-status" style="font-size:11px;margin-top:4px;">Sin archivo</div>
+                </div>
+                <div class="full">
+                  <label>Descripcion</label>
+                  <input id="org-description" placeholder="Grupo con varios locales y dojos asociados">
+                </div>
+                <div class="full">
+                  <button class="btn" type="submit">Crear organizacion</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
 
         <pre id="admin-output" style="display:none;">Sin datos</pre>
       </article>
@@ -1936,52 +2274,64 @@
           <button class="module-sub-btn active" data-tab="pasarela">Pasarela de Pago</button>
         </div>
         <p class="muted">Configura proveedor, modo y links de cobro por establecimiento.</p>
-        <form id="gateway-form" class="form" onsubmit="return false;">
-          <div>
-            <label>Proveedor</label>
-            <input id="gw-provider" placeholder="stripe / paypal / yappy / none">
-          </div>
-          <div>
-            <label>Modo</label>
-            <select id="gw-mode">
-              <option value="link">link</option>
-              <option value="api">api</option>
-            </select>
-          </div>
-          <div>
-            <label>Moneda</label>
-            <input id="gw-currency" placeholder="USD" value="USD">
-          </div>
-          <div>
-            <label>Habilitado</label>
-            <select id="gw-enabled">
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-          </div>
-          <div class="full">
-            <label>Plantilla de link</label>
-            <input id="gw-link-template" placeholder="https://pasarela.com/pay?amount={amount}&student={studentId}">
-          </div>
-          <div>
-            <label>Success URL</label>
-            <input id="gw-success-url" placeholder="https://tuapp.com/pago/exito">
-          </div>
-          <div>
-            <label>Cancel URL</label>
-            <input id="gw-cancel-url" placeholder="https://tuapp.com/pago/cancelado">
-          </div>
-          <div class="full">
-            <label>API Key Hint (ultimo 4)</label>
-            <input id="gw-api-key-hint" placeholder="1234">
-          </div>
-          <div class="full">
-            <button class="btn alt" id="gw-load" type="button">Cargar configuracion</button>
-            <button class="btn" id="gw-save" type="button" style="margin-left:8px;">Guardar configuracion</button>
-          </div>
-        </form>
+        <div class="row" style="margin-bottom:8px;">
+          <button class="btn" type="button" data-modal-open="modal-pasarela">＋ Configurar pasarela</button>
+          <button class="btn alt" id="gw-load" type="button">Cargar configuración</button>
+        </div>
         <pre id="gateway-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Pasarela de pago -->
+      <div class="ms-modal-overlay" id="modal-pasarela">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Configurar pasarela de pago</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="gateway-form" class="form" onsubmit="return false;">
+              <div>
+                <label>Proveedor</label>
+                <input id="gw-provider" placeholder="stripe / paypal / yappy / none">
+              </div>
+              <div>
+                <label>Modo</label>
+                <select id="gw-mode">
+                  <option value="link">link</option>
+                  <option value="api">api</option>
+                </select>
+              </div>
+              <div>
+                <label>Moneda</label>
+                <input id="gw-currency" placeholder="USD" value="USD">
+              </div>
+              <div>
+                <label>Habilitado</label>
+                <select id="gw-enabled">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div class="full">
+                <label>Plantilla de link</label>
+                <input id="gw-link-template" placeholder="https://pasarela.com/pay?amount={amount}&student={studentId}">
+              </div>
+              <div>
+                <label>Success URL</label>
+                <input id="gw-success-url" placeholder="https://tuapp.com/pago/exito">
+              </div>
+              <div>
+                <label>Cancel URL</label>
+                <input id="gw-cancel-url" placeholder="https://tuapp.com/pago/cancelado">
+              </div>
+              <div class="full">
+                <label>API Key Hint (ultimo 4)</label>
+                <input id="gw-api-key-hint" placeholder="1234">
+              </div>
+              <div class="full">
+                <button class="btn" id="gw-save" type="button">Guardar configuración</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="tab-configuracion" class="grid hidden">
@@ -2127,54 +2477,78 @@
       <article class="card full">
         <h3>Colores de Cinturon por Disciplina</h3>
         <p class="muted">Define paleta por disciplina. Formato: nombre de cinturón y color HEX.</p>
-        <form id="belt-colors-form" class="form">
-          <div>
-            <label>Disciplina (code)</label>
-            <select id="bc-discipline"><option value="">-- Selecciona disciplina --</option></select>
-          </div>
-          <div>
-            <label>Cinturon</label>
-            <input id="bc-belt" placeholder="Blanco, Amarillo, Verde...">
-          </div>
-          <div>
-            <label>Color HEX</label>
-            <input id="bc-hex" placeholder="#FFFFFF">
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Guardar color</button>
-            <button class="btn alt" id="bc-load" type="button">Cargar colores</button>
-          </div>
-        </form>
+        <div class="row" style="margin-bottom:8px;">
+          <button class="btn" type="button" data-modal-open="modal-belt-color">＋ Guardar color</button>
+          <button class="btn alt" id="bc-load" type="button">Cargar colores</button>
+        </div>
         <pre id="belt-colors-output" style="display:none;">Sin datos</pre>
       </article>
 
+      <!-- Modal: Guardar color de cinturón -->
+      <div class="ms-modal-overlay" id="modal-belt-color">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Guardar color de cinturón</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="belt-colors-form" class="form">
+              <div>
+                <label>Disciplina (code)</label>
+                <select id="bc-discipline"><option value="">-- Selecciona disciplina --</option></select>
+              </div>
+              <div>
+                <label>Cinturon</label>
+                <input id="bc-belt" placeholder="Blanco, Amarillo, Verde...">
+              </div>
+              <div>
+                <label>Color HEX</label>
+                <input id="bc-hex" placeholder="#FFFFFF">
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Guardar color</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <article class="card full">
         <h3>Cuotas Mensuales por Nivel</h3>
-        <form id="monthly-fees-form" class="form">
-          <div>
-            <label>Disciplina (code)</label>
-            <select id="mf-discipline"><option value="">-- Selecciona disciplina --</option></select>
-          </div>
-          <div>
-            <label>Nivel</label>
-            <select id="mf-level">
-              <option value="iniciacion">Iniciacion</option>
-              <option value="intermedio">Intermedio</option>
-              <option value="avanzado">Avanzado</option>
-              <option value="junior">Junior</option>
-            </select>
-          </div>
-          <div>
-            <label>Monto</label>
-            <input id="mf-amount" type="number" min="0" step="0.01" placeholder="50.00">
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Guardar cuota</button>
-            <button class="btn alt" id="mf-load" type="button">Cargar cuotas</button>
-          </div>
-        </form>
+        <div class="row" style="margin-bottom:8px;">
+          <button class="btn" type="button" data-modal-open="modal-cuota">＋ Guardar cuota</button>
+          <button class="btn alt" id="mf-load" type="button">Cargar cuotas</button>
+        </div>
         <pre id="monthly-fees-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Guardar cuota -->
+      <div class="ms-modal-overlay" id="modal-cuota">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Guardar cuota mensual</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="monthly-fees-form" class="form">
+              <div>
+                <label>Disciplina (code)</label>
+                <select id="mf-discipline"><option value="">-- Selecciona disciplina --</option></select>
+              </div>
+              <div>
+                <label>Nivel</label>
+                <select id="mf-level">
+                  <option value="iniciacion">Iniciacion</option>
+                  <option value="intermedio">Intermedio</option>
+                  <option value="avanzado">Avanzado</option>
+                  <option value="junior">Junior</option>
+                </select>
+              </div>
+              <div>
+                <label>Monto</label>
+                <input id="mf-amount" type="number" min="0" step="0.01" placeholder="50.00">
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Guardar cuota</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
 
       <article class="card full">
         <h3>Cargas Masivas (Excel)</h3>
@@ -2223,144 +2597,221 @@
       </article>
 
       <article class="card full">
-        <h3>Respaldo y Banco Teorico</h3>
-        <div class="row" style="margin-bottom:10px;">
-          <button class="btn alt" id="bk-export" type="button">Exportar backup JSON</button>
-          <button class="btn alt" id="bk-import-btn" type="button">Importar backup JSON</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <h3 style="margin:0;">Respaldo y Banco Teorico</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn alt" id="bk-export" type="button">Exportar backup JSON</button>
+            <button class="btn alt" id="bk-import-btn" type="button">Importar backup JSON</button>
+            <button class="btn" type="button" data-modal-open="modal-banco-teorico">＋ Banco teórico</button>
+          </div>
           <input id="bk-import-file" type="file" accept="application/json" style="display:none;">
         </div>
-        <form id="theory-bank-form" class="form">
-          <div>
-            <label>Disciplina teorica</label>
-            <select id="tb-discipline"><option value="">-- Selecciona arte --</option></select>
-          </div>
-          <div>
-            <label>Estilo</label>
-            <select id="tb-style"><option value="">-- Carga disciplina --</option></select>
-          </div>
-          <div class="full">
-            <button class="btn alt" id="tb-load" type="button">Cargar banco</button>
-            <button class="btn" id="tb-download" type="button">Descargar JSON</button>
-            <button class="btn" id="tb-upload" type="button">Guardar JSON</button>
-          </div>
-          <div class="full">
-            <label>JSON del banco teorico</label>
-            <textarea id="tb-json" style="height:180px;">{}</textarea>
-          </div>
-        </form>
         <pre id="backup-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Banco teorico -->
+      <div class="ms-modal-overlay" id="modal-banco-teorico">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Banco teórico</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="theory-bank-form" class="form">
+              <div>
+                <label>Disciplina teorica</label>
+                <select id="tb-discipline"><option value="">-- Selecciona arte --</option></select>
+              </div>
+              <div>
+                <label>Estilo</label>
+                <select id="tb-style"><option value="">-- Carga disciplina --</option></select>
+              </div>
+              <div class="full">
+                <button class="btn alt" id="tb-load" type="button">Cargar banco</button>
+                <button class="btn" id="tb-download" type="button">Descargar JSON</button>
+                <button class="btn" id="tb-upload" type="button">Guardar JSON</button>
+              </div>
+              <div class="full">
+                <label>JSON del banco teorico</label>
+                <textarea id="tb-json" style="height:180px;">{}</textarea>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- â•â•â•â•â•â•â•â•â•â• TORNEOS â•â•â•â•â•â•â•â•â•â• -->
     <section id="tab-torneos" class="grid hidden">
       <article class="card full">
-        <h3>Inscripcion a Torneo</h3>
-        <form id="tournament-reg-form" class="form" style="margin-bottom:12px;">
-          <div><label>Establishment ID</label><input id="tr-est-id" placeholder="uuid establecimiento"></div>
-          <div><label>Student ID</label><input id="tr-student-id" placeholder="uuid alumno"></div>
-          <div><label>Nombre del torneo</label><input id="tr-name" placeholder="Copa Nacional 2026"></div>
-          <div><label>Fecha</label><input id="tr-date" type="date"></div>
-          <div><label>Categoria</label><input id="tr-category" placeholder="Sub-18 / -60kg"></div>
-          <div><label>Modalidad</label>
-            <select id="tr-mode"><option value="Kata">Kata</option><option value="Kumite">Kumite</option><option value="Ambos">Ambos</option></select>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Inscripcion a Torneo</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-inscripcion">＋ Registrar inscripción</button>
+            <button class="btn alt" id="tr-load" type="button">Ver inscripciones</button>
           </div>
-          <div><label>Costo ($)</label><input id="tr-cost" type="number" step="0.01" placeholder="25.00"></div>
-          <div><label>Notas</label><input id="tr-notes" placeholder="Opcional"></div>
-          <div class="full">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
-              <input type="checkbox" id="tr-manual-override" style="width:auto;min-height:auto;"> Excepción manual (permitir duplicado de modalidad — solo organizador/superadmin)
-            </label>
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Registrar inscripcion</button>
-            <button class="btn alt" id="tr-load" type="button" style="margin-left:8px;">Ver inscripciones</button>
-          </div>
-        </form>
+        </div>
         <div id="tournament-reg-output"><span class="muted">Sin datos. Presiona "Ver inscripciones".</span></div>
         <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap;">
           <button class="btn alt" id="tr-verify" type="button">⚠️ Verificar duplicados (Kata/Kumite)</button>
         </div>
         <div id="tr-verify-output" style="margin-top:8px;"></div>
       </article>
-      <article class="card full">
-        <h3>Resultados de Torneo</h3>
-        <form id="tournament-res-form" class="form" style="margin-bottom:12px;">
-          <div><label>Establishment ID</label><input id="trr-est-id" placeholder="uuid establecimiento"></div>
-          <div><label>Student ID</label><input id="trr-student-id" placeholder="uuid alumno"></div>
-          <div><label>Nombre del torneo</label><input id="trr-name" placeholder="Copa Nacional 2026"></div>
-          <div><label>Modalidad</label><input id="trr-mode" placeholder="Kata / Kumite"></div>
-          <div><label>Ronda alcanzada</label><input id="trr-round" placeholder="Final / Semifinal"></div>
-          <div><label>Medalla</label><input id="trr-medal" placeholder="Oro / Plata / Bronce"></div>
-          <div><label>Puntos / Estadisticas</label><input id="trr-points" placeholder="Opcional"></div>
-          <div class="full">
-            <button class="btn" type="submit">Guardar resultado</button>
-            <button class="btn alt" id="trr-load" type="button" style="margin-left:8px;">Ver resultados</button>
+
+      <!-- Modal: Inscripción -->
+      <div class="ms-modal-overlay" id="modal-inscripcion">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Registrar inscripción a torneo</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="tournament-reg-form" class="form">
+              <div><label>Establishment ID</label><input id="tr-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Student ID</label><input id="tr-student-id" placeholder="uuid alumno"></div>
+              <div><label>Nombre del torneo</label><input id="tr-name" placeholder="Copa Nacional 2026"></div>
+              <div><label>Fecha</label><input id="tr-date" type="date"></div>
+              <div><label>Categoria</label><input id="tr-category" placeholder="Sub-18 / -60kg"></div>
+              <div><label>Modalidad</label>
+                <select id="tr-mode"><option value="Kata">Kata</option><option value="Kumite">Kumite</option><option value="Ambos">Ambos</option></select>
+              </div>
+              <div><label>Costo ($)</label><input id="tr-cost" type="number" step="0.01" placeholder="25.00"></div>
+              <div><label>Notas</label><input id="tr-notes" placeholder="Opcional"></div>
+              <div class="full">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+                  <input type="checkbox" id="tr-manual-override" style="width:auto;min-height:auto;"> Excepción manual (permitir duplicado de modalidad — solo organizador/superadmin)
+                </label>
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Registrar inscripcion</button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
+      </div>
+      <article class="card full">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Resultados de Torneo</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-resultado-torneo">＋ Guardar resultado</button>
+            <button class="btn alt" id="trr-load" type="button">Ver resultados</button>
+          </div>
+        </div>
         <div id="tournament-res-output"><span class="muted">Sin datos. Presiona "Ver resultados".</span></div>
       </article>
+
+      <!-- Modal: Resultado de torneo -->
+      <div class="ms-modal-overlay" id="modal-resultado-torneo">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Resultado de torneo</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="tournament-res-form" class="form">
+              <div><label>Establishment ID</label><input id="trr-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Student ID</label><input id="trr-student-id" placeholder="uuid alumno"></div>
+              <div><label>Nombre del torneo</label><input id="trr-name" placeholder="Copa Nacional 2026"></div>
+              <div><label>Modalidad</label><input id="trr-mode" placeholder="Kata / Kumite"></div>
+              <div><label>Ronda alcanzada</label><input id="trr-round" placeholder="Final / Semifinal"></div>
+              <div><label>Medalla</label><input id="trr-medal" placeholder="Oro / Plata / Bronce"></div>
+              <div><label>Puntos / Estadisticas</label><input id="trr-points" placeholder="Opcional"></div>
+              <div class="full">
+                <button class="btn" type="submit">Guardar resultado</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
       <article class="card full" id="bracket-card">
-        <h3>🥋 Llaves (Brackets)</h3>
-        <div class="form" style="margin-bottom:12px;">
-          <div class="row" style="gap:8px;flex-wrap:wrap;">
-            <div style="flex:1;min-width:150px;"><label>Establishment ID</label><input id="br-est-id" placeholder="uuid establecimiento"></div>
-            <div style="flex:1;min-width:180px;"><label>Nombre del torneo</label><input id="br-name" placeholder="Copa Nacional 2026"></div>
-            <div style="flex:1;min-width:120px;"><label>Modalidad</label><select id="br-mode"><option value="Kata">Kata</option><option value="Kumite">Kumite</option></select></div>
-          </div>
-          <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;">
-            <button class="btn" id="br-optimize" type="button">⚙️ Optimizar</button>
-            <button class="btn alt" id="br-load" type="button">Cargar llaves</button>
-            <button class="btn alt" id="br-verify" type="button">⚠️ Verificar duplicados</button>
-          </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <h3 style="margin:0;">🥋 Llaves (Brackets)</h3>
+          <button class="btn" type="button" data-modal-open="modal-bracket">＋ Configurar llaves</button>
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <button class="btn" id="br-optimize" type="button">⚙️ Optimizar</button>
+          <button class="btn alt" id="br-load" type="button">Cargar llaves</button>
+          <button class="btn alt" id="br-verify" type="button">⚠️ Verificar duplicados</button>
         </div>
         <div id="bracket-output"><span class="muted">Selecciona torneo + modalidad y pulsa "Optimizar" o "Cargar llaves".</span></div>
       </article>
+
+      <!-- Modal: Configurar llaves -->
+      <div class="ms-modal-overlay" id="modal-bracket">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Configurar llaves</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <div class="form">
+              <div><label>Establishment ID</label><input id="br-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Nombre del torneo</label><input id="br-name" placeholder="Copa Nacional 2026"></div>
+              <div><label>Modalidad</label><select id="br-mode"><option value="Kata">Kata</option><option value="Kumite">Kumite</option></select></div>
+            </div>
+            <div class="row" style="margin-top:12px;">
+              <button class="btn" type="button" data-modal-close>Aplicar</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- â•â•â•â•â•â•â•â•â•â• INVENTARIO â•â•â•â•â•â•â•â•â•â• -->
     <section id="tab-inventario" class="grid hidden">
       <article class="card full">
-        <h3>Agregar Producto</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <h3 style="margin:0;">Agregar Producto</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-producto">＋ Agregar producto</button>
+            <button class="btn alt" id="inv-load" type="button">Ver inventario</button>
+          </div>
+        </div>
         <div class="module-subnav" id="subnav-marketplace-inv">
           <button class="module-sub-btn" data-tab="marketplace">Marketplace</button>
           <button class="module-sub-btn active" data-tab="inventario">Inventario</button>
         </div>
-        <form id="inventory-form" class="form" style="margin-bottom:12px;">
-          <div><label>Establishment ID</label><input id="inv-est-id" placeholder="uuid establecimiento"></div>
-          <div><label>Nombre producto</label><input id="inv-name" placeholder="Karategi 8oz"></div>
-          <div><label>Categoria</label><input id="inv-category" placeholder="Uniforme / Proteccion / Accesorio"></div>
-          <div><label>Proveedor</label><input id="inv-supplier" placeholder="Tokaido / Hayashi"></div>
-          <div><label>Talla</label><input id="inv-size" placeholder="XS / S / M / L / XL"></div>
-          <div><label>Costo interno ($)</label><input id="inv-cost" type="number" step="0.01" placeholder="30.00"></div>
-          <div><label>Precio venta ($)</label><input id="inv-price" type="number" step="0.01" placeholder="45.00"></div>
-          <div><label>Stock inicial</label><input id="inv-stock" type="number" placeholder="10"></div>
-          <div class="full">
-            <button class="btn" type="submit">Agregar al inventario</button>
-            <button class="btn alt" id="inv-load" type="button" style="margin-left:8px;">Ver inventario</button>
-          </div>
-        </form>
         <div id="inventory-list"><span class="muted">Sin datos. Presiona "Ver inventario".</span></div>
       </article>
+
+      <!-- Modal: Agregar producto -->
+      <div class="ms-modal-overlay" id="modal-producto">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Agregar producto al inventario</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="inventory-form" class="form">
+              <div><label>Establishment ID</label><input id="inv-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Nombre producto</label><input id="inv-name" placeholder="Karategi 8oz"></div>
+              <div><label>Categoria</label><input id="inv-category" placeholder="Uniforme / Proteccion / Accesorio"></div>
+              <div><label>Proveedor</label><input id="inv-supplier" placeholder="Tokaido / Hayashi"></div>
+              <div><label>Talla</label><input id="inv-size" placeholder="XS / S / M / L / XL"></div>
+              <div><label>Costo interno ($)</label><input id="inv-cost" type="number" step="0.01" placeholder="30.00"></div>
+              <div><label>Precio venta ($)</label><input id="inv-price" type="number" step="0.01" placeholder="45.00"></div>
+              <div><label>Stock inicial</label><input id="inv-stock" type="number" placeholder="10"></div>
+              <div class="full"><button class="btn" type="submit">Agregar al inventario</button></div>
+            </form>
+          </div>
+        </div>
+      </div>
       <article class="card full">
-        <h3>Movimiento de Stock</h3>
-        <form id="inv-movement-form" class="form" style="margin-bottom:12px;">
-          <div><label>Establishment ID</label><input id="invm-est-id" placeholder="uuid establecimiento"></div>
-          <div><label>Item ID</label><input id="invm-item-id" placeholder="uuid producto (ver tabla)"></div>
-          <div><label>Tipo</label>
-            <select id="invm-type"><option value="entrada">Entrada (+stock)</option><option value="salida">Salida (-stock)</option><option value="ajuste">Ajuste (fija stock)</option></select>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <h3 style="margin:0;">Movimiento de Stock</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-movimiento">＋ Registrar movimiento</button>
+            <button class="btn alt" id="invm-load" type="button">Ver movimientos</button>
           </div>
-          <div><label>Cantidad</label><input id="invm-qty" type="number" min="1" placeholder="5"></div>
-          <div><label>Fecha</label><input id="invm-date" type="date"></div>
-          <div><label>Responsable</label><input id="invm-responsible" placeholder="Nombre responsable"></div>
-          <div class="full"><label>Razon</label><input id="invm-reason" placeholder="Compra / Venta / Ajuste de inventario"></div>
-          <div class="full">
-            <button class="btn" type="submit">Registrar movimiento</button>
-            <button class="btn alt" id="invm-load" type="button" style="margin-left:8px;">Ver movimientos</button>
-          </div>
-        </form>
+        </div>
         <div id="inv-movements-list"><span class="muted">Ingresa Item ID y presiona "Ver movimientos".</span></div>
       </article>
+
+      <!-- Modal: Movimiento de stock -->
+      <div class="ms-modal-overlay" id="modal-movimiento">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Registrar movimiento de stock</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="inv-movement-form" class="form">
+              <div><label>Establishment ID</label><input id="invm-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Item ID</label><input id="invm-item-id" placeholder="uuid producto (ver tabla)"></div>
+              <div><label>Tipo</label>
+                <select id="invm-type"><option value="entrada">Entrada (+stock)</option><option value="salida">Salida (-stock)</option><option value="ajuste">Ajuste (fija stock)</option></select>
+              </div>
+              <div><label>Cantidad</label><input id="invm-qty" type="number" min="1" placeholder="5"></div>
+              <div><label>Fecha</label><input id="invm-date" type="date"></div>
+              <div><label>Responsable</label><input id="invm-responsible" placeholder="Nombre responsable"></div>
+              <div class="full"><label>Razon</label><input id="invm-reason" placeholder="Compra / Venta / Ajuste de inventario"></div>
+              <div class="full"><button class="btn" type="submit">Registrar movimiento</button></div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- â•â•â•â•â•â•â•â•â•â• ACADEMICO â•â•â•â•â•â•â•â•â•â• -->
@@ -2379,35 +2830,22 @@
         </div>
       </article>
       <article class="card full" id="students-template-card">
-        <h3>Gestion de Alumnos</h3>
-        <p class="muted" id="st-dojo-label">Dojo activo: -</p>
-        <div class="form" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
           <div>
-            <label>Academia / Local</label>
-            <select id="st-establishment"><option value="">-- Selecciona academia --</option></select>
+            <h3 style="margin:0;">Gestion de Alumnos</h3>
+            <p class="muted" id="st-dojo-label" style="margin:0;">Dojo activo: -</p>
           </div>
-          <div>
-            <label>Disciplina</label>
-            <select id="st-discipline"><option value="">Todas</option></select>
-          </div>
-          <div>
-            <label>Estilo</label>
-            <select id="st-style"><option value="">Todos</option></select>
-          </div>
-          <div>
-            <label>Busqueda por nombre</label>
-            <input id="st-cv-search" placeholder="Buscar alumno...">
-          </div>
-          <div>
-            <label>Student ID seleccionado</label>
-            <input id="st-cv-student-id" placeholder="Se autocompleta al hacer click en una fila">
-          </div>
-          <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div class="row" style="margin:0;gap:8px;">
+            <input id="st-cv-search" placeholder="Buscar alumno..." style="max-width:220px;">
             <button class="btn alt" id="st-load" type="button">Cargar alumnos del local</button>
-            <button class="btn alt" id="st-export-cv" type="button">Exportar curriculum</button>
-            <button class="btn alt" id="st-print-cv" type="button">Imprimir curriculum</button>
-            <button class="btn alt" id="st-show-qr" type="button">Ver QR alumno</button>
+            <button class="btn" type="button" data-modal-open="modal-filtros-alumnos">＋ Filtros</button>
           </div>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <input id="st-cv-student-id" placeholder="Se autocompleta al hacer click en una fila" style="flex:1;min-width:200px;">
+          <button class="btn alt" id="st-export-cv" type="button">Exportar curriculum</button>
+          <button class="btn alt" id="st-print-cv" type="button">Imprimir curriculum</button>
+          <button class="btn alt" id="st-show-qr" type="button">Ver QR alumno</button>
         </div>
         <div id="students-list-wrap"><span class="muted">Presiona "Cargar alumnos del local" para ver la lista.</span></div>
         <div id="students-detail-wrap" class="muted" style="margin-top:8px;">Selecciona un alumno de la lista para ver su detalle rapido.</div>
@@ -2423,12 +2861,39 @@
           <pre id="evaluations-output" style="display:none;"></pre>
         </div>
       </article>
-      <article class="card full" id="organigram-card">
-        <h3>Organigrama Empresarial</h3>
-        <div class="form" style="margin-bottom:10px;">
-          <div class="full" style="display:flex;gap:8px;">
-            <button class="btn alt" id="og-load" type="button">Cargar organigrama</button>
+      <!-- Modal Filtros de Alumnos -->
+      <div class="ms-modal-overlay" id="modal-filtros-alumnos">
+        <div class="ms-modal">
+          <div class="ms-modal-head">
+            <h4 style="margin:0;">Filtros de alumnos</h4>
+            <button class="ms-modal-close" type="button" data-modal-close>✕</button>
           </div>
+          <div class="ms-modal-body">
+            <div class="form">
+              <div>
+                <label>Academia / Local</label>
+                <select id="st-establishment"><option value="">-- Selecciona academia --</option></select>
+              </div>
+              <div>
+                <label>Disciplina</label>
+                <select id="st-discipline"><option value="">Todas</option></select>
+              </div>
+              <div>
+                <label>Estilo</label>
+                <select id="st-style"><option value="">Todos</option></select>
+              </div>
+            </div>
+            <div class="row" style="margin-top:12px;">
+              <button class="btn" type="button" data-modal-close>Aplicar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <article class="card full" id="organigram-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <h3 style="margin:0;">Organigrama Empresarial</h3>
+          <button class="btn alt" id="og-load" type="button">Cargar organigrama</button>
         </div>
         <div id="organigram-container" style="margin-top:12px;padding:20px;border:1px solid var(--line);border-radius:8px;background:var(--bg-tertiary);overflow-x:auto;min-height:400px;">
           <span class="muted">Presiona "Cargar organigrama" para visualizar la estructura.</span>
@@ -2436,78 +2901,118 @@
         <pre id="organigram-output" style="display:none;">Sin datos</pre>
       </article>
       <article class="card full" id="academic-invite-card">
-        <h3>Invitaciones a Examen de Ascenso</h3>
-        <form id="academic-invite-form" class="form">
-          <div>
-            <label>Tipo de invitacion</label>
-            <select id="ac-invite-mode">
-              <option value="general">General</option>
-              <option value="rank">Por rango</option>
-              <option value="special">Especial</option>
-            </select>
-          </div>
-          <div>
-            <label>Rango objetivo (modo rango)</label>
-            <select id="ac-invite-rank"><option value="">Todos</option></select>
-          </div>
-          <div>
-            <label>Alumno puntual (modo especial)</label>
-            <select id="ac-invite-student"><option value="">-- Selecciona alumno --</option></select>
-          </div>
-          <div class="full">
-            <label>Titulo</label>
-            <input id="ac-invite-title" value="Invitacion a examen de ascenso">
-          </div>
-          <div class="full">
-            <label>Mensaje</label>
-            <textarea id="ac-invite-body" placeholder="Sensei invita al alumno a presentar examen de ascenso."></textarea>
-          </div>
-          <div class="full">
-            <button class="btn" type="submit">Enviar invitacion</button>
-          </div>
-        </form>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Invitaciones a Examen de Ascenso</h3>
+          <button class="btn" type="button" data-modal-open="modal-invite">＋ Nueva invitación</button>
+        </div>
         <pre id="academic-invite-output" style="display:none;">Sin datos</pre>
       </article>
+
+      <!-- Modal: Invitación -->
+      <div class="ms-modal-overlay" id="modal-invite">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Nueva invitación a examen</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="academic-invite-form" class="form">
+              <div>
+                <label>Tipo de invitacion</label>
+                <select id="ac-invite-mode">
+                  <option value="general">General</option>
+                  <option value="rank">Por rango</option>
+                  <option value="special">Especial</option>
+                </select>
+              </div>
+              <div>
+                <label>Rango objetivo (modo rango)</label>
+                <select id="ac-invite-rank"><option value="">Todos</option></select>
+              </div>
+              <div>
+                <label>Alumno puntual (modo especial)</label>
+                <select id="ac-invite-student"><option value="">-- Selecciona alumno --</option></select>
+              </div>
+              <div class="full">
+                <label>Titulo</label>
+                <input id="ac-invite-title" value="Invitacion a examen de ascenso">
+              </div>
+              <div class="full">
+                <label>Mensaje</label>
+                <textarea id="ac-invite-body" placeholder="Sensei invita al alumno a presentar examen de ascenso."></textarea>
+              </div>
+              <div class="full">
+                <button class="btn" type="submit">Enviar invitacion</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
       <article class="card full" id="academic-req-card">
         <div class="module-subnav" id="subnav-academico">
           <button class="module-sub-btn active" data-tab="academico">Academico</button>
           <button class="module-sub-btn" data-tab="teoria">Examen</button>
         </div>
-        <h3>Solicitud de Examen de Grado</h3>
-        <form id="academic-req-form" class="form" style="margin-bottom:12px;">
-          <div><label>Establishment ID</label><input id="acr-est-id" placeholder="uuid establecimiento"></div>
-          <div><label>Alumno (por nombre)</label><select id="acr-student-id"><option value="">-- Carga alumnos y selecciona --</option></select></div>
-          <div><label>Grado actual</label><input id="acr-current" placeholder="6o Kyu / Cinturon Verde"></div>
-          <div><label>Grado solicitado</label><input id="acr-target" placeholder="5o Kyu / Cinturon Azul"></div>
-          <div><label>Fecha del examen</label><input id="acr-date" type="date"></div>
-          <div><label>Costo del examen ($)</label><input id="acr-fee" type="number" step="0.01" placeholder="20.00"></div>
-          <div><label>Sensei evaluador</label><input id="acr-examiner" placeholder="Sensei nombre"></div>
-          <div class="full">
-            <button class="btn" type="submit">Registrar solicitud</button>
-            <button class="btn alt" id="acr-load" type="button" style="margin-left:8px;">Ver solicitudes</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Solicitud de Examen de Grado</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-req">＋ Registrar solicitud</button>
+            <button class="btn alt" id="acr-load" type="button">Ver solicitudes</button>
           </div>
-        </form>
+        </div>
         <div id="academic-req-output"><span class="muted">Sin datos. Presiona "Ver solicitudes".</span></div>
       </article>
+
+      <!-- Modal: Solicitud de examen -->
+      <div class="ms-modal-overlay" id="modal-req">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Solicitud de Examen de Grado</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="academic-req-form" class="form">
+              <div><label>Establishment ID</label><input id="acr-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Alumno (por nombre)</label><select id="acr-student-id"><option value="">-- Carga alumnos y selecciona --</option></select></div>
+              <div><label>Grado actual</label><input id="acr-current" placeholder="6o Kyu / Cinturon Verde"></div>
+              <div><label>Grado solicitado</label><input id="acr-target" placeholder="5o Kyu / Cinturon Azul"></div>
+              <div><label>Fecha del examen</label><input id="acr-date" type="date"></div>
+              <div><label>Costo del examen ($)</label><input id="acr-fee" type="number" step="0.01" placeholder="20.00"></div>
+              <div><label>Sensei evaluador</label><input id="acr-examiner" placeholder="Sensei nombre"></div>
+              <div class="full">
+                <button class="btn" type="submit">Registrar solicitud</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
       <article class="card full" id="academic-res-card">
-        <h3>Resultado de Examen</h3>
-        <form id="academic-res-form" class="form" style="margin-bottom:12px;">
-          <div><label>Establishment ID</label><input id="acres-est-id" placeholder="uuid establecimiento"></div>
-          <div><label>Alumno (por nombre)</label><select id="acres-student-id"><option value="">-- Carga alumnos y selecciona --</option></select></div>
-          <div><label>Request ID (opcional)</label><input id="acres-req-id" placeholder="uuid solicitud"></div>
-          <div><label>Resultado</label>
-            <select id="acres-result"><option value="Aprobado">Aprobado</option><option value="Reprobado">Reprobado</option></select>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">Resultado de Examen</h3>
+          <div class="row" style="margin:0;gap:8px;">
+            <button class="btn" type="button" data-modal-open="modal-res">＋ Guardar resultado</button>
+            <button class="btn alt" id="acres-load" type="button">Ver resultados</button>
           </div>
-          <div><label>Puntuacion</label><input id="acres-score" placeholder="85/100"></div>
-          <div><label>Areas evaluadas</label><input id="acres-areas" placeholder="Kata, Kumite, Teoria"></div>
-          <div class="full"><label>Observaciones</label><textarea id="acres-notes" rows="2" placeholder="Notas del evaluador"></textarea></div>
-          <div class="full">
-            <button class="btn" type="submit">Guardar resultado</button>
-            <button class="btn alt" id="acres-load" type="button" style="margin-left:8px;">Ver resultados</button>
-          </div>
-        </form>
+        </div>
         <div id="academic-res-output"><span class="muted">Sin datos. Presiona "Ver resultados".</span></div>
       </article>
+
+      <!-- Modal: Resultado examen -->
+      <div class="ms-modal-overlay" id="modal-res">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Resultado de Examen</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <form id="academic-res-form" class="form">
+              <div><label>Establishment ID</label><input id="acres-est-id" placeholder="uuid establecimiento"></div>
+              <div><label>Alumno (por nombre)</label><select id="acres-student-id"><option value="">-- Carga alumnos y selecciona --</option></select></div>
+              <div><label>Request ID (opcional)</label><input id="acres-req-id" placeholder="uuid solicitud"></div>
+              <div><label>Resultado</label>
+                <select id="acres-result"><option value="Aprobado">Aprobado</option><option value="Reprobado">Reprobado</option></select>
+              </div>
+              <div><label>Puntuacion</label><input id="acres-score" placeholder="85/100"></div>
+              <div><label>Areas evaluadas</label><input id="acres-areas" placeholder="Kata, Kumite, Teoria"></div>
+              <div class="full"><label>Observaciones</label><textarea id="acres-notes" rows="2" placeholder="Notas del evaluador"></textarea></div>
+              <div class="full">
+                <button class="btn" type="submit">Guardar resultado</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- â•â•â•â•â•â•â•â•â•â• TEORIA â•â•â•â•â•â•â•â•â•â• -->
@@ -2517,35 +3022,13 @@
           <button class="module-sub-btn" data-tab="academico">Academico</button>
           <button class="module-sub-btn active" data-tab="teoria">Examen</button>
         </div>
-        <div class="exam-grade-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="exam-grade-head" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;flex-wrap:wrap;">
           <h3 style="margin:0;">Examen de Grado</h3>
-          <span id="theory-score" style="font-size:1.1rem;font-weight:800;color:#e76f51;display:none;"></span>
-        </div>
-        <div class="form" style="margin:10px 0 14px;">
-          <div><label>Alumno</label><input id="theory-student-name" placeholder="Nombre del alumno"></div>
-          <div><label>Arte Marcial</label>
-            <select id="theory-discipline">
-              <option value="">-- Selecciona un arte --</option>
-            </select>
-          </div>
-          <div><label>Estilo (perfil del alumno)</label>
-            <select id="theory-style">
-              <option value="">-- Carga un arte primero --</option>
-            </select>
-          </div>
-          <div><label id="theory-level-label">Grado objetivo</label>
-            <select id="theory-level">
-              <option value="iniciacion">Iniciacion</option>
-              <option value="intermedio">Intermedio</option>
-              <option value="avanzado">Avanzado</option>
-              <option value="junior">Junior</option>
-            </select>
-          </div>
-          <div><label>Fecha del examen</label><input id="theory-exam-date" type="date"></div>
-          <div class="full">
-            <button class="btn" id="theory-start" type="button">Cargar examen</button>
-            <button class="btn alt" id="theory-print" type="button" style="margin-left:8px;display:none;">Imprimir hoja teorica</button>
-            <button class="btn alt" id="theory-restart" type="button" style="margin-left:8px;display:none;">Recargar</button>
+          <div class="row" style="margin:0;gap:8px;">
+            <span id="theory-score" style="font-size:1.1rem;font-weight:800;color:#e76f51;display:none;"></span>
+            <button class="btn" type="button" data-modal-open="modal-examen">＋ Configurar examen</button>
+            <button class="btn alt" id="theory-print" type="button" style="display:none;">Imprimir hoja teorica</button>
+            <button class="btn alt" id="theory-restart" type="button" style="display:none;">Recargar</button>
           </div>
         </div>
         <div id="theory-quiz-area" style="display:none;padding:10px 0;">
@@ -2586,6 +3069,38 @@
           </div>
         </div>
       </article>
+
+      <!-- Modal: Configurar examen de grado -->
+      <div class="ms-modal-overlay" id="modal-examen">
+        <div class="ms-modal">
+          <div class="ms-modal-head"><h4>Configurar examen de grado</h4><button class="ms-modal-close" type="button" data-modal-close>✕</button></div>
+          <div class="ms-modal-body">
+            <div class="form">
+              <div><label>Alumno</label><input id="theory-student-name" placeholder="Nombre del alumno"></div>
+              <div><label>Arte Marcial</label>
+                <select id="theory-discipline">
+                  <option value="">-- Selecciona un arte --</option>
+                </select>
+              </div>
+              <div><label>Estilo (perfil del alumno)</label>
+                <select id="theory-style">
+                  <option value="">-- Carga un arte primero --</option>
+                </select>
+              </div>
+              <div><label id="theory-level-label">Grado objetivo</label>
+                <select id="theory-level">
+                  <option value="iniciacion">Iniciacion</option>
+                  <option value="intermedio">Intermedio</option>
+                  <option value="avanzado">Avanzado</option>
+                  <option value="junior">Junior</option>
+                </select>
+              </div>
+              <div><label>Fecha del examen</label><input id="theory-exam-date" type="date"></div>
+              <div class="full"><button class="btn" id="theory-start" type="button">Cargar examen</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- â•â•â•â•â•â•â•â•â•â• DEBUG â•â•â•â•â•â•â•â•â•â• -->
@@ -3166,23 +3681,29 @@
           return ds.formatResult({ profile, memberships });
         }
 
-        // AI status: leer el flag habilitado/sin-key directo de Supabase (sin exponer keys)
+        // AI status (Supabase Directo): el RPC solo da estado mínimo NO sensible (enabled/hasKey).
+        // La autorización completa (rol, plan, facturación, cooldown) vive en el backend Express
+        // (/api/ai/status). Aquí NO se fabrica planOk/billing: se marca "requiere servidor".
         if (pathLower.includes('/api/ai/status')) {
           try {
             const sb = (window.MartialSupabaseAPI && window.MartialSupabaseAPI.getClient && window.MartialSupabaseAPI.getClient()) || window.MartialSupabase || null;
-            let st = { enabled: false, hasKey: false };
+            let st = { enabled: false, hasKey: false, rpcAvailable: false };
             if (sb && typeof sb.rpc === 'function') {
               const rpc = await sb.rpc('get_ai_enabled_status');
-              if (rpc && rpc.data && typeof rpc.data === 'object') st = rpc.data;
+              if (rpc && rpc.data && typeof rpc.data === 'object') {
+                st = Object.assign({ rpcAvailable: true }, rpc.data);
+              }
             }
             return { ok: true, data: Object.assign({}, st, {
               role: state.profileRole || '',
-              planOk: true,
-              billing: { hasBill: false, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 },
+              serverAvailable: false,
+              requiresServer: true,
+              planOk: null,
+              billing: null,
               cooldown: null
             }) };
           } catch (_) {
-            return { ok: true, data: { enabled: false, hasKey: false, role: state.profileRole || '', planOk: true, billing: { hasBill: false, needsOverlay: false, severeOverdue: false, overlayType: 'none', daysOverdue: 0 }, cooldown: null } };
+            return { ok: true, data: { enabled: false, hasKey: false, rpcAvailable: false, role: state.profileRole || '', serverAvailable: false, requiresServer: true, planOk: null, billing: null, cooldown: null } };
           }
         }
 
@@ -4034,13 +4555,149 @@
       const userCard = ids('ai-user-info-card');
       if (userCard && state.accessToken) userCard.style.display = '';
 
-      // Owner/superadmin: mantener el check de mensualidad (aviso)
+      const dw = ids('dashboard-wrap');
+      if (dw) dw.style.display = 'flex';
+
+      if (state.profileName) {
+        const el = ids('dashboard-user-name');
+        if (el) el.textContent = state.profileName;
+      }
+      if (state.profileRole) {
+        const el = ids('dashboard-user-role');
+        if (el) el.textContent = state.profileRole.charAt(0).toUpperCase() + state.profileRole.slice(1);
+      }
+
       if ((role === 'owner' || role === 'superadmin') && typeof checkSystemBillingOverlay === 'function') {
         checkSystemBillingOverlay();
       }
 
-      // Add mobile quick actions bar (no-op: dashboard eliminado)
+      loadDashboardData();
       renderMobileQuickActions();
+    }
+
+    // ─── DASHBOARD NAVIGATION ─────────────────────────────────────────
+    function setDashboardNav(el) {
+      document.querySelectorAll('.dashboard-nav-item').forEach(btn => {
+        btn.classList.remove('active', 'bg-[#242a3a]', 'text-ms-text', 'border-ms-brand/30');
+        btn.classList.add('text-ms-muted');
+      });
+      el.classList.remove('text-ms-muted');
+      el.classList.add('active', 'bg-[#242a3a]', 'text-ms-text', 'border-ms-brand/30');
+    }
+
+    function logoutDashboard() {
+      if (typeof window.logout === 'function') window.logout();
+      else if (ids('logout-btn')) ids('logout-btn').click();
+    }
+
+    async function loadDashboardData() {
+      const token = state.accessToken;
+      if (!token) return;
+      try {
+        const res = await fetch('/api/dashboard/stats', { headers: { Authorization: 'Bearer ' + token } });
+        const json = await res.json();
+        if (json.ok && json.data) {
+          const d = json.data;
+          const s = d.students || {};
+          const u = d.users || {};
+          ids('kpi-athletes').textContent = s.total !== undefined ? s.total : 0;
+          ids('kpi-categories').textContent = d.disciplines?.total !== undefined ? d.disciplines.total : 0;
+          ids('kpi-matches').textContent = u.total !== undefined ? u.total : 0;
+          ids('kpi-days').textContent = '18';
+        }
+      } catch (e) { console.warn('Dashboard stats error:', e.message); }
+      try {
+        const sb = window.MartialSupabase;
+        if (!sb) return;
+        const establishmentId = (state.memberships && state.memberships.length > 0)
+          ? state.memberships[0].establishment?.id : null;
+        if (!establishmentId) return;
+        const { data: cats } = await sb
+          .from('tournament_categories')
+          .select('id, name, mode, tournament_name, status')
+          .eq('establishment_id', establishmentId)
+          .eq('status', 'active');
+        if (cats && cats.length) {
+          renderCategoryProgress(cats);
+          const firstCat = cats[0];
+          const { data: brackets } = await sb
+            .from('tournament_brackets')
+            .select('*, entries:tournament_bracket_entries(*, student:students(*, profile:profiles(*)))')
+            .eq('category_id', firstCat.id)
+            .order('seed_order', { ascending: true });
+          if (brackets && brackets.length) renderBracket(brackets, firstCat);
+        }
+        const { data: results } = await sb
+          .from('tournament_results')
+          .select('*, student:students(*, profile:profiles(*))')
+          .eq('establishment_id', establishmentId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (results && results.length) {
+          renderRecentMatches(results);
+          var _ml = ids('matches-loading'); if (_ml) _ml.style.display = 'none';
+        } else {
+          var _ml2 = ids('matches-loading'); if (_ml2) _ml2.style.display = 'none';
+          ids('recent-matches-body').innerHTML = '<tr><td colspan="4" class="py-8 text-center text-ms-muted">Sin partidos registrados</td></tr>';
+        }
+      } catch (err) {
+        console.warn('Dashboard supabase error:', err.message);
+        var _ml3 = ids('matches-loading'); if (_ml3) _ml3.style.display = 'none';
+        var _bl2 = ids('bracket-loading'); if (_bl2) _bl2.style.display = 'none';
+      }
+    }
+
+    function renderCategoryProgress(cats) {
+      const list = ids('category-progress-list');
+      if (!list) return;
+      list.innerHTML = '';
+      const catConfigs = [
+        { label: 'Kumite -60 kg', total: 16, color: '' },
+        { label: 'Kumite -67 kg', total: 16, color: 'gold' },
+        { label: 'Kumite -75 kg', total: 16, color: '' },
+        { label: 'Kumite -84 kg', total: 16, color: '' },
+        { label: 'Kata Individual', total: 8, color: 'gold' },
+        { label: 'Kumite Femenino', total: 8, color: '' }
+      ];
+      catConfigs.forEach(cfg => {
+        const cat = cats.find(c => c.name && c.name.toLowerCase().includes(cfg.label.toLowerCase().replace('kumite ', '').replace('kata ', '')));
+        const count = cat ? 12 : 0;
+        const pct = Math.round((count / cfg.total) * 100);
+        const el = document.createElement('div');
+        el.style.marginBottom = '12px';
+        el.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:12px;font-weight:600;color:var(--text);text-transform:uppercase;">' + cfg.label + '</span><span style="font-size:12px;font-weight:700;color:var(--brand-2);">' + count + ' / ' + cfg.total + '</span></div><div class="progress-track"><div class="progress-fill ' + cfg.color + '" style="width:' + pct + '%;"></div></div>';
+        list.appendChild(el);
+      });
+    }
+
+    function renderBracket(brackets, category) {
+      const content = ids('bracket-content');
+      const loading = ids('bracket-loading');
+      if (!content) return;
+      if (loading) loading.style.display = 'none';
+      const b = brackets[0];
+      const entries = (b.entries || []).slice(0, 8);
+      let rowsHtml = '';
+      for (let i = 0; i < entries.length; i += 2) {
+        const a = entries[i] && entries[i].student ? entries[i].student.full_name : ('Competidor ' + (i + 1));
+        const bn = entries[i + 1] && entries[i + 1].student ? entries[i + 1].student.full_name : ('Competidor ' + (i + 2));
+        rowsHtml += '<div style="display:flex;align-items:center;gap:8px;background:#151a23;border:1px solid #283140;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12px;"><span style="flex:1;color:var(--text);">' + a + '</span><span style="color:#c9a227;font-weight:700;">vs</span><span style="flex:1;text-align:right;color:var(--text);">' + bn + '</span></div>';
+      }
+      if (!rowsHtml) rowsHtml = '<span class="muted" style="font-size:12px;">Sin competidores en esta llave.</span>';
+      content.innerHTML = '<div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">' + ((category && category.name) || 'Llave') + ' · ' + ((category && category.mode) || '') + '</div>' + rowsHtml;
+    }
+
+    function renderRecentMatches(results) {
+      const body = ids('recent-matches-body');
+      if (!body) return;
+      body.innerHTML = results.map((r, i) => {
+        const st = r.student || {};
+        const profile = st.profile || {};
+        const opponent = results[(i + 1) % results.length] && results[(i + 1) % results.length].student ? results[(i + 1) % results.length].student : {};
+        const oppProfile = opponent.profile || {};
+        const score = r.medal === 'Gold' ? '3 — 0' : r.medal === 'Silver' ? '2 — 1' : '1 — 0';
+        return '<tr style="border-bottom:1px solid var(--line);"><td style="padding:8px;color:var(--text);">' + (profile.full_name || st.full_name || 'Competidor') + ' <span style="color:#c9a227;font-weight:700;">' + score + '</span> ' + (oppProfile.full_name || opponent.full_name || 'Oponente') + '</td><td style="padding:8px;color:var(--text);">' + (r.tournament_name || 'Torneo') + '</td><td style="padding:8px;color:#c9a227;font-weight:700;">' + score + '</td><td style="padding:8px;"><span class="badge-completed">Completed</span></td></tr>';
+      }).join('');
     }
 
 
@@ -5479,6 +6136,7 @@
               ids('inv-name').value = ''; ids('inv-category').value = ''; ids('inv-supplier').value = '';
               ids('inv-size').value = ''; ids('inv-cost').value = ''; ids('inv-price').value = ''; ids('inv-stock').value = '';
               await loadInventory();
+              if (typeof msCloseModal === 'function') msCloseModal('modal-producto');
             } catch (err) { ids('inventory-list').innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
           });
           ids('inv-load')?.addEventListener('click', loadInventory);
@@ -5512,6 +6170,7 @@
               ids('invm-qty').value = ''; ids('invm-responsible').value = ''; ids('invm-reason').value = '';
               await loadMovements(itemId, eid);
               await loadInventory();
+              if (typeof msCloseModal === 'function') msCloseModal('modal-movimiento');
             } catch (err) { ids('inv-movements-list').innerHTML = `<span style="color:#e76f51;">${err.message}</span>`; }
           });
           async function loadMovements(itemId, eid) {
@@ -8064,6 +8723,65 @@
       }
     });
 
+    ids('tutor-guardian-link-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) { ids('tutor-portal-output').textContent = 'Selecciona establecimiento primero'; return; }
+      try {
+        const result = await api('/api/portal/guardian/link', {
+          method: 'POST',
+          body: JSON.stringify({
+            establishmentId,
+            guardianProfileId: ids('tutor-guardian-id').value.trim(),
+            studentId: ids('tutor-link-student-id').value.trim(),
+            relationship: ids('tutor-relationship').value.trim()
+          })
+        });
+        ids('tutor-portal-output').textContent = JSON.stringify(result, null, 2);
+        ids('tutor-portal-output').style.display = 'block';
+      } catch (err) { ids('tutor-portal-output').textContent = err.message; }
+    });
+
+    ids('tutor-load-guardian')?.addEventListener('click', async () => {
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) { ids('tutor-portal-output').textContent = 'Selecciona establecimiento primero'; return; }
+      try {
+        const guardianProfileId = ids('tutor-guardian-query').value.trim();
+        const qs = [
+          'establishmentId=' + encodeURIComponent(establishmentId),
+          guardianProfileId ? 'guardianProfileId=' + encodeURIComponent(guardianProfileId) : ''
+        ].filter(Boolean).join('&');
+        const result = await api('/api/portal/guardian?' + qs);
+        ids('tutor-portal-output').textContent = JSON.stringify(result, null, 2);
+        ids('tutor-portal-output').style.display = 'block';
+      } catch (err) { ids('tutor-portal-output').textContent = err.message; }
+    });
+
+    ids('tutor-summary')?.addEventListener('click', async () => {
+      const establishmentId = selectedEstablishmentId();
+      if (!establishmentId) { ids('tutor-portal-output').textContent = 'Selecciona establecimiento primero'; return; }
+      const studentId = ids('tutor-link-student-id').value.trim();
+      if (!studentId) { ids('tutor-portal-output').textContent = 'Ingresa Student ID en Vincular guardian-alumno'; return; }
+      try {
+        const result = await api('/api/portal/student?establishmentId=' + encodeURIComponent(establishmentId) + '&studentId=' + encodeURIComponent(studentId));
+        const data = result && result.data ? result.data : {};
+        const student = data.student || {};
+        const payments = Array.isArray(data.payments) ? data.payments : [];
+        const attendance = Array.isArray(data.attendance) ? data.attendance : [];
+        const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+        const paidTotal = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const presentCount = attendance.filter(a => ['present', 'late'].includes(String(a.status || '').toLowerCase())).length;
+        const attendanceRate = attendance.length ? ((presentCount / attendance.length) * 100) : 0;
+        ids('tutor-portal-summary').innerHTML = '<div class="finance-kpis" style="margin-bottom:8px;">' +
+          kpiCard('Alumno', student.full_name || '-', '#b9d6ff') +
+          kpiCard('Pagos registrados', String(payments.length), '#84f0be') +
+          kpiCard('Total pagado', formatCurrency(paidTotal, 'USD'), '#ffd39f') +
+          kpiCard('Asistencia', attendanceRate.toFixed(1) + '%', '#ffd6c2') +
+          '</div><div class="row" style="margin-bottom:8px;"><span class="pill">Notificaciones: ' + notifications.length + '</span><span class="pill">Registros de asistencia: ' + attendance.length + '</span></div>';
+        ids('tutor-portal-output').textContent = JSON.stringify(result, null, 2);
+      } catch (err) { ids('tutor-portal-output').textContent = err.message; }
+    });
+
     ids('instructor-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const establishmentId = ids('tree-establishment').value;
@@ -9205,6 +9923,7 @@
         ids('theory-restart').style.display = 'inline-block';
         ids('theory-print').style.display = 'inline-block';
         ids('theory-score').style.display = 'none';
+        if (typeof msCloseModal === 'function') msCloseModal('modal-examen');
         if (ids('theory-exam-date') && !ids('theory-exam-date').value) {
           ids('theory-exam-date').value = new Date().toISOString().slice(0, 10);
         }
@@ -11614,7 +12333,8 @@
         if (rolePill) rolePill.textContent = '🔒 Visible: ' + aiRoleLabel(d.role);
         if (billingBlock) billingBlock.style.display = (d.billing && d.billing.severeOverdue) ? '' : 'none';
         if (statusLine) {
-          if (!d.enabled) statusLine.textContent = '⚠️ La IA está desactivada por el superadmin.';
+          if (d.requiresServer || d.serverAvailable === false) statusLine.textContent = '⚠️ Requiere servidor: conecta esta app al backend Express para usar la IA.';
+          else if (!d.enabled) statusLine.textContent = '⚠️ La IA está desactivada por el superadmin.';
           else if (!d.hasKey) statusLine.textContent = '⚠️ La IA aún no tiene API key configurada. Avísale al superadmin.';
           else if (!d.planOk) statusLine.textContent = '⚠️ Tu plan no incluye IA. Contacta al superadmin para activarla.';
           else if (d.billing && d.billing.severeOverdue) statusLine.textContent = '🚫 Mensualidad vencida (' + d.billing.daysOverdue + ' días). La IA está bloqueada.';

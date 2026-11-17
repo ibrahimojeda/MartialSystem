@@ -1,16 +1,16 @@
 {
-  "version": "2.11.3",
-  "buildNumber": 25,
-  "message": "Panel \"Consumo de las IAs\" mejorado: lista TODAS las IAs registradas (nuevas incluidas, sin reescribir su consumo), muestra el consumo individual de cada una con estado, y explica qué significa cada métrica (llamadas, tokens de entrada/salida, costo estimado).",
+  "version": "2.11.4",
+  "buildNumber": 28,
+  "message": "Cierre técnico: dependencias seguras (body-parser 1.20.9, multer 2.5.0), RPC de estado de IA endurecido (booleanos tolerantes, sin secretos), corrección del estado Supabase Directo y aislamiento de fixtures de facturación.",
   "forceUpdate": false,
-  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.3.apk",
-  "releaseDate": "2026-09-17",
+  "apkUrl": "https://github.com/ibrahimojeda/MartialSystem/releases/download/Martial_System/MartialSystem_v2.11.4.apk",
+  "releaseDate": "2026-11-17",
   "changelog": [
-    "Consumo de las IAs: se listan todas las IAs registradas, incluso las recién agregadas (con consumo en 0)",
-    "Consumo individual por IA: llamadas, tokens de entrada/salida, total, costo estimado y último uso",
-    "Columna Estado: activa / sin key / desactivada",
-    "Leyenda que explica qué significa cada métrica del consumo"
+    "Dependencias: body-parser 1.20.9 y multer 2.5.0 (cierra 2 vulnerabilidades HIGH de producción)",
+    "RPC get_ai_enabled_status: conversión booleana tolerante y sin exposición de API keys",
+    "Supabase Directo ya no fabrica planOk/billing falsos cuando no hay servidor Express",
+    "Fixtures de facturación aislados por test (planes/perfiles ya no heredan bloqueo 423)"
   ],
-  "build": 27,
-  "appVersion": "2.11.3"
+  "build": 28,
+  "appVersion": "2.11.4"
 }

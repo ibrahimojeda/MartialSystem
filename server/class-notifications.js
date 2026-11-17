@@ -6,8 +6,6 @@
 
 const crypto = require('crypto');
 
-function httpError(status, message, code) { const e = new Error(message); e.status = status; if (code) e.code = code; return e; }
-
 // Destinatarios reales de una clase (solo profiles con profile_id no nulo).
 async function resolveClassRecipients(db, { disciplineId, instructorProfileId }) {
   let studentProfileIds = [];
@@ -23,36 +21,6 @@ async function resolveClassRecipients(db, { disciplineId, instructorProfileId })
     }
   }
   return { students: studentProfileIds, guardians: guardianProfileIds, instructor: instructorProfileId || null };
-}
-
-// Genera notificaciones idempotentes para UN evento de clase.
-// Devuelve { notified, recipients } (notified = avisos nuevos creados).
-async function notifyClassEvent(db, { classId, establishmentId, eventType, title, body, version, recipients }) {
-  const targets = [...new Set([
-    ...(recipients.students || []),
-    ...(recipients.guardians || []),
-    ...(recipients.instructor ? [recipients.instructor] : [])
-  ].filter(Boolean))];
-
-  let notified = 0;
-  for (const pid of targets) {
-    const { data: existing } = await db.from('class_notification_events')
-      .select('id').eq('class_id', classId).eq('event_type', eventType).eq('recipient_profile_id', pid).eq('version', version).maybeSingle();
-    if (existing) continue;
-
-    const { error: nErr } = await db.from('notifications').insert({
-      id: crypto.randomUUID(), establishment_id: establishmentId,
-      recipient_profile_id: pid, title, body, is_read: false
-    });
-    if (nErr) throw httpError(500, 'No se pudo crear notificación: ' + nErr.message);
-
-    const { error: dErr } = await db.from('class_notification_events').insert({
-      id: crypto.randomUUID(), class_id: classId, event_type: eventType, recipient_profile_id: pid, version
-    });
-    if (dErr) throw httpError(500, 'No se pudo registrar dedup: ' + dErr.message);
-    notified += 1;
-  }
-  return { notified, recipients: targets.length };
 }
 
 // Devuelve los tipos de evento que cambió un PATCH (para notificar).
@@ -110,31 +78,4 @@ function buildClassNotificationJobs(cls, upd, events, recipients) {
   return jobs;
 }
 
-
-// Encola trabajos en la outbox (idempotente por class+event+recipient+version).
-async function enqueueClassNotifications(db, { classId, establishmentId, events, recipients, version, cls }) {
-  let queued = 0;
-  for (const evt of events) {
-    const targets = [...new Set([
-      ...(recipients.students || []),
-      ...(recipients.guardians || []),
-      ...(recipients.instructor ? [recipients.instructor] : [])
-    ].filter(Boolean))];
-    for (const pid of targets) {
-      const { data: existing } = await db.from('class_notification_outbox')
-        .select('id').eq('class_id', classId).eq('event_type', evt).eq('recipient_profile_id', pid).eq('version', version).maybeSingle();
-      if (existing) continue;
-      const { error: oErr } = await db.from('class_notification_outbox').insert({
-        id: crypto.randomUUID(), class_id: classId, establishment_id: establishmentId,
-        event_type: evt, recipient_profile_id: pid, version,
-        title: 'Clase actualizada', body: classEventBody(evt, cls),
-        status: 'pending', attempts: 0, available_at: new Date().toISOString()
-      });
-      if (oErr) throw httpError(500, 'No se pudo encolar notificación: ' + oErr.message);
-      queued += 1;
-    }
-  }
-  return { queued };
-}
-
-module.exports = { httpError, resolveClassRecipients, notifyClassEvent, detectClassEventTypes, buildClassUpdate, classEventBody, buildClassNotificationJobs, enqueueClassNotifications };
+module.exports = { resolveClassRecipients, detectClassEventTypes, buildClassUpdate, classEventBody, buildClassNotificationJobs };

@@ -29,6 +29,21 @@ function aiChatTarget(token, message, establishmentId, targetProfileId) {
   });
 }
 
+// Fixture compartido de facturas del sistema. Se devuelve una copia nueva cada vez
+// para aislar los tests: las mutaciones (confirm-payment, mark-overdue) de un test
+// no deben filtrar un bloqueo 423 a tests de planes/perfiles que asumen facturación al día.
+function defaultBills() {
+  return [
+    { id: 'bill-1', establishment_id: 'est-1', billing_month: '2026-10', amount: 29, currency: 'USD', status: 'confirmed', due_date: '2026-10-05' },
+    { id: 'bill-2', establishment_id: 'est-1', billing_month: '2026-08', amount: 49, currency: 'USD', status: 'overdue', due_date: '2026-08-05', paid_at: '2026-08-10', payment_reference: 'REF-2' },
+    { id: 'bill-3', establishment_id: 'est-1', billing_month: '2026-09', amount: 49, currency: 'USD', status: 'pending', due_date: '2026-09-05' },
+    { id: 'bill-4', establishment_id: 'est-2', billing_month: '2026-08', amount: 99, currency: 'USD', status: 'overdue', due_date: '2026-08-05' },
+    { id: 'bill-5', establishment_id: 'est-2', billing_month: '2026-09', amount: 99, currency: 'ARS', status: 'pending', due_date: '2026-09-05' },
+    { id: 'bill-6', establishment_id: 'est-2', billing_month: '2026-07', amount: 99, currency: 'USD', status: 'waived', due_date: '2026-07-05' },
+    { id: 'bill-7', establishment_id: 'est-1', billing_month: '2026-06', amount: 49, currency: 'USD', status: 'paid', due_date: '2026-06-05', paid_at: '2026-06-10', payment_reference: 'REF-7' }
+  ];
+}
+
 before(async () => {
   process.env.NODE_ENV = 'test';
   process.env.SUPERADMIN_USERNAME = 'venta';
@@ -58,16 +73,8 @@ before(async () => {
     { id: 'm-guardian', establishment_id: 'est-1', profile_id: 'guardian-1', role: 'guardian', created_at: '2026-01-01' }
   );
 
-  // Facturas del sistema: est-1 (propia) y est-2 (ajena).
-  supabaseMock._tables.system_usage_bills = [
-    { id: 'bill-1', establishment_id: 'est-1', billing_month: '2026-10', amount: 29, currency: 'USD', status: 'confirmed', due_date: '2026-10-05' },
-    { id: 'bill-2', establishment_id: 'est-1', billing_month: '2026-08', amount: 49, currency: 'USD', status: 'overdue', due_date: '2026-08-05', paid_at: '2026-08-10', payment_reference: 'REF-2' },
-    { id: 'bill-3', establishment_id: 'est-1', billing_month: '2026-09', amount: 49, currency: 'USD', status: 'pending', due_date: '2026-09-05' },
-    { id: 'bill-4', establishment_id: 'est-2', billing_month: '2026-08', amount: 99, currency: 'USD', status: 'overdue', due_date: '2026-08-05' },
-    { id: 'bill-5', establishment_id: 'est-2', billing_month: '2026-09', amount: 99, currency: 'ARS', status: 'pending', due_date: '2026-09-05' },
-    { id: 'bill-6', establishment_id: 'est-2', billing_month: '2026-07', amount: 99, currency: 'USD', status: 'waived', due_date: '2026-07-05' },
-    { id: 'bill-7', establishment_id: 'est-1', billing_month: '2026-06', amount: 49, currency: 'USD', status: 'paid', due_date: '2026-06-05', paid_at: '2026-06-10', payment_reference: 'REF-7' }
-  ];
+  // Facturas del sistema: fixture compartido (defaultBills) para aislamiento entre tests.
+  supabaseMock._tables.system_usage_bills = defaultBills();
 
   setConfig();
   globalThis.__TEST_SUPABASE_ADMIN__ = supabaseMock;
@@ -92,6 +99,10 @@ beforeEach(() => {
   require('../server/index.js').__resetAICooldown();
   require('../server/index.js').__resetDetailedListState();
   require('../server/index.js').__resetRateLimit();
+  // Restaurar facturas del sistema al estado conocido: impide que mutaciones de
+  // tests previos (confirm-payment / mark-overdue) filtren un bloqueo 423 a tests
+  // de planes/perfiles que asumen facturación al día.
+  supabaseMock._tables.system_usage_bills = defaultBills();
 });
 
 test('1. Identidad usa ctx (no busca en users)', async () => {
@@ -398,6 +409,27 @@ test('24. Superadmin lista planes de todos los dojos (list_plans, solo lectura)'
   assert.ok(String(json.data.content).includes('Bushido'));
   assert.ok(String(json.data.content).includes('Starter'));
   assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('BILLING_BLOCKED. Owner con factura del mes severamente vencida → 423', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const now = new Date();
+  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  supabaseMock._tables.system_usage_bills = [
+    { id: 'ovd-now', establishment_id: 'est-1', billing_month: currentMonth, amount: 49, currency: 'USD', status: 'overdue', due_date: '2000-01-01' }
+  ];
+  supabaseMock._tables.establishment_plans = [
+    { id: 'ep-1', establishment_id: 'est-1', plan_code: 'bushido', price_usd: 29 }
+  ];
+  supabaseMock._tables.system_plans = [
+    { id: 'sp-1', code: 'bushido', name: 'Bushido', features: ['ia_features'] }
+  ];
+  const res = await aiChat('tok_owner_1', 'Dame el plan de mi dojo', 'est-1');
+  assert.equal(res.status, 423);
+  const json = await res.json();
+  assert.equal(json.code, 'BILLING_BLOCKED');
   assert.equal(supabaseMock.writes.length, 0);
 });
 

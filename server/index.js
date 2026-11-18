@@ -10762,19 +10762,25 @@ app.post('/api/ai/chat', requireAuth, async (req, res) => {
     const aiRole = await getAIContextRole(req, establishmentId);
     let aiUsername = '';
     let aiFullName = '';
+    // Rol canónico de la cuenta (profiles.role). Se usa SOLO para la respuesta de
+    // identidad ("¿quién soy?"). ctx.role sigue siendo el rol de alcance/autorización
+    // (getAIContextRole devuelve 'user' sin membresía) y NO se modifica: reemplazarlo
+    // globalmente podría convertir una degradación segura en elevación de permisos.
+    let canonicalRole = aiRole;
     if (req.isSuperadmin) {
       aiUsername = process.env.SUPERADMIN_USERNAME || 'venta';
       aiFullName = '';
     } else {
-      const { data: profRow } = await supabaseAdmin.from('profiles').select('username, full_name').eq('id', profileId).maybeSingle();
+      const { data: profRow } = await supabaseAdmin.from('profiles').select('username, full_name, role').eq('id', profileId).maybeSingle();
       if (profRow) { aiUsername = profRow.username || ''; aiFullName = profRow.full_name || ''; }
+      if (profRow && profRow.role) canonicalRole = profRow.role;
     }
     const ctx = { profileId, role: aiRole, isSuperadmin: Boolean(req.isSuperadmin), establishmentId: establishmentId || null, username: aiUsername, fullName: aiFullName };
 
     // ── Identidad determinística ("¿quién soy?") ───────────────────────
     const identityQuery = aiDetectIdentityQuery(message);
     if (identityQuery) {
-      const identity = getCurrentUserIdentity(ctx);
+      const identity = getCurrentUserIdentity({ ...ctx, role: canonicalRole });
       const identityContent = formatIdentityResult(identity);
       return res.json({ ok: true, data: { content: identityContent, model: 'deterministic', provider: '', providerId: '', memorySaved: false, tools: [], tool: null, identity } });
     }

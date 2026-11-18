@@ -1,0 +1,178 @@
+=====================================================================
+MartialSystem — Evidencia de release local (NO versionar en Git)
+Generado (UTC): 2026-11-17
+Commit validado: 30dbd4c3d535b4aa13389236a761fb51cce44d79
+Version/build: 2.11.4 / 28
+=====================================================================
+
+GATE 0 — Confirmar artefacto desplegado              => PASS
+  git rev-parse HEAD          : 30dbd4c3d535b4aa13389236a761fb51cce44d79
+  git rev-parse origin/master : 30dbd4c3d535b4aa13389236a761fb51cce44d79
+  git log -1 origin/master    : 30dbd4c fix(cierre): hardening ... 2.11.4
+  Render /api/health          : {"ok":true,"version":"2.11.4","build":"28",
+                                 "commit":"30dbd4c3d535b4aa13389236a761fb51cce44d79",
+                                 "branch":"master"}
+  JSON de health              : valido, no vacio
+  Working tree (tracked)      : 0 cambios funcionales sin registrar
+
+GATE 1 — Revision local reproducible                 => PASS
+  node --check server/index.js                : OK (exit 0)
+  node --check server/ai-security.js          : OK (exit 0)
+  node --check server/class-notifications.js  : OK (exit 0)
+  node tests/tenancy-audit.js                 : exit 0 - "Aserciones criticas: TODAS OK"
+  node --test tests/*.test.js                 : 284 tests / 284 pass / 0 fail
+  npm audit --omit=dev                        : found 0 vulnerabilities
+  git diff --check                            : limpio (exit 0)
+
+GATE 12 — Verificacion de secretos (HEAD + historial) => PASS
+  git grep 'sk-[A-Za-z0-9]{10,}' | 'BEGIN ... PRIVATE KEY' : 0 coincidencias
+  git grep 'SUPABASE_SERVICE_ROLE_KEY=[valor]' | 'password=[valor]':
+      unico resultado = .env.example:4 placeholder "YOUR_SERVICE_ROLE_KEY" (plantilla,
+      NO es un secreto real)
+  git ls-files sensibles: .env.example, *.env.example (plantillas),
+      docs/runbook-secrets-rotation.md, web/assets-ui/products/private-class-512.png
+      (imagen de producto "clase privada")
+  Historial (git log --all --name-only): 0 archivos .env/tok.txt/.jks/.keystore/.p12/.pem
+  .env local: existe en disco, pero esta en .gitignore y sin versionar
+      (no se muestra contenido)
+
+---------------------------------------------------------------------
+GATES 2-8 (Supabase produccion) - actualizado 2026-11-17
+  Objetos 021-025                       : 14/14 existentes (sin NULL)
+  RPC get_ai_enabled_status()           : {"hasKey":true,"enabled":true} (solo 2 campos)
+  Schema-check consolidado 021-025      : 24/24 PASS
+  Outbox class_notification_outbox      : status 'sent' = 62 ; dead = 0 (ausente)
+  Outbox stuck_processing               : 0
+  GATE 2 (ref Supabase == SUPABASE_URL Render): pendiente confirmacion explicita
+  GATE 3 (backup antes de migrar)            : pendiente evidencia (fecha/hora)
+  Nota: tests/class-notification-outbox-schema-check.sql dice "esperado: 19"
+        columnas, pero la migracion 023 crea 17 (comentario desactualizado;
+        no es un fallo de migracion).
+---------------------------------------------------------------------
+GATES 9-11 (smoke HTTP, APK, visual): PENDIENTE
+  GATE 9  smoke HTTP productivo   : requiere cuentas autorizadas (manual)
+  GATE 10 APK Release firmado     : keystorePath vacio en capacitor.config.json
+  GATE 11 visual vs referencias   : requiere capturas reales desktop/movil
+---------------------------------------------------------------------
+
+NOTAS housekeeping (NO bloquean el gate; NO estan en produccion):
+  - untracked en working tree: backups (server/index.js.backup-fase0.js,
+    web/index.html.backup*, web/index.html.backup-before-th-fix, ...),
+    web/dashboard.html (huerfano), y contaminacion agent-skills
+    (.agents/, .claude/, .codex-plugin/, .gemini/, .opencode/, skills/,
+     agent-skills/, AGENTS.md, CLAUDE.md, CONTRIBUTING.md, plugin.json,
+     LICENSE-agent-skills).
+
+---------------------------------------------------------------------
+HALLAZGOS SMOKE (2026-11-17) - ver informe del revisor
+  GATE 9 parcial: owners 5/5 PASS; senseis 4/5 PASS + 1 ATENCION (HTTP 401).
+  IA identidad (sensei): PASS (devuelve nombre/usuario/rol en espanol).
+  IA compuesta (alumnos+dojos): PASS seguridad / PARCIAL UX.
+    Causa raiz: server/ai-security.js -> aiDetectIntent() clasifica TODO el
+    mensaje con UN solo intento. La rama read_billing (linea ~37) matchea
+    ANTES que read_charges (~38); un sensei (sin billing.read) recibe denial
+    total en vez de responder la parte de cargos. NO es fuga de datos.
+    -> Mejora UX pendiente: descomponer consultas mixtas en subpreguntas.
+       DECISION pendiente del propietario.
+  ryu_kawakami 401: el usuario NO existe en fixtures locales ni en
+    tests/.production.env / tests/.staging.env (solo hiroshi_tanaka,
+    takeshi_mori, juan_moreno, kenji_matsuda, mei_nakamura, venta).
+    El 401 del login es ambiguo por diseno (anti-enumeracion): puede ser
+    (a) usuario inexistente, (b) auth_email null, o (c) contrasena incorrecta.
+    NO cambiar produccion a ciegas. Diagnostico SOLO LECTURA sugerido:
+      select id, username, role, is_active, (auth_email is not null) as has_auth_email
+      from public.profiles where username = 'ryu_kawakami';
+  Nota de seguridad: tests/.production.env (gitignored) contiene credenciales
+    reales de produccion; mantenerlo local y fuera de Git (ya lo esta).
+---------------------------------------------------------------------
+
+CIERRE OPERATIVO - pasos exactos para los 4 bloqueantes (2026-11-17)
+  [1] Ref Supabase correcto:
+      - Ref en codigo (Android assets): obwtpmzgwepqyawfvkjn
+        (https://obwtpmzgwepqyawfvkjn.supabase.co)
+      - Confirmar en Render > Environment: SUPABASE_URL termina en
+        obwtpmzgwepqyawfvkjn.supabase.co y el claim "ref" del JWT de
+        SUPABASE_SERVICE_ROLE_KEY es obwtpmzgwepqyawfvkjn.
+        Tambien: el SQL Editor del proyecto muestra ese ref en la URL.
+  [2] Backup con fecha/hora y proyecto:
+      - Supabase Dashboard > Database > Backups > "Backup now".
+      - Registro: fecha/hora (con zona), proyecto=ref obwtpmzgwepqyawfvkjn.
+      - Alt: pg_dump con la cadena de conexion (NO commitear el dump).
+  [3] APK Release firmado + SHA-256 + prueba fisica:
+      - Generar keystore una vez:
+          keytool -genkeypair -v -keystore martial-system-release.jks \
+            -alias martial -keyalg RSA -keysize 2048 -validity 10000
+      - Rellenar capacitor.config.json > android.buildOptions (keystorePath,
+        keystorePassword, keystoreAlias, keystoreAliasPassword) o configurar
+        signingConfig en android/app/build.gradle con variables de entorno.
+      - npx cap sync android
+      - cd android ; .\gradlew.bat bundleRelease        (AAB; o assembleRelease)
+      - SHA-256: keytool -list -v -keystore ... -alias martial | Select-String SHA256
+        o: certutil -hashfile android\app\build\outputs\bundle\release\app-release.aab SHA256
+      - Instalar en dispositivo fisico y abrir login (prueba real).
+  [4] Validacion visual desktop + movil vs 9 referencias:
+      - La lista de 9 referencias esta en el documento del revisor (no en repo).
+      - Desktop: abrir la app renderizada, capturar cada pantalla.
+      - Movil: emulador o dispositivo con el APK/AAB release, mismas pantallas.
+      - Guardar capturas con nombre y registrar el resultado aqui.
+---------------------------------------------------------------------
+
+ARTEFACTOS OPERATIVOS DE CIERRE (2026-11-18)
+  Checklist independiente: docs/release-operational-checklist.md
+  Smoke HTTP reproducible : smoke-release-authorized.sh
+  Contrato verificado (script validado contra server/index.js):
+    - GET  /api/health       -> {ok, version, build, commit, branch}
+    - POST /api/login        -> data.access_token
+    - GET  /api/me           -> data.profile.{username, role, full_name}
+    - POST /api/ai/chat      -> body {message}; respuesta data.content
+    - PATCH /api/classes/:id -> body location; data.notification_status
+    - PATCH identico         -> data.changed=false
+  El smoke es solo lectura por defecto.
+  Las mutaciones requieren RUN_MUTATIONS=1 y restauran la ubicacion original.
+  No contiene credenciales, tokens ni secretos.
+  Correcciones aplicadas al script:
+    - eliminar establishmentId del PATCH (el endpoint rechaza campos no permitidos);
+    - derivar el establecimiento desde la clase autenticada (cls.establishment_id);
+    - mantener la lista cerrada de campos permitidos (ALLOWED);
+    - corregir lectura de data.profile;
+    - extraer data.content sin depender de paste (jq '[..|strings]|join(" ")');
+    - ocultar tokens tanto en .data como en el nivel raiz.
+  Orden de ejecucion recomendado:
+    1) Primero sin RUN_MUTATIONS=1 (solo lectura).
+    2) PATCH reversible SOLO despues del backup y de registrar el estado
+       original de la clase.
+    3) Empezar con un sensei autorizado (bruno_silva_sensei) y luego un owner
+       autorizado. NO usar ryu_kawakami hasta resolver su 401.
+---------------------------------------------------------------------
+
+FIX IDENTIDAD IA (2026-11-18) - hallazgo del smoke real
+  Sintoma: '¿Qué usuario soy?' devolvia 'con rol user' para sensei y owner.
+  Causa raiz: la identidad usaba ctx.role (getAIContextRole -> 'user' cuando
+    no hay establishmentId); debia usar el rol canonico profiles.role.
+  Fix: server/index.js /api/ai/chat consulta profiles.role y lo usa SOLO para
+    getCurrentUserIdentity(). ctx.role (alcance/autorizacion) permanece intacto:
+    reemplazarlo globalmente habria elevado permisos (degradacion -> privilegio).
+  Smoke: acepta ESTABLISHMENT_ID opcional; el test clave sigue siendo el que NO
+    envia establishmentId (la identidad no debe depender del alcance contextual).
+  Tests nuevos: system-billing.test.js 1a-1d (owner/sensei sin establishmentId,
+    con establishmentId propio, y facturacion fail-closed).
+  Suite completa: 288 PASS / 0 FAIL.
+  Pendiente: re-smoke real (sensei/owner con y sin establishmentId) para marcar
+    D. Apartado E sigue pendiente (sin mutaciones).
+---------------------------------------------------------------------
+
+RE-SMOKE D/E (2026-11-18) - resultado en produccion
+  D: sigue NO PASS en produccion porque el commit desplegado (30dbd4c) no
+     incluye el fix de identidad.
+     - sin establishmentId -> 'rol user' (codigo viejo en produccion).
+     - con establishmentId propio -> 'rol sensei'/'rol owner' (correcto).
+     - Confirma que falta desplegar el fix local; tras deploy + re-smoke, D cierra.
+  E: bloqueado por dato, no por codigo. Los 5 establecimientos de owners
+     autorizados devolvieron 0 clases (consulta solo lectura). No se creo clase
+     artificial ni se ejecuto PATCH a ciegas. Falta: backup confirmado + clase
+     real con location original antes de RUN_MUTATIONS=1.
+  Accion: commit + push del fix (server/index.js, tests/system-billing.test.js,
+     smoke-release-authorized.sh, docs/release-operational-checklist.md,
+     esta evidencia). Render redespliega automaticamente.
+---------------------------------------------------------------------
+=====================================================================

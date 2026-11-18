@@ -118,6 +118,55 @@ test('1. Identidad usa ctx (no busca en users)', async () => {
   assert.equal(supabaseMock.writes.length, 0);
 });
 
+test('1a. Identidad sin establishmentId usa el rol canónico del perfil (owner)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', '¿Qué usuario soy?'); // sin establishmentId
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  const c = String(json.data.content);
+  assert.ok(c.includes('Owner 1'));
+  assert.ok(c.includes('con rol owner'), 'rol canónico, no el centinela user');
+  assert.ok(!c.includes('con rol user'), 'no debe degradar a user');
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('1b. Identidad sin establishmentId usa el rol canónico del perfil (sensei)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_sensei_1', '¿Qué usuario soy?'); // sin establishmentId
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  const c = String(json.data.content);
+  assert.ok(c.includes('Sensei 1'));
+  assert.ok(c.includes('con rol sensei'), 'rol canónico sensei');
+  assert.ok(!c.includes('con rol user'), 'no debe degradar a user');
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('1c. Identidad con establishmentId propio conserva el rol canónico', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_owner_1', '¿Cuál es mi rol?', 'est-1');
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.ok(String(json.data.content).includes('con rol owner'));
+  assert.equal(supabaseMock.writes.length, 0);
+});
+
+test('1d. Sin establishmentId, el alcance de facturación sigue fail-closed (sensei)', async () => {
+  setConfig();
+  supabaseMock.writes.length = 0;
+  const res = await aiChat('tok_sensei_1', '¿Cuánto debe mi dojo al sistema?'); // sin establishmentId
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.model, 'deterministic');
+  assert.ok(String(json.data.content).includes('No tienes permisos para consultar la facturación de la plataforma.'), 'debe seguir denegado');
+  assert.equal(providerA.metrics.interpretationCalls, 0);
+  assert.equal(supabaseMock.writes.length, 0);
+});
 test('2. Superadmin consulta facturación global (system_usage_bills)', async () => {
   setConfig();
   supabaseMock.writes.length = 0;
